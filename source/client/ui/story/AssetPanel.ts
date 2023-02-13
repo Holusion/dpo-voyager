@@ -47,7 +47,6 @@ export default class AssetPanel extends DocumentView
     protected render()
     {
         const mode = this.taskProvider.ins.mode.value;
-        this.basePath =  "";
 
         return html`<div class="sv-panel-header">
                 <ff-button icon="folder" title="Create Folder" @click=${this.onClickFolder}></ff-button>
