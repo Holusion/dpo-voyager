@@ -140,6 +140,8 @@ export default class MainMenu extends DocumentView
 
 
         return html`
+            <ff-button icon="close" id="home-btn" title=${language.getLocalizedString("Home")}
+                @click=${()=>window.history.back()}></ff-button>
             ${arButtonVisible ? html`<ff-button icon="ar" id="ar-btn" title=${language.getLocalizedString("Enter AR View")}
                 @click=${this.onEnterAR}></ff-button>` : null}
             ${narrationButtonVisible ? html`<ff-button icon="audio" id="audio-btn" title=${language.getLocalizedString("Play Audio Narration")}
