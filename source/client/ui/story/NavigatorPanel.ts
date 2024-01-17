@@ -50,6 +50,7 @@ export default class NavigatorPanel extends SystemView
     {
         const system = this.system;
         const expertMode = this.taskProvider.expertMode;
+        console.warn("Expert mode: ", expertMode)
 
         const documentList = expertMode ? html`<div class="ff-splitter-section ff-flex-column" style="flex-basis: 30%">
             <div class="sv-panel-header">

@@ -16,7 +16,7 @@
  */
 
 import System from "@ff/graph/System";
-
+import "@ff/ui/Dropdown";
 import "@ff/ui/Button";
 import Button, { IButtonClickEvent } from "@ff/ui/Button";
 
@@ -77,13 +77,20 @@ export default class TaskBar extends SystemView
         const activeTask = this.taskProvider.activeComponent;
         const taskMode = this.taskProvider.ins.mode.value;
         const taskModeText = this.taskProvider.ins.mode.getOptionText();
+        const taskModes = this.taskProvider.ins.mode.schema.options;
+        function onModeChange(event: CustomEvent) {
+            let searchParams = new URLSearchParams(window.location.search);
+            searchParams.set("mode", event.detail.item.toLowerCase());
+            window.location.search = searchParams.toString();
+        }
+        
         const downloadButtonVisible = taskMode !== ETaskMode.Standalone;
         const exitButtonVisible = taskMode !== ETaskMode.Standalone;
         const language = this.language;
         const saveName = language.getLocalizedString(taskMode !== ETaskMode.Standalone ? "Save" : "Download");
         return html`
             <img class="sv-story-logo" src=${this.assetReader.getSystemAssetUrl("images/voyager-75grey.svg")} alt="Logo"/>
-            <div class="sv-mode ff-text">${taskModeText}</div>
+            <div class="sv-mode"><ff-dropdown .items="${taskModes}" text="${taskModeText}" @select=${onModeChange}></ff-dropdown></div>
             <div class="sv-spacer"></div>
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group" @click=${this.onClickTask}>

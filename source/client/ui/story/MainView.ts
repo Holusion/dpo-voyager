@@ -148,7 +148,7 @@ export default class MainView extends CustomElement
 
         const reset = parseUrlParameter("reset") !== undefined;
         const state = reset ? null : localStorage.get("voyager-story", MainView.stateKey);
-
+        console.warn("State : ", state);
         this.state = state || {
             regularLayout: MainView.regularLayout,
             expertLayout: MainView.expertLayout,
