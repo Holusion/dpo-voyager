@@ -140,6 +140,10 @@ export default class CVMediaManager extends CAssetManager
                     path = CVMediaManager.articleFolder + "/" + cleanfileName;
                 }
 
+                if(!documentProvided && filenameLower.match(/\.(usdz|glb|gltf|bin)$/)) {
+                    path = "models/" + cleanfileName;
+                }
+
                 // normalize path relative to document root
                 let normalizedPath = documentProvided ? path.replace(documentRoot, '') : path;
                 normalizedPath = normalizedPath.startsWith("/") ? normalizedPath.substr(1) : normalizedPath;
