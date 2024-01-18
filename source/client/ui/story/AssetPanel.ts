@@ -23,13 +23,18 @@ import "@ff/scene/ui/AssetTree";
 import CVMediaManager from "../../components/CVMediaManager";
 import CVTaskProvider, { ETaskMode } from "../../components/CVTaskProvider";
 
-import DocumentView, { customElement, html } from "../explorer/DocumentView";
+import DocumentView, { customElement, property, html } from "../explorer/DocumentView";
+import CAssetManager, { IAssetEntry, IAssetTreeChangeEvent } from "@ff/scene/components/CAssetManager";
+import { IAssetDragEvent } from "@ff/scene/ui/AssetTree";
 
 ////////////////////////////////////////////////////////////////////////////////
 
 @customElement("sv-asset-panel")
 export default class AssetPanel extends DocumentView
 {
+    @property({attribute: false, type: Object})
+    private root :IAssetEntry = null;
+
     protected basePath = "";
 
     protected get mediaManager() {
@@ -39,15 +44,81 @@ export default class AssetPanel extends DocumentView
         return this.system.getMainComponent(CVTaskProvider);
     }
 
+    protected get assetManager() {
+        return this.system.components.get(CAssetManager);
+    }
+
     protected firstConnected()
     {
         this.classList.add("sv-panel", "sv-asset-panel");
     }
 
+    protected connected()
+    {
+        super.connected();
+        this.assetManager.on<IAssetTreeChangeEvent>("tree-change", this.onTreeChange, this);
+        this.onTreeChange({ type: "tree-change", root: this.assetManager.root });
+    }
+
+    protected disconnected()
+    {
+        this.assetManager.off<IAssetTreeChangeEvent>("tree-change", this.onTreeChange, this);
+
+        super.disconnected();
+    }
+
+    private onTreeChange(event: IAssetTreeChangeEvent){
+        console.debug("Tree change event ");
+        // traverse base path to find root tree node
+        const parts = this.basePath.split("/").filter(part => part !== "");
+        let root = event.root;
+        if(!root) return;
+
+        for (let i = 0; i < parts.length; ++i) {
+            root = root.children.find(child => child.info.name === parts[i]);
+            if (!root) {
+                break;
+            }
+        }
+
+        this.root = Object.assign({}, root || event.root);
+        this.requestUpdate();
+    }
+
+    private onNodeDragStart(ev :IAssetDragEvent){
+        ev.preventDefault();
+        const {node:sourceTreeNode, event} = ev.detail;
+        const mimeType = sourceTreeNode.info.type;
+        if (mimeType === "image/jpeg" || mimeType === "image/png") {
+            const url = this.assetManager.getAssetURL(sourceTreeNode.info.path);
+            event.dataTransfer.setData("text/html", `<img src="${url}">`);
+        }
+    }
+
+    private onNodeDrop(ev :IAssetDragEvent){
+        ev.preventDefault();
+        const {node:targetTreeNode, event} = ev.detail;
+        const files = event.dataTransfer.files;
+
+        if (files.length > 0) {
+            //console.log("dropping files", files.item(0));
+            this.assetManager.uploadFiles(files, targetTreeNode);
+        }
+        else {
+            //const sourceTreeNode = this.getNodeFromDragEvent(event);
+            //console.log("dropping asset", sourceTreeNode.info.path);
+            this.assetManager.moveSelected(targetTreeNode);
+        }
+    }
+
+    private onNodeOpen(ev :CustomEvent<IAssetEntry>){
+        this.assetManager.open(ev.detail);
+    }
+
+
     protected render()
     {
         const mode = this.taskProvider.ins.mode.value;
-        this.basePath =  "";
 
         return html`<div class="sv-panel-header">
                 <ff-button icon="folder" title="Create Folder" @click=${this.onClickFolder}></ff-button>
@@ -55,7 +126,10 @@ export default class AssetPanel extends DocumentView
                 <ff-button icon="trash" title="Delete Item" @click=${this.onClickDelete}></ff-button>
                 <ff-button icon="redo" title="Refresh View" @click=${this.onClickRefresh}></ff-button>
             </div>
-            <ff-asset-tree class="ff-flex-item-stretch" draggable .system=${this.system} path=${this.basePath}>
+            <ff-asset-tree class="ff-flex-item-stretch" 
+                .root=${this.root}
+                draggable @dragstart=${this.onNodeDragStart} @drop=${this.onNodeDrop} @open=${this.onNodeOpen}
+            >
             </ff-asset-tree>`;
     }
 
