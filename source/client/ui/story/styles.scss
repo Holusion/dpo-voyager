@@ -463,6 +463,15 @@ $color-component-meta-light: #d9d998;
     font-weight: normal;
     padding: 0px;
   }
+  .ff-splitter-section{
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    .sv-entry{
+      margin-left: 14px;
+    }
+  }
 }
 
 
@@ -509,6 +518,7 @@ $color-component-meta-light: #d9d998;
       flex-direction: column;
       padding-left: 14px;
       .ff-derivative-asset{
+        display: flex;
         line-height: 1.6em;
         border-top: 1px solid #40464d;
         border-bottom: 1px solid #40464d;

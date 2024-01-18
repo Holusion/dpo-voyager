@@ -24,53 +24,31 @@ import { EAssetType, EDerivativeQuality, EDerivativeUsage, EMapType, TAssetType,
 import CVModel2 from "client/components/CVModel2";
 
 import { enumToArray } from "@ff/core/types";
-import CustomElement, { property } from "@ff/ui/CustomElement";
+import CustomElement, { TemplateResult, property } from "@ff/ui/CustomElement";
 
 ////////////////////////////////////////////////////////////////////////////////
 
 
-@customElement("ff-collapse")
-export class Collapse extends CustomElement
-{
-    protected header: string|HTMLElement;
-    protected content: string|HTMLElement;
-
-    @property({ type: Boolean, attribute: true, reflect: true })
-    protected collapsed = false;
-
-    constructor()
-    {
-        super();
-    }
-    protected firstConnected(): void {
-        super.firstConnected();
-        this.classList.add("ff-collapse");
-        this.addEventListener("click", this.onClick.bind(this));
-    }
-
-    protected onClick()
-    {
-        this.collapsed = !this.collapsed;
-    }
-
-    protected render() {
-        return html`
-            <div class="ff-collapse-header">${this.header}</div>
-            <div class="ff-collapse-content">${this.content}</div>
-        `
-    }
-}
-
-interface Selections {
+interface Selections{
     usage: EDerivativeUsage;
     type: EAssetType;
     mapType: EMapType;
     quality: EDerivativeQuality;
 };
 
+type Section = keyof Selections;
+
+
 export interface ImportResult extends Selections {
     parentName: string;
 }
+
+const titles = {
+    usage: "Derivative Usage",
+    type: "Asset Type",
+    mapType: "Map type",
+    quality: "Derivative Quality",
+};
 
 @customElement("sv-import-menu")
 export default class ImportMenu extends Popup
@@ -84,18 +62,25 @@ export default class ImportMenu extends Popup
 
     public selection :Selections = {
         usage: EDerivativeUsage.Web3D,
-        type: null,
+        type: EAssetType.Model,
         mapType: null,
         quality: null,
     };
 
-    private options :Record<keyof Selections, string[]> = {
+    private options :Record<Section, string[]> = {
         usage: enumToArray(EDerivativeUsage),
         type: enumToArray(EAssetType),
         mapType: enumToArray(EMapType),
         quality: enumToArray(EDerivativeQuality),
     };
-    
+
+    private expanded :Record<Section, Boolean> = {
+        usage: false,
+        type: false,
+        mapType: false,
+        quality: true,
+    }
+
 
     protected parentSelection: {name: string, id: string} = null;
 
@@ -124,9 +109,9 @@ export default class ImportMenu extends Popup
         this.modal = true;
         let allowedTypes = [];
         if(this.is_model){
-            this.selection["type"] = EAssetType.Model;
-            allowedTypes = [EAssetType.Model]
+            allowedTypes = [EAssetType.Model];
         }else if(this.is_image){
+            this.expanded["mapType"] = true;
             this.selection["type"] = EAssetType.Image;
             allowedTypes  = [EAssetType.Image, EAssetType.Texture];
         }else{
@@ -149,25 +134,39 @@ export default class ImportMenu extends Popup
 
     confirm()
     {
+        if(this.selection["quality"] === null && this.options["quality"].filter(q=>q).length == 1){
+            this.selection["quality"] = EDerivativeQuality[this.options["quality"].find(q=>q)];
+        }
+
         if(this.selection["quality"] === null) {
             this.errorString = "Please select derivative quality.";
             this.requestUpdate();
-        }else if(this.selection["type"] === null) {
+            return;
+        }
+
+        if(this.selection["type"] === null) {
             this.errorString = "Please select derivative type.";
             this.requestUpdate();
-        }else if(  this.selection["usage"] === EDerivativeUsage.Web3D
+            return;
+        }
+
+        if(  this.selection["usage"] === EDerivativeUsage.Web3D
                 && this.selection["type"] === EAssetType.Image 
                 && this.selection["mapType"] === null
             ) {
             this.errorString = "Please select map type.";
             this.requestUpdate();
-        }else if(this.selection["usage"] === null) {
+            return;
+        }
+
+        if(this.selection["usage"] === null) {
             this.errorString = "Please select derivative usage.";
             this.requestUpdate();
-        }else {
-            this.dispatchEvent(new CustomEvent("confirm"));
-            this.remove();
+            return;
         }
+
+        this.dispatchEvent(new CustomEvent("confirm"));
+        this.remove();
     }
 
     protected firstConnected()
@@ -183,14 +182,15 @@ export default class ImportMenu extends Popup
         return /\.(glb|gltf|usdz)$/i.test(this.filename);
     }
 
-    protected handleClick(name :keyof Selections, value: number|null, e: MouseEvent){
+    protected handleClick(name :Section, value: number|null, e: MouseEvent){
         e?.stopPropagation();
         if(value === this.selection[name]) return;
         (this.selection[name] as any) = value as any;
+        (this.expanded[name] as any) = false;
         this.requestUpdate();
     }
 
-    protected renderEntry(name: keyof typeof this.selection, value: number)
+    protected renderEntry(name: Section, value: number)
     {
         const list = this.options[name];
         return html`<div class="sv-entry" @click=${e => this.handleClick(name, value, e)} ?selected=${ value === this.selection[name] }>
@@ -198,7 +198,7 @@ export default class ImportMenu extends Popup
         </div>`;
     }
 
-    protected renderChoices<T>(name: keyof typeof this.selection){
+    protected renderChoices<T>(name: Section){
         const list = this.options[name];
 
         return html`<div>
@@ -206,11 +206,23 @@ export default class ImportMenu extends Popup
         </div>`
     }
 
-    protected renderSection(name :keyof typeof this.selection){
-        return html`<ff-collapse
-            header=${html`<div class="ff-flex-spacer ff-header">${this.language.getLocalizedString(name)}</div>`}
-            content=${this.renderChoices(name)}
-        ></ff-collapse>`
+    protected renderSection(name :Section){
+        const toggle = ()=>{
+            this.expanded[name] = !this.expanded[name];
+            this.requestUpdate();
+        }
+        return html`
+            <div class="ff-flex-row ff-header" @click=${toggle}>
+                <div class="ff-flex-spacer">
+                    ${this.language.getLocalizedString(titles[name])}:
+                </div>
+                <span style="flex:0 1 auto;padding-right:4px;text-overflow: ellipsis;">${((this.expanded[name] && this.selection[name])? "": this.options[name][this.selection[name]])}</span>
+                <ff-icon name="caret-${this.expanded[name]?"up":"down"}"></ff-icon>
+            </div>
+            ${this.expanded[name]? html`<div class="">
+                ${this.renderChoices(name)}
+            </div>`:null}
+        `
     }
 
     protected renderParentEntry(option: string, index: number)
@@ -231,15 +243,19 @@ export default class ImportMenu extends Popup
                     a[q] = EDerivativeQuality[q];
                     return a;
                 }, []);
+                if(!this.options["quality"].includes(EDerivativeQuality[this.selection["quality"]])){
+                    this.selection["quality"] = null;
+                }
             }
         }
+
+
         return super.update(changedProperties);
     }
 
     protected render()
     {
         const language = this.language;
-        console.log("Quality options ; ", this.options["quality"])
         return html`
         <div>
             <div class="ff-flex-column ff-fullsize ff-scroll-y">
@@ -247,42 +263,23 @@ export default class ImportMenu extends Popup
                     <div class="ff-flex-spacer ff-title">${"File: "}<i>${this.filename}</i></div>
                     <ff-button icon="close" transparent class="ff-close-button" title=${language.getLocalizedString("Close")} @click=${this.close}></ff-button>
                 </div>
+                <div class="ff-splitter-section">
 
-                <div class="ff-flex-row">
-                    <div class="ff-flex-spacer ff-header">${language.getLocalizedString("Derivative Usage")}:</div>
-                </div>
-                <div class="">
-                    ${this.renderChoices("usage")}
-                </div>
+                    ${this.renderSection("usage")}
 
-                ${1 < this.options["type"].length? html`
-                    <div class="ff-flex-row">
-                        <div class="ff-flex-spacer ff-header">${language.getLocalizedString("Asset Type")}:</div>
-                    </div>
-                    <div class="">
-                        ${this.renderChoices("type")}
-                    </div>
-                `:html``}
-                ${ this.selection["type"] == EAssetType.Image && this.selection["usage"] == EDerivativeUsage.Web3D ? html`
-                    <div class="ff-flex-row">
-                        <div class="ff-flex-spacer ff-header">${language.getLocalizedString("Map type")}:</div>
-                    </div>
-                    <div class="">
-                        ${this.renderChoices("mapType")}
-                    </div>
-                `:null}
+                    ${1 < this.options["type"].length? this.renderSection("type"):null}
 
-                ${1 < this.options["quality"].filter(q=>q).length ?html`<div class="ff-flex-row">
-                    <div class="ff-flex-spacer ff-header">${language.getLocalizedString("Derivative Quality")}:</div>
+                    ${ this.selection["type"] == EAssetType.Image && this.selection["usage"] == EDerivativeUsage.Web3D ?
+                        this.renderSection("mapType")
+                        : null
+                    }
+
+                    ${1 < this.options["quality"].filter(q=>q).length ? this.renderSection("quality"): null}
                 </div>
-                <div class="">
-                    ${this.renderChoices("quality")}
-                </div>`: null}
-                
                 <div class="ff-flex-row">
                     <div class="ff-flex-spacer ff-header">${language.getLocalizedString("Parent Node")}:</div>
                 </div>
-                <div class="ff-splitter-section" style="min-height: 45px;">
+                <div>
                     ${this.modelOptions.length > 0 ? html`<div >
                         ${this.modelOptions.map((option, index) => this.renderParentEntry(option.name, index))}
                     </div>` : html`<div class="ff-flex-row sv-centered sv-notification" style="height:100%; align-items:center">No Models In Scene</div>`}

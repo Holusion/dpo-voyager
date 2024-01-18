@@ -19,7 +19,7 @@
 import { customElement, property, html } from "@ff/ui/CustomElement";
 import List from "@ff/ui/List";
 
-import Derivative, { EDerivativeUsage, EDerivativeQuality, EAssetType} from "../../models/Derivative";
+import Derivative, { EDerivativeUsage, EDerivativeQuality, EAssetType, Asset} from "../../models/Derivative";
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +32,14 @@ export interface ISelectDerivativeEvent extends CustomEvent
     }
 }
 
+export interface ISelectAssetEvent extends CustomEvent
+{
+    target: DerivativeList;
+    detail: {
+        asset: Asset;
+        derivative: Derivative;
+    }
+}
 @customElement("sv-derivative-list")
 class DerivativeList extends List<Derivative>
 {
@@ -47,7 +55,9 @@ class DerivativeList extends List<Derivative>
         this.classList.add("sv-derivative-list");
     }
 
-    protected renderAsset(item :Derivative, asset :typeof Derivative.prototype.data.assets[0]){
+    protected renderAsset(item :Derivative, asset :Asset){
+
+
         let icon = "file";
         switch(asset.data.type){
             case EAssetType.Model:
@@ -59,8 +69,8 @@ class DerivativeList extends List<Derivative>
         }
         return html`<span class="ff-derivative-asset">
             <ff-icon name="${icon}"></ff-icon>
-            ${asset.data.uri}
-            <ff-icon style="fill: var(--color-danger)" name="trash" @click=${(e)=>console.log(e)}></ff-icon>
+            <span style="flex: 1 1 auto">${asset.data.uri}</span>
+            <a style="cursor: pointer" @click=${()=>this.onRemoveAsset(asset)}><ff-icon style="fill: var(--color-danger)" name="trash"></ff-icon></a>
         </span>`
     }
 
@@ -91,6 +101,12 @@ class DerivativeList extends List<Derivative>
     {
         this.dispatchEvent(new CustomEvent("select", {
             detail: { derivative: item }
+        }));
+    }
+
+    protected onRemoveAsset(asset: Asset){
+        this.dispatchEvent(new CustomEvent("remove-asset", {
+            detail: { asset: asset, derivative: this.selectedItem }
         }));
     }
 

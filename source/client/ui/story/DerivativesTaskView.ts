@@ -27,7 +27,7 @@ import CVDerivativesTask from "../../components/CVDerivativesTask";
 import { TaskView } from "../../components/CVTask";
 
 import "./DerivativeList";
-import { ISelectDerivativeEvent } from "./DerivativeList";
+import { ISelectAssetEvent, ISelectDerivativeEvent } from "./DerivativeList";
 import NVNode from "client/nodes/NVNode";
 import CVLanguageManager from "client/components/CVLanguageManager";
 import AssetMenu from "./AssetMenu";
@@ -61,7 +61,11 @@ export default class DerivativesTaskView extends TaskView<CVDerivativesTask>
             <div class="ff-flex-row ff-flex-wrap">
                 <ff-button @click=${this.onAddDerivative} icon="create" text="Add Asset"></ff-button>
             </div>
-            <sv-derivative-list .data=${derivatives} .selectedItem=${activeDerivative} .loadedItem=${loadedDerivative} @remove=${this.onRemoveDerivative} @select=${this.onSelectDerivative}></sv-derivative-list>
+            <sv-derivative-list .data=${derivatives} .selectedItem=${activeDerivative} .loadedItem=${loadedDerivative} 
+                @remove=${this.onRemoveDerivative} 
+                @select=${this.onSelectDerivative}
+                @remove-asset=${this.onRemoveAsset}
+            ></sv-derivative-list>
         `
     }
 
@@ -74,6 +78,16 @@ export default class DerivativesTaskView extends TaskView<CVDerivativesTask>
     }
     protected onRemoveDerivative(ev:ISelectDerivativeEvent){
         this.activeNode.model.derivatives.remove(ev.detail.derivative.data.usage, ev.detail.derivative.data.quality);
+        this.requestUpdate();
+    }
+
+    protected onRemoveAsset(ev:ISelectAssetEvent){
+        const {asset, derivative} = ev.detail;
+
+        derivative.removeAsset(asset);
+        if(derivative.data.assets.length === 0){
+            this.activeNode.model.derivatives.remove(derivative.data.usage, derivative.data.quality);
+        }
         this.requestUpdate();
     }
 
