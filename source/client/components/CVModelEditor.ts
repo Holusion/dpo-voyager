@@ -68,38 +68,13 @@ export default class CVModelEditor extends Component
         // if there is no asset, close any current article
         if(event.asset === null ) {
             //Close
-        } else if (event.asset.info.name.toLowerCase().endsWith(".glb")) {
-           this.importModel(event.asset.info);
+        } else {
+            this.mediaManager.handleModelImport(event.asset.info.path);
+            //this.importModel(event.asset.info);
         }
     }
 
     protected onTreeChange(event: IAssetTreeChangeEvent){
         console.log("Tree change", event);
-    }
-
-    private importModel(file :IFileInfo){
-        const mainView : MainView = document.getElementsByTagName('voyager-story')[0] as MainView;
-        const activeDoc = this.documentProvider.activeComponent;
-        ImportMenu.show(mainView, activeDoc.setup.language, file.name).then(([quality, parentName]) => {
-            const model = this.getSystemComponents(CVModel2).find(element => element.node.name === parentName);
-            if(typeof model === "undefined") {
-                const newModel = activeDoc.appendModel(file.path, quality);
-                const name = parentName;
-                newModel.node.name = name;
-                newModel.ins.name.setValue(name);
-                newModel.ins.quality.setValue(quality);
-            }
-            else {
-                model.derivatives.remove(EDerivativeUsage.Web3D, quality);
-                model.derivatives.createModelAsset(file.path, quality)
-                model.ins.quality.setValue(quality);
-                model.outs.updated.set();
-            }
-        }).catch(e => {
-            if(e){
-                console.error(e);
-                Notification.show(`Failed to edit model : ${e.message}`, "error");
-            }
-        });
     }
 }

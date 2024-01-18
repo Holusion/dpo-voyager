@@ -17,7 +17,7 @@
 
 import { Dictionary } from "@ff/core/types";
 
-import { IDerivative } from "client/schema/model";
+import { EAssetType, IDerivative } from "client/schema/model";
 
 import Derivative, { EDerivativeQuality, EDerivativeUsage } from "./Derivative";
 import Asset, { EMapType } from "./Asset";
@@ -144,16 +144,36 @@ export default class DerivativeList
         return derivative;
     }
 
-    remove(usage: EDerivativeUsage, quality: EDerivativeQuality)
+    remove(usage: EDerivativeUsage, quality: EDerivativeQuality, type ?:EAssetType)
     {
         const derivative = this.get(usage, quality);
         if(derivative) {
             const bin = this.getOrCreateBin(usage);
             const index = bin.indexOf(derivative);
-            if (index > -1) {
+            if (index == -1) return;
+            if(!type) {
                 bin.splice(index, 1);
+            }else{
+                bin[index].findAssets(type).forEach(asset => bin[index].removeAsset(asset));
             }
         }
+    }
+
+
+
+    createMapAsset(assetPath: string, quality: EDerivativeQuality | string, type :EMapType): Derivative
+    {
+        quality = (typeof quality === "string" ? EDerivativeQuality[quality] : quality) as EDerivativeQuality;
+        quality = isFinite(quality) ? quality : EDerivativeQuality.Medium;
+
+        const derivative = this.getOrCreate(EDerivativeUsage.Web3D, quality);
+
+        const asset = new Asset();
+        asset.setTexture(assetPath, type);
+        derivative.addAsset(asset);
+
+        return derivative;
+
     }
 
     createModelAsset(assetPath: string, quality: EDerivativeQuality | string): Derivative

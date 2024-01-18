@@ -82,6 +82,7 @@ export class SettingsTree extends Tree<ITreeNode>
     protected update(changedProperties: Map<PropertyKey, unknown>)
     {
         if (changedProperties.has("node")) {
+            console.log("Show properties for : ", this.node);
             this.root = this.createNodeTreeNode(this.node);
         }
 

@@ -496,4 +496,31 @@ $color-component-meta-light: #d9d998;
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// DERIVATIVES TASK
+.sv-derivative-list{
+  .ff-list-item{
+    .ff-derivative-title{
+      display:flex;
+      justify-content:stretch;
+    }
+    .ff-derivative-assets{
+      display: flex;
+      flex-direction: column;
+      padding-left: 14px;
+      .ff-derivative-asset{
+        line-height: 1.6em;
+        border-top: 1px solid #40464d;
+        border-bottom: 1px solid #40464d;
+      }
+    }
 
+    &[selected][expanded]{
+      background-color: transparent;
+      cursor: default;
+      .ff-derivative-title{
+        background-color: $color-primary;
+      }
+    }
+  }
+}

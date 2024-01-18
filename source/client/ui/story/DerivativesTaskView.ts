@@ -30,7 +30,7 @@ import "./DerivativeList";
 import { ISelectDerivativeEvent } from "./DerivativeList";
 import NVNode from "client/nodes/NVNode";
 import CVLanguageManager from "client/components/CVLanguageManager";
-import DerivativeMenu from "./DerivativeMenu";
+import AssetMenu from "./AssetMenu";
 import Notification from "@ff/ui/Notification";
 import CSelection from "@ff/graph/components/CSelection";
 
@@ -59,7 +59,7 @@ export default class DerivativesTaskView extends TaskView<CVDerivativesTask>
         const loadedDerivative = model.derivatives.get(EDerivativeUsage.Web3D, loadedQuality);
         return html`
             <div class="ff-flex-row ff-flex-wrap">
-                <ff-button @click=${this.onAddDerivative} icon="create" text="Add Derivative"></ff-button>
+                <ff-button @click=${this.onAddDerivative} icon="create" text="Add Asset"></ff-button>
             </div>
             <sv-derivative-list .data=${derivatives} .selectedItem=${activeDerivative} .loadedItem=${loadedDerivative} @remove=${this.onRemoveDerivative} @select=${this.onSelectDerivative}></sv-derivative-list>
         `
@@ -95,7 +95,7 @@ export default class DerivativesTaskView extends TaskView<CVDerivativesTask>
     }
 
     protected onAddDerivative(event :MouseEvent){
-        DerivativeMenu.show(this, this.system).then(([usage, quality, asset])=>{
+        AssetMenu.show(this, this.system).then(([usage, quality, asset])=>{
             let filepath = asset.info.path;
             console.log("Add derivative :", EDerivativeQuality[quality], asset);
             this.model.derivatives.remove(EDerivativeUsage.Web3D, quality);

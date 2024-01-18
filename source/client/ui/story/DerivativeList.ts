@@ -15,10 +15,12 @@
  * limitations under the License.
  */
 
+
 import { customElement, property, html } from "@ff/ui/CustomElement";
 import List from "@ff/ui/List";
 
-import Derivative, { EDerivativeUsage, EDerivativeQuality} from "../../models/Derivative";
+import Derivative, { EDerivativeUsage, EDerivativeQuality, EAssetType} from "../../models/Derivative";
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -45,14 +47,39 @@ class DerivativeList extends List<Derivative>
         this.classList.add("sv-derivative-list");
     }
 
+    protected renderAsset(item :Derivative, asset :typeof Derivative.prototype.data.assets[0]){
+        let icon = "file";
+        switch(asset.data.type){
+            case EAssetType.Model:
+                icon = "cube";
+                break;
+            case EAssetType.Image:
+                icon = "camera";
+                break;
+        }
+        return html`<span class="ff-derivative-asset">
+            <ff-icon name="${icon}"></ff-icon>
+            ${asset.data.uri}
+            <ff-icon style="fill: var(--color-danger)" name="trash" @click=${(e)=>console.log(e)}></ff-icon>
+        </span>`
+    }
+
+
     protected renderItem(item: Derivative)
     {
+        const isSelected = item == this.selectedItem;
         const isLoaded = item === this.loadedItem;
-        return html`<div style="display:flex;justify-content:stretch;">
-            <ff-icon name=${isLoaded ? "check" : "empty"}></ff-icon>
-            <span title=${item.data.assets.map(a=>a.data.uri).join("\n")} style="flex: 1 1 auto;">${EDerivativeUsage[item.data.usage]} - ${EDerivativeQuality[item.data.quality]}</span>
-            <ff-icon name="trash" @click=${(e)=>this.onRemoveItem(e, item)}></ff-icon>
-        </div>`;
+        //<ff-icon style="fill: var(--color-danger)" name="trash" @click=${(e)=>this.onRemoveItem(e, item)}></ff-icon>
+        return html`
+            <div class="ff-derivative-title">
+                <ff-icon name=${isLoaded ? "check" : "empty"} title="${isLoaded ? "current model" : ""}"></ff-icon>
+                <span title=${item.data.assets.map(a=>a.data.uri).join("\n")} style="flex: 1 1 auto;">${EDerivativeUsage[item.data.usage]} - ${EDerivativeQuality[item.data.quality]}</span>
+                <ff-icon name="caret-${isSelected? "up":"down"}"></ff-icon>
+            </div>
+            ${isSelected? html`<div class="ff-derivative-assets">
+                ${item.data.assets.map(this.renderAsset.bind(this, item))}
+            </div>`: null}
+        `;
     }
 
     protected isItemSelected(item: Derivative)

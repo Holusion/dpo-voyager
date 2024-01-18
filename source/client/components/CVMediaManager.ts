@@ -26,7 +26,7 @@ import MainView from "client/ui/explorer/MainView";
 import CVDocumentProvider from "./CVDocumentProvider";
 import ImportMenu from "client/ui/story/ImportMenu";
 import CVModel2 from "./CVModel2";
-import { EDerivativeUsage } from "client/schema/model";
+import { EAssetType, EDerivativeQuality, EDerivativeUsage } from "client/schema/model";
 import CSelection from "@ff/graph/components/CSelection";
 import CVMeta from "./CVMeta";
 import Article from "client/models/Article";
@@ -134,9 +134,9 @@ export default class CVMediaManager extends CAssetManager
             const cleanfileName = decodeURI(file.name);
             const filenameLower = cleanfileName.toLowerCase();
             
-            if (filenameLower.match(/\.(gltf|glb|bin|svx.json|html|jpg|jpeg|png|usdz)$/)) {
+            if (filenameLower.match(/\.(gltf|glb|bin|svx.json|html|jpe?g|webp|png|usdz)$/)) {
 
-                if(!documentProvided && filenameLower.match(/\.(jpg|jpeg|png)$/) && !fileArray.some(entry => entry[0].endsWith("gltf"))) {
+                if(!documentProvided && filenameLower.match(/\.(jpe?g|webp|png)$/) && !fileArray.some(entry => entry[0].endsWith("gltf"))) {
                     path = CVMediaManager.articleFolder + "/" + cleanfileName;
                 }
 
@@ -171,15 +171,17 @@ export default class CVMediaManager extends CAssetManager
         });
     }
 
-    protected handleModelImport(filepath: string) {
+    public handleModelImport(filepath: string):Promise<void> {
         const mainView : MainView = document.getElementsByTagName('voyager-story')[0] as MainView;
         const activeDoc = this.getMainComponent(CVDocumentProvider).activeComponent;
-        const filename = filepath.substr(filepath.lastIndexOf("/") + 1);
+        const filename = filepath.slice(filepath.lastIndexOf("/") + 1);
         const selection = this.getMainComponent(CSelection);
 
-        ImportMenu.show(mainView, activeDoc.setup.language, filename).then(([quality, parentName]) => {
+
+        return ImportMenu.show(mainView, activeDoc.setup.language, filename).then(({quality, usage, type, mapType, parentName}) => {
             const model = this.getSystemComponents(CVModel2).find(element => element.node.name === parentName);
             if(model === undefined) {
+                if(type !== EAssetType.Model) throw new Error(`Need an existing model to add a ${EAssetType[type]}`);
                 // converting path to relative (TODO: check if all browsers will have leading slash here)
                 const newModel = activeDoc.appendModel(filepath, quality);
                 const name = parentName;
@@ -189,13 +191,19 @@ export default class CVMediaManager extends CAssetManager
                 selection.selectNode(newModel.node);
             }
             else {
-                model.derivatives.remove(EDerivativeUsage.Web3D, quality);
-                model.derivatives.createModelAsset(filepath, quality)
+                if(type == EAssetType.Model){
+                    model.derivatives.remove(usage, quality, type);
+                    model.derivatives.createModelAsset(filepath, quality);
+                }else if(type == EAssetType.Image){
+                    model.derivatives.createMapAsset(filepath, quality, mapType);
+                }
                 model.ins.quality.setValue(quality);
                 model.outs.updated.set();
                 selection.selectNode(model.node);
             }
-        }).catch(e => {});
+        }).catch(e => {
+            if(e) Notification.show(`Failed to setup asset ${filename}: ${e.message}`, "error");
+        });
     }
 
     uploadFiles(files: FileList, folder: IAssetEntry): Promise<any>
