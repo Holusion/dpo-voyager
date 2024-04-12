@@ -25,6 +25,8 @@ import TextureReader from "../io/TextureReader";
 import FontReader, { IBitmapFont } from "../io/FontReader";
 
 import CVAssetManager from "./CVAssetManager";
+import CRenderer from "@ff/scene/components/CRenderer";
+import { WebGLRenderer } from "three";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -52,7 +54,7 @@ export default class CVAssetReader extends Component
         super(node, id);
 
         const loadingManager = this.assetManager.loadingManager;
-
+        
         this.jsonLoader = new JSONReader(loadingManager);
         this.modelLoader = new ModelReader(loadingManager);
         this.geometryLoader = new GeometryReader(loadingManager);

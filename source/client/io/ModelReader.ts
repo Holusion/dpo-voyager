@@ -17,12 +17,15 @@
 
 //import resolvePathname from "resolve-pathname";
 import UberPBRAdvMaterial from "client/shaders/UberPBRAdvMaterial";
-import { LoadingManager, Object3D, Scene, Group, Mesh, MeshStandardMaterial, sRGBEncoding, SRGBColorSpace, MeshPhysicalMaterial } from "three";
+import { LoadingManager, Object3D, Scene, Group, Mesh, MeshStandardMaterial, sRGBEncoding, SRGBColorSpace, MeshPhysicalMaterial, WebGLRenderer } from "three";
 
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader";
 
 import UberPBRMaterial from "../shaders/UberPBRMaterial";
+import MainView from "client/ui/explorer/MainView";
+import CRenderer from "@ff/scene/components/CRenderer";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -61,6 +64,16 @@ export default class ModelReader
 
         this.gltfLoader = new GLTFLoader(loadingManager);
         this.gltfLoader.setDRACOLoader(dracoLoader);
+        setTimeout(()=>{
+            const renderer = (document.querySelector("voyager-explorer") as MainView).application.system.getMainComponent(CRenderer).views[0].renderer
+            console.warn("Set KTX2Loader");
+            const ktxLoader = new KTX2Loader(loadingManager);
+            ktxLoader.setTranscoderPath("/dist/js/basis/");
+            ktxLoader.detectSupport(renderer);
+    
+            this.gltfLoader.setKTX2Loader(ktxLoader);
+
+        }, 0);
     }
 
     dispose()
