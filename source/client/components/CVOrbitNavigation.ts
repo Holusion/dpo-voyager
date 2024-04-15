@@ -32,6 +32,7 @@ import CVAssetManager from "./CVAssetManager";
 import CVARManager from "./CVARManager";
 import CVModel2 from "./CVModel2";
 import { EDerivativeQuality, EDerivativeUsage } from "client/schema/model";
+import { getMeshTransform } from "client/utils/Helpers";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -131,6 +132,7 @@ export default class CVOrbitNavigation extends CObject3D
         return [
             this.ins.orbit,
             this.ins.offset,
+            this.ins.pivot,
         ];
     }
 
@@ -149,6 +151,7 @@ export default class CVOrbitNavigation extends CObject3D
         super.create();
 
         this.system.on<IPointerEvent>(["pointer-down", "pointer-up", "pointer-move"], this.onPointer, this);
+        this.system.on<ITriggerEvent>("double-click", this.onDoubleClick, this);
         this.system.on<ITriggerEvent>("wheel", this.onTrigger, this);
         this.system.on<IKeyboardEvent>("keydown", this.onKeyboard, this);
 
@@ -483,6 +486,19 @@ export default class CVOrbitNavigation extends CObject3D
         }
 
         this._hasChanged = true;
+    }
+
+    protected onDoubleClick(event: ITriggerEvent){
+        if(event.component.typeName != "CVModel2") return;
+        const model = event.component as CVModel2;
+
+        const meshTransform = getMeshTransform(model.object3D, event.object3D);
+        const invMeshTransform = meshTransform.clone().invert();
+        const bounds = model.localBoundingBox.clone().applyMatrix4(meshTransform);
+        // add mesh parent transforms in this branch
+        let localPosition = event.view.pickPosition(event as any, bounds).applyMatrix4(invMeshTransform);
+        this.ins.pivot.setValue(localPosition.toArray());
+        this.ins.offset.setValue([0, 0, this.ins.offset.value[2]]);
     }
 
     protected onTrigger(event: ITriggerEvent)
