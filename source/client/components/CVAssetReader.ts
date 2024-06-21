@@ -25,6 +25,8 @@ import TextureReader from "../io/TextureReader";
 import FontReader, { IBitmapFont } from "../io/FontReader";
 
 import CVAssetManager from "./CVAssetManager";
+import CRenderer from "@ff/scene/components/CRenderer";
+import { BufferGeometry, Object3D, Texture } from "three";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -54,7 +56,7 @@ export default class CVAssetReader extends Component
         const loadingManager = this.assetManager.loadingManager;
 
         this.jsonLoader = new JSONReader(loadingManager);
-        this.modelLoader = new ModelReader(loadingManager);
+        this.modelLoader = new ModelReader(loadingManager, this.renderer);
         this.geometryLoader = new GeometryReader(loadingManager);
         this.textureLoader = new TextureReader(loadingManager);
         this.fontReader = new FontReader(loadingManager);
@@ -68,6 +70,10 @@ export default class CVAssetReader extends Component
 
     protected get assetManager() {
         return this.getMainComponent(CVAssetManager);
+    }
+
+    protected get renderer(){
+        return this.getMainComponent(CRenderer);
     }
 
     setDracoPath(dracoPath: string)

@@ -17,12 +17,15 @@
 
 //import resolvePathname from "resolve-pathname";
 import UberPBRAdvMaterial from "client/shaders/UberPBRAdvMaterial";
-import { LoadingManager, Object3D, Scene, Group, Mesh, MeshStandardMaterial, sRGBEncoding, SRGBColorSpace, MeshPhysicalMaterial } from "three";
+import { LoadingManager, Object3D, Scene, Group, Mesh, MeshStandardMaterial, SRGBColorSpace, MeshPhysicalMaterial, WebGLRenderer } from "three";
 
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js';
+import {MeshoptDecoder} from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 
 import UberPBRMaterial from "../shaders/UberPBRMaterial";
+import CRenderer from "@ff/scene/components/CRenderer";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -34,9 +37,12 @@ export default class ModelReader
     static readonly mimeTypes = [ "model/gltf+json", "model/gltf-binary" ];
 
     protected loadingManager: LoadingManager;
-    protected gltfLoader;
+    protected renderer: CRenderer;
+    protected gltfLoader :GLTFLoader;
 
     protected customDracoPath = null;
+
+    private queue = Promise.resolve();
 
     set dracoPath(path: string) 
     {
@@ -45,8 +51,9 @@ export default class ModelReader
             this.gltfLoader.dracoLoader.setDecoderPath(this.customDracoPath);
         }
     }
-   
-    constructor(loadingManager: LoadingManager)
+
+
+    constructor(loadingManager: LoadingManager, renderer: CRenderer)
     {
         this.loadingManager = loadingManager;
 
@@ -58,9 +65,10 @@ export default class ModelReader
 
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath(this.customDracoPath || DEFAULT_DRACO_PATH);
-
+        this.renderer = renderer;
         this.gltfLoader = new GLTFLoader(loadingManager);
         this.gltfLoader.setDRACOLoader(dracoLoader);
+        this.gltfLoader.setMeshoptDecoder(MeshoptDecoder);
     }
 
     dispose()
@@ -83,7 +91,16 @@ export default class ModelReader
 
     get(url: string): Promise<Object3D>
     {
+        console.debug("Load model :", url)
         return new Promise((resolve, reject) => {
+            /** ktx2Loader has been here for a long time but only added to types definitions in r165 */
+            if(!(this.gltfLoader as any).ktx2Loader){
+                const ktx2Loader = new KTX2Loader(this.loadingManager);
+                ktx2Loader.setTranscoderPath("/dist/js/basis/");
+                ktx2Loader.detectSupport(this.renderer.views[0].renderer);
+                this.gltfLoader.setKTX2Loader(ktx2Loader);
+            }
+
             this.gltfLoader.load(url, gltf => {
                 resolve(this.createModelGroup(gltf));
             }, null, error => {
@@ -94,17 +111,20 @@ export default class ModelReader
                 }
                 else {
                     console.error(`failed to load '${url}': ${error}`);
-                    reject(new Error(error));
+                    reject(new Error(error as any));
                 }
             })
         });
     }
 
-    protected createModelGroup(gltf): Object3D
+    protected async createModelGroup(gltf): Promise<Object3D>
     {
-        const scene: Scene = gltf.scene;
-
-        scene.traverse((object: any) => {
+        const group: Scene = gltf.scene;
+        let textures = [];
+        await new Promise((resolve=>{
+                requestAnimationFrame(resolve);
+            }));
+        group.traverse((object: any) => {
             if (object.type === "Mesh") {
                 const mesh: Mesh = object;
                 mesh.castShadow = true;
@@ -117,7 +137,7 @@ export default class ModelReader
                 mesh.geometry.computeBoundingBox();
 
                 const uberMat = material.type === "MeshPhysicalMaterial" ? new UberPBRAdvMaterial() : new UberPBRMaterial();
-
+                
                 if (material.flatShading) {
                     mesh.geometry.computeVertexNormals();
                     material.flatShading = false;
@@ -137,11 +157,28 @@ export default class ModelReader
                         console.log("ModelReader.createModelGroup - objectSpaceNormals: ", true);
                     }
                 }
+                textures.push(uberMat.alphaMap, uberMat.aoMap, uberMat.bumpMap, uberMat.displacementMap, uberMat.emissiveMap, uberMat.envMap, uberMat.lightMap, uberMat.map, uberMat.metalnessMap, uberMat.normalMap, uberMat.roughnessMap, uberMat.zoneMap);
 
                 mesh.material = uberMat;
             }
         });
-
-        return scene;
+        const webRenderer= this.renderer?.views[0]?.renderer;
+        const camera = this.renderer.activeCamera;
+        const s = this.renderer.activeScene;
+        for(let tex of textures){
+            if(!tex) continue;
+            this.queue = this.queue.then(()=>new Promise((resolve=>{
+                requestAnimationFrame(()=>{
+                    console.debug("Load texture", Date.now());
+                    webRenderer.initTexture(tex);
+                    resolve();
+                });
+            })));
+        }
+        await this.queue;
+        console.debug("Compile");
+        //compileAsync requires THREE r161
+        //await webRenderer.compileAsync(s, camera, group);
+        return group;
     }
 }
