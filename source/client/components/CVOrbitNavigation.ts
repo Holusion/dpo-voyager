@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Box3 } from "three";
+import { Box3, Sphere, Vector3 } from "three";
 
 import CObject3D, { Node, types } from "@ff/scene/components/CObject3D";
 
@@ -30,6 +30,8 @@ import { INavigation } from "client/schema/setup";
 import CVScene from "./CVScene";
 import CVAssetManager from "./CVAssetManager";
 import CVARManager from "./CVARManager";
+import CVModel2 from "./CVModel2";
+import { EDerivativeQuality, EDerivativeUsage } from "client/schema/model";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -318,6 +320,35 @@ export default class CVOrbitNavigation extends CObject3D
             }
             else {
                 cameraComponent.setPropertiesFromMatrix();
+            }
+            const cam = new Vector3(...transform.ins.position.value);
+            const yfov= cameraComponent.ins.fov.value * Math.PI / 180; 
+
+            console.debug("Camera Position :", cam);
+            for(let model of this.getGraphComponents(CVModel2)){
+                const position = model.localBoundingBox.getBoundingSphere(new Sphere());
+                //Try to approximate how much screen space the model is taking up
+                //This should also look whether the object is "in screen" or outside of it
+                const distance = cam.distanceTo(position.center);
+                const relSize = position.radius / (2*Math.tan(yfov/2)*distance);
+                //Arbitrarily set: 10% Low, 25% Medium, 50% High
+                const current = model.ins.quality.value;
+                let bestMatchQuality :EDerivativeQuality = current;
+                if(relSize < 0.1){
+                    bestMatchQuality = EDerivativeQuality.Thumb;
+                }else if(relSize < 0.20){
+                    bestMatchQuality = EDerivativeQuality.Low;
+                }else if(relSize < 0.40){
+                    bestMatchQuality = EDerivativeQuality.Medium;
+                }else{
+                    bestMatchQuality = EDerivativeQuality.High;
+                }
+                if(bestMatchQuality == current) continue;
+                const bestMatchDerivative = model.derivatives.select(EDerivativeUsage.Web3D, bestMatchQuality);
+                if(bestMatchDerivative && bestMatchDerivative.data.quality != current ){
+                    console.debug("Set quality for ", model.ins.name.value, " to ", bestMatchDerivative.data.quality);
+                    model.ins.quality.setValue(bestMatchDerivative.data.quality);
+                }
             }
 
             return true;
