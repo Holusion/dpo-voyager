@@ -104,7 +104,7 @@ export default class ModelReader
 
     get(url: string): Promise<Object3D>
     {
-        console.debug("Load model :", url)
+        console.debug("Load model :", url.split("/").pop())
         return new Promise((resolve, reject) => {
             /** ktx2Loader has been here for a long time but only added to types definitions in r165 */
             if(!(this.gltfLoader as any).ktx2Loader){
@@ -182,14 +182,12 @@ export default class ModelReader
             if(!tex) continue;
             this.queue = this.queue.then(()=>new Promise((resolve=>{
                 requestAnimationFrame(()=>{
-                    console.debug("Load texture", Date.now());
                     webRenderer.initTexture(tex);
                     resolve();
                 });
             })));
         }
         await this.queue;
-        console.debug("Compile");
         //compileAsync requires THREE r161
         //await webRenderer.compileAsync(s, camera, group);
         return group;

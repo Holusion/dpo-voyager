@@ -321,32 +321,58 @@ export default class CVOrbitNavigation extends CObject3D
             else {
                 cameraComponent.setPropertiesFromMatrix();
             }
-            const cam = new Vector3(...transform.ins.position.value);
+            //VEctors allocations should be moved to module-globals once things are stable
+            // Kepts there for now for readability
+            const camPos = new Vector3(...transform.ins.position.value);
+            //Might be faster to calculate from transform.ins
+            const camForward = cameraComponent.camera.getWorldDirection(new Vector3());
             const yfov= cameraComponent.ins.fov.value * Math.PI / 180; 
-
-            console.debug("Camera Position :", cam);
+            
             for(let model of this.getGraphComponents(CVModel2)){
-                const position = model.localBoundingBox.getBoundingSphere(new Sphere());
+                const scale = Math.pow(10, model.ins.localUnits.value);
+                let {center:position, radius: size} = model.localBoundingBox.getBoundingSphere(new Sphere());
+                position.multiplyScalar(scale);
+                size = size*scale;
                 //Try to approximate how much screen space the model is taking up
                 //This should also look whether the object is "in screen" or outside of it
-                const distance = cam.distanceTo(position.center);
-                const relSize = position.radius / (2*Math.tan(yfov/2)*distance);
+                const distance = camPos.distanceTo(position);
+
+
+                // Size relative to viewport in 0..1 range
+                const relSize = size* Math.max(...model.transform.ins.scale.value) / (2*Math.tan(yfov/2)*distance);
+
+                //View direction modification
+                position.sub(camPos);
+                const camAngle = camForward.angleTo(position);
+                const inView = camAngle < yfov/2; /** @fixme Ideally check against both FOV angles */
+                /** @fixme also check if fully or partially in view */
+                
                 //Arbitrarily set: 10% Low, 25% Medium, 50% High
                 const current = model.ins.quality.value;
                 let bestMatchQuality :EDerivativeQuality = current;
-                if(relSize < 0.1){
+                if(relSize == 0){
+                    continue;
+                }else if(relSize < 0.05){
                     bestMatchQuality = EDerivativeQuality.Thumb;
-                }else if(relSize < 0.20){
+                }else if(relSize < 0.1 && EDerivativeQuality.Low < current){
                     bestMatchQuality = EDerivativeQuality.Low;
-                }else if(relSize < 0.40){
+                }else if(relSize < 0.15){
+                    bestMatchQuality = EDerivativeQuality.Low;
+                }else if(relSize < 0.2 && EDerivativeQuality.Medium < current){
                     bestMatchQuality = EDerivativeQuality.Medium;
-                }else{
+                }else if(relSize < 0.30){
+                    bestMatchQuality = EDerivativeQuality.Medium;
+                }else if(relSize < 40){
                     bestMatchQuality = EDerivativeQuality.High;
                 }
+
+                //Check for cases where we won't update quality
                 if(bestMatchQuality == current) continue;
+                else if(current < bestMatchQuality && !inView) continue; //Don't upgrade when not visible
+
                 const bestMatchDerivative = model.derivatives.select(EDerivativeUsage.Web3D, bestMatchQuality);
                 if(bestMatchDerivative && bestMatchDerivative.data.quality != current ){
-                    console.debug("Set quality for ", model.ins.name.value, " to ", bestMatchDerivative.data.quality);
+                    console.debug("Set quality for ", model.ins.name.value, " from ", current, " to ", bestMatchDerivative.data.quality);
                     model.ins.quality.setValue(bestMatchDerivative.data.quality);
                 }
             }

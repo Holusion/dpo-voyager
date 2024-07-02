@@ -681,11 +681,14 @@ export default class CVModel2 extends CObject3D
 
         return derivative.load(this.assetReader)
             .then(() => {
-                if (!derivative.model || !this.node || 
-                  (this._activeDerivative && derivative.data.quality != this.ins.quality.value)) {
+                if ( !derivative.model 
+                  || !this.node 
+                  || (this._activeDerivative && derivative.data.quality != this.ins.quality.value)) {
                     derivative.unload();
                     return;
                 }
+                //Race condition
+                if(this._activeDerivative && this._activeDerivative == derivative) return;
 
                 // set asset manager flag for initial model load
                 if(!this.assetManager.initialLoad && !this._activeDerivative) {
@@ -693,7 +696,7 @@ export default class CVModel2 extends CObject3D
                 }
 
                 if (this._activeDerivative) {
-                    this.removeObject3D(this._activeDerivative.model);
+                    if(this._activeDerivative.model) this.removeObject3D(this._activeDerivative.model);
                     this._activeDerivative.unload();
                 }
 
@@ -708,8 +711,8 @@ export default class CVModel2 extends CObject3D
                 }
 
                 // update bounding box based on loaded derivative
-                this._localBoundingBox.makeEmpty();
-                helpers.computeLocalBoundingBox(derivative.model, this._localBoundingBox);
+                //this._localBoundingBox.makeEmpty();
+                //helpers.computeLocalBoundingBox(derivative.model, this._localBoundingBox);
                 this.outs.updated.set();
 
                 if (ENV_DEVELOPMENT) {
@@ -764,8 +767,10 @@ export default class CVModel2 extends CObject3D
 
                 this.emit<IModelLoadEvent>({ type: "model-load", quality: derivative.data.quality });
                 //this.getGraphComponent(CVSetup).navigation.ins.zoomExtents.set(); 
-            })
-            .catch(error => Notification.show(`Failed to load model derivative: ${error.message}`));
+            }).catch(error =>{
+                console.error(error);
+                Notification.show(`Failed to load model derivative: ${error.message}`)
+            });
     }
 
     protected addObject3D(object: Object3D)
