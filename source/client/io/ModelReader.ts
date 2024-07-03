@@ -124,11 +124,14 @@ export default class ModelReader
         });
     }
 
-    protected createModelGroup(gltf): Object3D
+    protected async createModelGroup(gltf): Promise<Object3D>
     {
-        const scene: Scene = gltf.scene;
-
-        scene.traverse((object: any) => {
+        const group: Scene = gltf.scene;
+        let textures = [];
+        await new Promise((resolve=>{
+                requestAnimationFrame(resolve);
+            }));
+        group.traverse((object: any) => {
             if (object.type === "Mesh") {
                 const mesh: Mesh = object;
                 mesh.castShadow = true;
@@ -161,11 +164,23 @@ export default class ModelReader
                         console.log("ModelReader.createModelGroup - objectSpaceNormals: ", true);
                     }
                 }
+                textures.push(uberMat.alphaMap, uberMat.aoMap, uberMat.bumpMap, uberMat.displacementMap, uberMat.emissiveMap, uberMat.envMap, uberMat.lightMap, uberMat.map, uberMat.metalnessMap, uberMat.normalMap, uberMat.roughnessMap, uberMat.zoneMap);
 
                 mesh.material = uberMat;
             }
         });
-
-        return scene;
+        const webRenderer= this.renderer?.views[0]?.renderer;
+        for(let tex of textures){
+            if(!tex) continue;
+            await new Promise<void>((resolve)=>{
+                requestAnimationFrame(()=>{
+                    webRenderer.initTexture(tex);
+                    resolve();
+                });
+            });
+        }
+        //compileAsync requires THREE r161
+        //await webRenderer.compileAsync(s, camera, group);
+        return group;
     }
 }
