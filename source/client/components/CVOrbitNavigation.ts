@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Box3, Euler, Quaternion, Sphere, Vector3 } from "three";
+import { Box3, Euler, Sphere, Quaternion, Vector3, Matrix4, Plane, Ray, Vector2 } from "three";
 
 import CObject3D, { Node, types } from "@ff/scene/components/CObject3D";
 
@@ -41,6 +41,15 @@ export { EProjection };
 
 export enum EViewPreset { Left, Right, Top, Bottom, Front, Back, None };
 export enum EKeyNavMode { Orbit, Zoom, Pan };
+
+const sizeMap ={
+    [EDerivativeQuality.Thumb]: 512*512,
+    [EDerivativeQuality.Low]: 1024*1024,
+    [EDerivativeQuality.Medium]: 2048*2048,
+    [EDerivativeQuality.High]: 4096*4096,
+} as const;
+
+
 
 const _orientationPresets = [];
 _orientationPresets[EViewPreset.Left] = [ 0, -90, 0 ];
@@ -322,66 +331,174 @@ export default class CVOrbitNavigation extends CObject3D
             else {
                 cameraComponent.setPropertiesFromMatrix();
             }
-            //VEctors allocations should be moved to module-globals once things are stable
-            // Kepts there for now for readability
-            const camPos = new Vector3(...transform.ins.position.value);
-            //Might be faster to calculate from transform.ins
-            const camForward = cameraComponent.camera.getWorldDirection(new Vector3());
-            const yfov= cameraComponent.ins.fov.value * Math.PI / 180; 
-            
-            for(let model of this.getGraphComponents(CVModel2)){
-                const scale = Math.pow(10, model.ins.localUnits.value);
-                let {center:position, radius: size} = model.localBoundingBox.getBoundingSphere(new Sphere());
-                position.multiplyScalar(scale);
-                size = size*scale;
-                //Try to approximate how much screen space the model is taking up
-                //This should also look whether the object is "in screen" or outside of it
-                const distance = camPos.distanceTo(position);
 
+            /**
+             * Dynamic LOD handling.
+             * @fixme Vectors allocations should be moved to module scope once things stabilize.
+             *      They are kept here for now for readability
+             * 
+             * @fixme we currently don't account for viewport size which might be an interesting modifier
+             *      ie. smaller (as in pixels as much as physical size) screens might need smaller
+             * 
+             * 
+             */
 
-                // Size relative to viewport in 0..1 range
-                const relSize = size* Math.max(...model.transform.ins.scale.value) / (2*Math.tan(yfov/2)*distance);
+            /**
+             * Applies a modifier depending on the model's center position on screen
+             * Models near the center of screen are considered more important than near corners
+             * A coefficient of 0.5 means a model whose center is right at the edge of the screen
+             * is half as important as a centered model of equal size
+             * @fixme using min/max might be more pertinent 
+             * Don't go below 25% of original weight
+             */
+            function centerWeight(pt :Vector2|Vector3){
+                return Math.sqrt(Math.max(1 - 0.5*Math.abs(pt.x) - 0.5*Math.abs(pt.y), 1/16));
+            }
 
-                //View direction modification
-                position.sub(camPos);
-                const camAngle = camForward.angleTo(position);
-                const inView = camAngle < yfov/2; /** @fixme Ideally check against both FOV angles */
-                /** @fixme also check if fully or partially in view */
+            /**
+             * How far from center is the centermost part of the object?
+             * 1: Object crosses the image's center
+             */
+            function maxCenterWeight(b :Box3){
+                let dx = Math.max(-b.max.x, b.min.x, 0);
+                let dy = Math.max(-b.max.y, b.min.y, 0);
+                return 1 / (1+dx+dy);
+            }
+
+            /**
+             * Applies a modifier using Z depth
+             * Keep in mind that actual depth decay is already accounted-for naturally through screen-space coordinates
+             * 
+             */
+            function depthWeight(min:number, max:number){
+                if(max < -1 || 1 < min ) return 0;
+                //Actual depth when within near/far bounds is already accounted-for
+                //through NDC projection. We could however implement some kind of exponential decay here
+                if(-1 < min && max < 1 ) return 1;
+                return 1 - 2/(Math.max(1,max-1) - Math.min(-1, min+1));
+            }
+
+            const hyst = 0.02; //In absolute % of screen area unit
+            const steps = [
+                [0.03, EDerivativeQuality.Thumb],
+                [0.10, EDerivativeQuality.Low],
+                [0.3, EDerivativeQuality.Medium],
+            ];
+            /**
+             * Calculate desired quality setting agressively.
+             * 
+             * An hysteresis is necessary to prevent flickering, 
+             * but it would be interesting to configure if we upgrade-first or downgrade-first
+             * depending on resources contention 
+             * 
+             * @fixme here we should take into account the renderer's resolution:
+             * we probably don't need a 4k texture when rendering an object over 40% of a 800px viewport
+             */
+            function getQuality(current :EDerivativeQuality, relSize:number){
+                return steps.find(([size, q])=>{
+                    if (current <= q) size += hyst;
+                    return relSize < size;
+                })?.[1] ?? EDerivativeQuality.High;
+            }
+
+            const box = new Box3();
+            const point = new Vector3(0, 0, 0);
+
+            const models :Array<{model:CVModel2, weight:number, relSize:number, quality : EDerivativeQuality}> = this.getGraphComponents(CVModel2).map(model=>{
+                box.makeEmpty();
+                const scale = model.outs.unitScale.value;
+                let b = model.localBoundingBox.clone().applyMatrix4(new Matrix4().compose(
+                    new Vector3(...model.transform.ins.position.value).multiplyScalar(scale),
+                    new Quaternion().setFromEuler(new Euler(...model.transform.ins.rotation.value, "XYZ" as any)),
+                    new Vector3(...model.transform.ins.scale.value).multiplyScalar(scale),
+                ));
+                //console.debug("Box:", b.min.toArray(), b.max.toArray(), cameraComponent.camera.position.toArray());
+                [
+                    [b.min.x, b.min.y, b.min.z],
+                    [b.max.x, b.min.y, b.min.z],
+                    [b.max.x, b.max.y, b.min.z],
+                    [b.max.x, b.max.y, b.max.z],
+                    [b.min.x, b.max.y, b.max.z],
+                    [b.min.x, b.min.y, b.max.z],
+                    [b.max.x, b.min.y, b.max.z],
+                    [b.min.x, b.max.y, b.min.z],
+                ].forEach((coords:[number, number, number], index)=>{
+                    point.set(...coords).project(cameraComponent.camera);
+                    box.expandByPoint(point);
+                });
+                //console.debug("NDC : ", box.min.toArray(), box.max.toArray());
+                //We want % of screen surface that would be used if the object was centered
+                box.getSize(point);
+                const relSize = (point.x *point.y)/4;
+                let center = box.getCenter(point);
+                /**
+                 * Weight (object's perceived importance) is separate from relSize (object's scale relative to screen)
+                 * because we don't want to downscale objects that become invisible too agressively when we can avoid it.
+                 */
+                let weight = relSize*maxCenterWeight(box)*depthWeight(box.min.z, box.max.z);
                 
-                //Arbitrarily set: 10% Low, 25% Medium, 50% High
+                /**
+                 * Calculate the expected quality for the given relative size
+                 */
                 const current = model.ins.quality.value;
-                let bestMatchQuality :EDerivativeQuality = current;
-                if(relSize == 0){
-                    continue;
-                }else if(relSize < 0.05){
-                    bestMatchQuality = EDerivativeQuality.Thumb;
-                }else if(relSize < 0.1 && EDerivativeQuality.Low < current){
-                    bestMatchQuality = EDerivativeQuality.Low;
-                }else if(relSize < 0.15){
-                    bestMatchQuality = EDerivativeQuality.Low;
-                }else if(relSize < 0.2 && EDerivativeQuality.Medium < current){
-                    bestMatchQuality = EDerivativeQuality.Medium;
-                }else if(relSize < 0.30){
-                    bestMatchQuality = EDerivativeQuality.Medium;
-                }else if(relSize < 40){
-                    bestMatchQuality = EDerivativeQuality.High;
+                let quality :EDerivativeQuality = getQuality(current, weight);
+                console.debug(
+                    `${model.ins.name.value} quality :`
+                    +` ${quality} ${Math.round(relSize*100)}% screen size`
+                    +` (${center.x.toFixed(2)}, ${center.y.toFixed(2)}) ${Math.round(maxCenterWeight(box)*100)}% centered`
+                    +` ${Math.round((depthWeight(box.min.z, box.max.z))*100)}% Z-mod` );
+                //*/
+                return {model, weight, relSize, quality}
+            });
+            models.sort((a, b)=> a.weight - b.weight)
+            //Texture size is counted in squares, we use total number of pixels
+            const textureSpace = 16384; //Discrete GPUs have twice as much, but we are not trying to max-out
+            let texSize = 0;
+            // 2 maps of 512px per thumbnails models
+            // Then a few 1024px maps for shadow maps
+            // We are not trying to minmax things here, just eyeballing how texture-contrained we expect to be
+            let reserved = 2*models.length * 512 * 512 + 1024*1024*4; 
+            let downgrades = {};
+            models.forEach(m=>{
+                reserved -= 512*512;
+                while((16384*16384 - reserved) < texSize + sizeMap[m.quality] && EDerivativeQuality.Thumb < m.quality){
+                    downgrades[m.quality]= (downgrades[m.quality] ?? 0) +1;
+                    m.quality--;
                 }
+                texSize+= sizeMap[m.quality];
+            });
+            if(Object.keys(downgrades).length) console.debug("Downgrade : ", downgrades);
 
+            //console.debug("%d models in view", models.filter(m=>m.weight !== 0).length);
+
+            for(let {model, quality, weight} of models){
+                const current = model.ins.quality.value;
+                
                 //Check for cases where we won't update quality
-                if(bestMatchQuality == current) continue;
-                else if(current < bestMatchQuality && !inView) continue; //Don't upgrade when not visible
+                if(quality == current) continue;
+                else if(current < quality && !weight) continue; //Don't upgrade when not visible, but do downgrade
 
-                const bestMatchDerivative = model.derivatives.select(EDerivativeUsage.Web3D, bestMatchQuality);
+                const bestMatchDerivative = model.derivatives.select(EDerivativeUsage.Web3D, quality);
                 if(bestMatchDerivative && bestMatchDerivative.data.quality != current ){
                     console.debug("Set quality for ", model.ins.name.value, " from ", current, " to ", bestMatchDerivative.data.quality);
                     model.ins.quality.setValue(bestMatchDerivative.data.quality);
                 }
             }
-
             return true;
         }
 
         return false;
+    }
+
+    projectPointOnPlaneTowardsCamera(
+        point: Vector3,
+        plane: THREE.Plane,
+        camera: Vector3
+    ) {
+        const direction = new Vector3();
+        direction.copy(camera).sub(point).normalize();
+        const ray = new Ray(point, direction);
+        return ray.intersectPlane(plane, new Vector3());
     }
 
     preRender(context: IRenderContext)
