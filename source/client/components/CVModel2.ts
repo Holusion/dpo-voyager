@@ -136,6 +136,12 @@ export default class CVModel2 extends CObject3D
     private _derivatives = new DerivativeList();
     private _activeDerivative: Derivative = null;
 
+    /**
+     * Separate from activeDerivative because when switching quality levels,
+     * we want to keep the active model until the new one is ready
+     */
+    private _loadingDerivative :Derivative = null;
+
     private _visible: boolean = true;
     private _boxFrame: Mesh = null;
     private _localBoundingBox = new Box3();
@@ -678,6 +684,14 @@ export default class CVModel2 extends CObject3D
             console.warn("Model load interrupted.");
             return;
         }
+        if(this._activeDerivative && this._activeDerivative == derivative) return;
+        console.debug("Load derivative : ", derivative.data.quality);
+        if(this._loadingDerivative == derivative) {
+            return new Promise(resolve=> this._loadingDerivative.on("load", resolve));
+        }
+        else if(this._loadingDerivative) this._loadingDerivative.unload();
+        
+        this._loadingDerivative = derivative;
 
         return derivative.load(this.assetReader)
             .then(() => {
@@ -699,8 +713,8 @@ export default class CVModel2 extends CObject3D
                     if(this._activeDerivative.model) this.removeObject3D(this._activeDerivative.model);
                     this._activeDerivative.unload();
                 }
-
                 this._activeDerivative = derivative;
+                this._loadingDerivative = null;
                 this.addObject3D(derivative.model);
                 this.renderer.activeSceneComponent.scene.updateMatrixWorld(true);
 
@@ -768,6 +782,7 @@ export default class CVModel2 extends CObject3D
                 this.emit<IModelLoadEvent>({ type: "model-load", quality: derivative.data.quality });
                 //this.getGraphComponent(CVSetup).navigation.ins.zoomExtents.set(); 
             }).catch(error =>{
+                if(error.name == "AbortError" || error.name == "ABORT_ERR") return;
                 console.error(error);
                 Notification.show(`Failed to load model derivative: ${error.message}`)
             });

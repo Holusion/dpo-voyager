@@ -17,7 +17,7 @@
 
 //import resolvePathname from "resolve-pathname";
 import UberPBRAdvMaterial from "client/shaders/UberPBRAdvMaterial";
-import { LoadingManager, Object3D, Scene, Mesh, MeshStandardMaterial, SRGBColorSpace } from "three";
+import { LoadingManager, Object3D, Scene, Group, Mesh, MeshStandardMaterial, SRGBColorSpace, MeshPhysicalMaterial, WebGLRenderer, LoaderUtils } from "three";
 
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js';
 import {MeshoptDecoder} from "three/examples/jsm/libs/meshopt_decoder.module.js";
@@ -38,6 +38,8 @@ export default class ModelReader
     protected loadingManager: LoadingManager;
     protected renderer: CRenderer;
     protected gltfLoader :GLTFLoader;
+
+    protected loading :Record<string, {listeners : {onload: (data:ArrayBuffer)=>any, onerror: (e:Error)=>any, signal:AbortSignal}[], abortController :AbortController}> = {}
 
     protected customDracoPath = null;
 
@@ -102,33 +104,82 @@ export default class ModelReader
         return ModelReader.mimeTypes.indexOf(mimeType) >= 0;
     }
 
-    get(url: string): Promise<Object3D>
+    get(url: string, {signal}:{signal?:AbortSignal}={}): Promise<Object3D>
     {
-        console.debug("Load model :", url.split("/").pop())
-        return new Promise((resolve, reject) => {
+		let resourcePath = LoaderUtils.extractUrlBase( url );
+        //console.debug("Load model :", url.split("/").pop())
             /** ktx2Loader has been here for a long time but only added to types definitions in r165 */
-            if(!(this.gltfLoader as any).ktx2Loader){
-                const ktx2Loader = new KTX2Loader(this.loadingManager);
-                ktx2Loader.setTranscoderPath("/dist/js/basis/");
-                ktx2Loader.detectSupport(this.renderer.views[0].renderer);
-                this.gltfLoader.setKTX2Loader(ktx2Loader);
-            }
-
-            this.gltfLoader.load(url, gltf => {
-                resolve(this.createModelGroup(gltf));
-            }, null, error => {
-                if(this.gltfLoader === null || this.gltfLoader.dracoLoader === null) {
-                    // HACK to avoid errors when component is removed while loading still in progress.
-                    // Remove once Three.js supports aborting requests again.
-                    resolve(null);
-                }
-                else {
-                    console.error(`failed to load '${url}': ${error}`);
-                    reject(new Error(error as any));
-                }
-            })
-        });
+        if(!(this.gltfLoader as any).ktx2Loader){
+            const ktx2Loader = new KTX2Loader(this.loadingManager);
+            ktx2Loader.setTranscoderPath("/dist/js/basis/");
+            ktx2Loader.detectSupport(this.renderer.views[0].renderer);
+            this.gltfLoader.setKTX2Loader(ktx2Loader);
+        }
+        return this.loadModel(url, {signal})
+        .then(data=>this.gltfLoader.parseAsync(data, resourcePath))
+        .then(gltf=>this.createModelGroup(gltf));
     }
+
+    /**
+     * 
+     * Copy by GLTFLoader https://github.com/mrdoob/three.js/blob/master/examples/jsm/loaders/GLTFLoader.js#L186
+     * Adds an abort capability  while waiting for [THREE.js #23070](https://github.com/mrdoob/three.js/pull/23070)
+     * This implementation does not quite match what is proposed there because it allows _some_ duplicate requests to be aborted without aborting the `fetch` 
+     */
+    async loadModel( url :string, {signal} :{signal?:AbortSignal}={}) :Promise<ArrayBuffer>{
+
+		// Tells the LoadingManager to track an extra item, which resolves after
+		// the model is fully loaded. This means the count of items loaded will
+		// be incorrect, but ensures manager.onLoad() does not fire early.
+        if(signal){
+            const onAbort = ()=>{
+                const idx = this.loading[url]?.listeners.findIndex(l=>l.signal === signal) ?? -1;
+                if(idx == -1) return;
+                const {onerror} = this.loading[url].listeners.splice(idx, 1)[0];
+                onerror(new DOMException(signal.reason, "AbortError"));
+    
+                if(this.loading[url].listeners.length == 0){
+                    console.debug("Abort request for URL : ", url);
+                    this.loading[url].abortController.abort();
+                }else{
+                    console.debug("Abort listener for URL : %s (%d)", url, this.loading[url].listeners.length );
+                }
+            }
+            signal.addEventListener("abort", onAbort);
+        }
+
+        if(!this.loading[url]?.listeners.length){
+            this.loadingManager.itemStart( url );
+    
+            this.loading[url] = {listeners:[], abortController: new AbortController()};
+    
+            fetch(url, {
+                signal: this.loading[url].abortController.signal,
+            }).then(r=>{
+                if(!r.ok){
+                    throw new Error( `fetch for "${r.url}" responded with ${r.status}: ${r.statusText}`);
+                }
+                //Skip all the progress tracking from FileLoader since we don't use it.
+                return r.arrayBuffer();
+            }).then(data=> {
+                this.loadingManager.itemEnd( url );
+                this.loading[url].listeners.forEach(({onload})=>onload(data));
+            }, (e)=>{
+                this.loading[url].listeners.forEach(({onerror})=>onerror(e));
+                if(e.name != "AbortError" && e.name != "ABORT_ERR"){
+                    console.error(e);
+                    this.loadingManager.itemError( url );
+                }
+                this.loadingManager.itemEnd( url );
+            }).finally(()=>{
+                delete this.loading[url];
+            });
+        }
+
+        return new Promise((onload, onerror)=>{
+            this.loading[url].listeners.push({onload, onerror, signal});
+        });
+	}
 
     protected async createModelGroup(gltf): Promise<Object3D>
     {
