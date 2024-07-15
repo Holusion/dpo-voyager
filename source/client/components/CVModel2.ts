@@ -153,6 +153,12 @@ export default class CVModel2 extends CObject3D
     private _derivatives = new DerivativeList();
     private _activeDerivative: Derivative = null;
 
+    /**
+     * Separate from activeDerivative because when switching quality levels,
+     * we want to keep the active model until the new one is ready
+     */
+    private _loadingDerivative :Derivative = null;
+
     private _visible: boolean = true;
     private _boxFrame: Mesh = null;
     private _localBoundingBox = new Box3();
@@ -311,7 +317,7 @@ export default class CVModel2 extends CObject3D
         }
         else if (ins.quality.changed) {
             const derivative = this.derivatives.select(EDerivativeUsage.Web3D, ins.quality.value);
-            if (derivative && derivative !== this.activeDerivative) {
+            if (derivative) {
                 this.loadDerivative(derivative)
                 .catch(error => {
                     console.warn("Model.update - failed to load derivative");
@@ -786,7 +792,7 @@ export default class CVModel2 extends CObject3D
 
         // load sequence of derivatives one by one
         return sequence.reduce((promise, derivative) => {
-            return promise.then(() => { this.loadDerivative(derivative)}); 
+            return promise.then(() => this.loadDerivative(derivative)); 
         }, Promise.resolve());
     }
 
@@ -794,18 +800,40 @@ export default class CVModel2 extends CObject3D
      * Loads and displays the given derivative.
      * @param derivative
      */
-    protected loadDerivative(derivative: Derivative): Promise<void>
+    protected async loadDerivative(derivative: Derivative): Promise<void>
     {
         if(!this.node || !this.assetReader) {    // TODO: Better way to handle active loads when node has been disposed?
             console.warn("Model load interrupted.");
             return;
         }
+        if(this._loadingDerivative && this._loadingDerivative != derivative) {
+            this._loadingDerivative.unload();
+            this._loadingDerivative = null;
+        }
+        if (this._activeDerivative == derivative){
+            return;
+        }
+        if(this._loadingDerivative == derivative) {
+            return new Promise(resolve=> this._loadingDerivative.on("load", resolve));
+        }
+        
+        this._loadingDerivative = derivative;
 
         return derivative.load(this.assetReader)
             .then(() => {
-                if (!derivative.model || !this.node || 
-                  (this._activeDerivative && derivative.data.quality != this.ins.quality.value)) {
+                if ( !derivative.model
+                  || !this.node
+                  || (this._activeDerivative && derivative.data.quality != this.ins.quality.value)
+                ) {
+                    //Either derivative is not valid, or we have been disconnected, 
+                    // or this derivative is no longer needed as it's not the requested quality 
+                    // AND we already have _something_ to display
                     derivative.unload();
+                    return;
+                }
+
+                if(this._activeDerivative && this._activeDerivative == derivative){
+                    //a race condition can happen where a derivative fires it's callback but it's already the active one.
                     return;
                 }
 
@@ -815,11 +843,11 @@ export default class CVModel2 extends CObject3D
                 }
 
                 if (this._activeDerivative) {
-                    this.removeObject3D(this._activeDerivative.model);
+                    if(this._activeDerivative.model) this.removeObject3D(this._activeDerivative.model);
                     this._activeDerivative.unload();
                 }
-
                 this._activeDerivative = derivative;
+                this._loadingDerivative = null;
                 this.addObject3D(derivative.model);
                 this.renderer.activeSceneComponent.scene.updateMatrixWorld(true);
 
@@ -892,8 +920,11 @@ export default class CVModel2 extends CObject3D
 
                 this.emit<IModelLoadEvent>({ type: "model-load", quality: derivative.data.quality });
                 //this.getGraphComponent(CVSetup).navigation.ins.zoomExtents.set(); 
-            })
-            .catch(error => Notification.show(`Failed to load model derivative: ${error.message}`));
+            }).catch(error =>{
+                if(error.name == "AbortError" || error.name == "ABORT_ERR") return;
+                console.error(error);
+                Notification.show(`Failed to load model derivative: ${error.message}`)
+            });
     }
 
     protected addObject3D(object: Object3D)
