@@ -34,6 +34,7 @@ import CVModel2 from "./CVModel2";
 import { EDerivativeQuality, EDerivativeUsage } from "client/schema/model";
 import { getMeshTransform } from "client/utils/Helpers";
 import { DEG2RAD, RAD2DEG } from "three/src/math/MathUtils";
+import CVNode from "./CVNode";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -49,6 +50,13 @@ const sizeMap ={
     [EDerivativeQuality.High]: 4096*4096,
 } as const;
 
+export interface QualitySelection{
+    model:CVModel2,
+    weight:number,
+
+    relSize:number,
+    quality : EDerivativeQuality,
+}
 
 
 const _orientationPresets = [];
@@ -128,6 +136,7 @@ export default class CVOrbitNavigation extends CObject3D
             this.ins.autoRotation,
             this.ins.autoRotationSpeed,
             this.ins.lightsFollowCamera,
+            this.ins.promptEnabled,
             this.ins.minOrbit,
             this.ins.minOffset,
             this.ins.maxOrbit,
@@ -340,6 +349,7 @@ export default class CVOrbitNavigation extends CObject3D
              * @fixme we currently don't account for viewport size which might be an interesting modifier
              *      ie. smaller (as in pixels as much as physical size) screens might need smaller
              * 
+             * @fixme should have a ponderation function lean toward "active derivative" < "currently loading" < "other" quality 
              * 
              */
 
@@ -357,12 +367,15 @@ export default class CVOrbitNavigation extends CObject3D
 
             /**
              * How far from center is the centermost part of the object?
-             * 1: Object crosses the image's center
+             * dxy = 0: Object crosses the image's center
+             * dxy = 1 object's nearest point would be just outside screen space if located on the X or Y axis
+             * dxy = 2: Object's nearest border is just beyond the screen's diagonal edge
+             * We add X offset and Y offset because we kind of _want_ diagonals to be underweighted,
+             * though a 1:1 addition might be a bit too much.
              */
             function maxCenterWeight(b :Box3){
-                let dx = Math.max(-b.max.x, b.min.x, 0);
-                let dy = Math.max(-b.max.y, b.min.y, 0);
-                return 1 / (1+dx+dy);
+                let dxy = Math.max(-b.max.x, b.min.x, 0) + Math.max(-b.max.y, b.min.y, 0);
+                return 1 / (1+dxy);
             }
 
             /**
@@ -376,6 +389,23 @@ export default class CVOrbitNavigation extends CObject3D
                 //through NDC projection. We could however implement some kind of exponential decay here
                 if(-1 < min && max < 1 ) return 1;
                 return 1 - 2/(Math.max(1,max-1) - Math.min(-1, min+1));
+            }
+
+            /**
+             * Discrete modifier to always prioritize a quality that is already selected over one that is yet to be loaded.
+             */
+            function stabilityWeight({model, quality}:{model: CVModel2, quality :number}){
+                if(model.ins.quality.value == quality) return 1;
+            }
+
+            /**
+             * Due to the nature of NDC coordinates, size on the (x, y, 0) plane would be infinite
+             * Simply clamp it for now.
+             */
+            let sizeClamp = 0;
+            function clampSize(size :number){
+                if(1 < size) sizeClamp++;
+                return Math.min(size, 1);
             }
 
             const hyst = 0.02; //In absolute % of screen area unit
@@ -401,18 +431,37 @@ export default class CVOrbitNavigation extends CObject3D
                 })?.[1] ?? EDerivativeQuality.High;
             }
 
-            const box = new Box3();
+            const NDCBox = new Box3();
             const point = new Vector3(0, 0, 0);
-
+            let badBox = 0;
             const models :Array<{model:CVModel2, weight:number, relSize:number, quality : EDerivativeQuality}> = this.getGraphComponents(CVModel2).map(model=>{
-                box.makeEmpty();
+                NDCBox.makeEmpty();
+                //Use localUnit
                 const scale = model.outs.unitScale.value;
-                let b = model.localBoundingBox.clone().applyMatrix4(new Matrix4().compose(
-                    new Vector3(...model.transform.ins.position.value).multiplyScalar(scale),
-                    new Quaternion().setFromEuler(new Euler(...model.transform.ins.rotation.value, "XYZ" as any)),
-                    new Vector3(...model.transform.ins.scale.value).multiplyScalar(scale),
-                ));
-                //console.debug("Box:", b.min.toArray(), b.max.toArray(), cameraComponent.camera.position.toArray());
+                //We can't just use the model's matrixWorld here because it might not have loaded yet.
+                //In this case the bounding box is whatever's defined in the scene file.
+                let b = model.localBoundingBox.clone();
+                let m = new Matrix4();
+                let t :CTransform|CVNode = model.transform;
+
+                b.min.multiplyScalar(scale);
+                b.max.multiplyScalar(scale);
+                while(t){
+                    m.fromArray(t.outs.matrix.value);
+                    b.applyMatrix4(m);
+                    t = t.parent as CTransform|CVNode;
+                }
+                
+                if(model.activeDerivative?.model){
+                    let _b = new Box3();
+                    _b.expandByObject(model.activeDerivative?.model);
+                    if( 0.1 < Math.abs(_b.min.sub(b.min).length()/b.min.length()) || 0.1 < Math.abs(_b.max.sub(b.max).length()/b.max.length())){
+                        _b.makeEmpty();
+                        _b.expandByObject(model.activeDerivative?.model);
+                        //console.debug("Box %s:", model.ins.name.value, b.min.toArray(), _b.min.toArray(), b.max.toArray(), _b.max.toArray());
+                        badBox++;
+                    }
+                }
                 [
                     [b.min.x, b.min.y, b.min.z],
                     [b.max.x, b.min.y, b.min.z],
@@ -424,25 +473,25 @@ export default class CVOrbitNavigation extends CObject3D
                     [b.min.x, b.max.y, b.min.z],
                 ].forEach((coords:[number, number, number], index)=>{
                     point.set(...coords).project(cameraComponent.camera);
-                    box.expandByPoint(point);
+                    NDCBox.expandByPoint(point);
                 });
                 //console.debug("NDC : ", box.min.toArray(), box.max.toArray());
                 //We want % of screen surface that would be used if the object was centered
-                box.getSize(point);
+                NDCBox.getSize(point);
                 const relSize = (point.x *point.y)/4;
-                let center = box.getCenter(point);
+                let center = NDCBox.getCenter(point);
                 /**
                  * Weight (object's perceived importance) is separate from relSize (object's scale relative to screen)
                  * because we don't want to downscale objects that become invisible too agressively when we can avoid it.
                  */
-                let weight = relSize*maxCenterWeight(box)*depthWeight(box.min.z, box.max.z);
+                let weight = clampSize(relSize)*maxCenterWeight(NDCBox)*depthWeight(NDCBox.min.z, NDCBox.max.z);
                 
                 /**
                  * Calculate the expected quality for the given relative size
                  */
                 const current = model.ins.quality.value;
                 let quality :EDerivativeQuality = getQuality(current, weight);
-                console.debug(
+                /*console.debug(
                     `${model.ins.name.value} quality :`
                     +` ${quality} ${Math.round(relSize*100)}% screen size`
                     +` (${center.x.toFixed(2)}, ${center.y.toFixed(2)}) ${Math.round(maxCenterWeight(box)*100)}% centered`
@@ -451,23 +500,28 @@ export default class CVOrbitNavigation extends CObject3D
                 return {model, weight, relSize, quality}
             });
             models.sort((a, b)=> a.weight - b.weight)
+            if(0 < sizeClamp) console.debug("Clamped %d/%d sizes", sizeClamp, models.length);
+            if(0 < badBox) console.debug("%d/%d Boxes mismatched", badBox, models.length);
             //Texture size is counted in squares, we use total number of pixels
             const textureSpace = 16384; //Discrete GPUs have twice as much, but we are not trying to max-out
             let texSize = 0;
             // 2 maps of 512px per thumbnails models
             // Then a few 1024px maps for shadow maps
             // We are not trying to minmax things here, just eyeballing how texture-contrained we expect to be
+            // An additional step we could take would be to completely unload some derivatives when we get really memory-constrained
             let reserved = 2*models.length * 512 * 512 + 1024*1024*4; 
-            let downgrades = {};
-            models.forEach(m=>{
-                reserved -= 512*512;
-                while((16384*16384 - reserved) < texSize + sizeMap[m.quality] && EDerivativeQuality.Thumb < m.quality){
-                    downgrades[m.quality]= (downgrades[m.quality] ?? 0) +1;
-                    m.quality--;
-                }
-                texSize+= sizeMap[m.quality];
-            });
-            if(Object.keys(downgrades).length) console.debug("Downgrade : ", downgrades);
+            let qs = models.reduce((acc, {quality})=> {
+                acc[EDerivativeQuality[quality]]= (acc[EDerivativeQuality[quality]] ?? 0) +1;
+                return acc;
+            }, {});
+            console.debug("Quality selection : ", qs);
+            // models.forEach(m=>{
+            //     reserved -= 512*512;
+            //     while((16384*16384 - reserved) < texSize + sizeMap[m.quality] && EDerivativeQuality.Thumb < m.quality){
+            //         m.quality--;
+            //     }
+            //     texSize+= sizeMap[m.quality];
+            // });
 
             //console.debug("%d models in view", models.filter(m=>m.weight !== 0).length);
 
@@ -480,7 +534,7 @@ export default class CVOrbitNavigation extends CObject3D
 
                 const bestMatchDerivative = model.derivatives.select(EDerivativeUsage.Web3D, quality);
                 if(bestMatchDerivative && bestMatchDerivative.data.quality != current ){
-                    console.debug("Set quality for ", model.ins.name.value, " from ", current, " to ", bestMatchDerivative.data.quality);
+                    //console.debug("Set quality for ", model.ins.name.value, " from ", current, " to ", bestMatchDerivative.data.quality);
                     model.ins.quality.setValue(bestMatchDerivative.data.quality);
                 }
             }
