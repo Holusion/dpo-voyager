@@ -601,7 +601,7 @@ export default class CVModel2 extends CObject3D
         this.outs.unitScale.setValue(unitScaleFactor(fromUnits, toUnits));
 
         if (ENV_DEVELOPMENT) {
-            console.log("Model.updateUnitScale, from: %s, to: %s", fromUnits, toUnits);
+            //console.log("Model.updateUnitScale, from: %s, to: %s", fromUnits, toUnits);
         }
 
         this.updateMatrixFromProps();
@@ -731,8 +731,8 @@ export default class CVModel2 extends CObject3D
 
                 if (ENV_DEVELOPMENT) {
                     // log bounding box to console
-                    const box = { min: this._localBoundingBox.min.toArray(), max: this._localBoundingBox.max.toArray() };
-                    console.log("CVModel.onLoad - bounding box: ", box);
+                    //const box = { min: this._localBoundingBox.min.toArray(), max: this._localBoundingBox.max.toArray() };
+                    //console.log("CVModel.onLoad - bounding box: ", box);
                 }
 
                 // update loaded quality property

@@ -302,7 +302,7 @@ export default class CVViewer extends Component
         this.ins.annotationsVisible.set();
 
         if (ENV_DEVELOPMENT) {
-            console.log("CVViewer.refreshTagCloud - %s", tagArray.join(", "));
+            //console.log("CVViewer.refreshTagCloud - %s", tagArray.join(", "));
         }
     }
 

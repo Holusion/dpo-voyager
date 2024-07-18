@@ -142,7 +142,7 @@ export default class CVGrid extends CObject3D
                 size = Math.ceil(size / f) * f * 2;
 
                 if (ENV_DEVELOPMENT) {
-                    console.log("CVGrid.update - grid size = %s %s", size, EUnitType[units]);
+                    //console.log("CVGrid.update - grid size = %s %s", size, EUnitType[units]);
                 }
 
                 props.size = size;

@@ -187,7 +187,7 @@ class AssetLoadingManager extends LoadingManager
     protected onLoadingProgress(url, itemsLoaded, itemsTotal)
     {
         if (ENV_DEVELOPMENT) {
-            console.log(`Loaded ${itemsLoaded} of ${itemsTotal} files: ${url}`);
+            //console.log(`Loaded ${itemsLoaded} of ${itemsTotal} files: ${url}`);
         }
     }
 
