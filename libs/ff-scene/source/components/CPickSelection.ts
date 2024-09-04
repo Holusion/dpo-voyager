@@ -33,6 +33,7 @@ const helpers = [
 const _inputs = {
     viewportPicking: types.Boolean("Viewport.Picking", true),
     viewportBrackets: types.Boolean("Viewport.Brackets", true),
+    viewportAxes: types.Boolean("Viewport.Axes", false),
 };
 
 export default class CPickSelection extends CSelection
@@ -70,6 +71,9 @@ export default class CPickSelection extends CSelection
                 bracket.visible = this.ins.viewportBrackets.value;
             }
         }
+        if(this.ins.viewportAxes.changed){
+            //FIXME : add axes helper to scene
+        }
         return true;
     }
 
@@ -88,7 +92,7 @@ export default class CPickSelection extends CSelection
         super.onSelectComponent(component, selected);
 
         if (component instanceof CObject3D || component instanceof CTransform) {
-            this.updateBracket(component, selected);
+            this.updateBracket(component, selected);    
         }
     }
 
