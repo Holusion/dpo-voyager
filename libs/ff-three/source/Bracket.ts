@@ -15,6 +15,8 @@ import {
     Matrix4,
     Box3,
     Color,
+    Points,
+    PointsMaterial,
 } from "three";
 
 import { computeLocalBoundingBox } from "./helpers";
@@ -110,11 +112,19 @@ export default class Bracket extends LineSegments
 
         super(geometry, material);
 
+        const dotGeometry = new BufferGeometry();
+        dotGeometry.setAttribute('position', new Float32BufferAttribute([0, 0, 0], 3));
+        const dotMaterial = new PointsMaterial({ size: 3, color: 0xff0000, sizeAttenuation: false, depthTest: false });
+        const dot = new Points(dotGeometry, dotMaterial);
+        dot.renderOrder = 2;
+        this.add(dot);
+
         this.renderOrder = 1;
 
         this.onBeforeRender = () => {
             target.updateMatrixWorld(false);
             this.matrixWorld.copy(target.matrixWorld);
+            dot.matrixWorld.copy(target.matrixWorld);
         }
     }
 
