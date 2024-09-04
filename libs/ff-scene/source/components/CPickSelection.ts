@@ -77,7 +77,7 @@ export default class CPickSelection extends CSelection
     {
         super.onSelectNode(node, selected);
 
-        const transform = node.getComponent(CTransform, true);
+        const transform = node.getComponent(CObject3D, true);
         if (transform) {
             this.updateBracket(transform, selected);
         }
