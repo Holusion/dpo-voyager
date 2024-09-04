@@ -11,6 +11,7 @@ import Node from "@ff/graph/Node";
 import CSelection from "@ff/graph/components/CSelection";
 
 import Bracket from "@ff/three/Bracket";
+import Origin from "@ff/three/Origin";
 
 import { IPointerEvent } from "../RenderView";
 
@@ -40,7 +41,7 @@ export default class CPickSelection extends CSelection
 
     ins = this.addInputs<CSelection, typeof _inputs>(_inputs);
 
-    private _brackets = new Map<Component, any>();
+    private _brackets = new Map<Component, Object3D & {dispose: ()=>void}>();
     private _sceneTracker: ComponentTracker<CScene> = null;
 
 
@@ -50,11 +51,6 @@ export default class CPickSelection extends CSelection
 
         this.system.on<IPointerEvent>("pointer-up", this.onPointerUp, this);
 
-        this._sceneTracker = new ComponentTracker(this.system.components, CScene, component => {
-            component.on<ISceneAfterRenderEvent>("after-render", this.onSceneAfterRender, this);
-        }, component => {
-            component.off<ISceneAfterRenderEvent>("after-render", this.onSceneAfterRender, this);
-        });
     }
 
     dispose()
@@ -69,6 +65,11 @@ export default class CPickSelection extends CSelection
 
     update()
     {
+        if(this.ins.viewportBrackets.changed){
+            for(let bracket of this._brackets.values()){
+                bracket.visible = this.ins.viewportBrackets.value;
+            }
+        }
         return true;
     }
 
@@ -120,24 +121,6 @@ export default class CPickSelection extends CSelection
         }
     }
 
-    protected onSceneAfterRender(event: ISceneAfterRenderEvent)
-    {
-        if (!this.ins.viewportBrackets.value) {
-            return;
-        }
-
-        const renderer = event.context.renderer;
-        const camera = event.context.camera;
-
-        for (let bracket of this._brackets.values()) {
-            if(helpers.some(([HelperCl])=> bracket instanceof HelperCl)){
-                bracket.update();
-                /** @bug PointLightHelper doesn't call it internally in  its update() method. */ 
-                bracket.updateWorldMatrix( true, false );
-            }
-            renderer.render(bracket as any, camera);
-        }
-    }
 
     protected updateBracket(component: CTransform | CObject3D, selected: boolean)
     {
@@ -145,8 +128,9 @@ export default class CPickSelection extends CSelection
             return;
         }
 
+        const object3D = component.object3D;
+        const transform = component.transform;
         if (selected) {
-            const object3D = component.object3D;
             if (object3D) {
                 let bracket;
                 for(let [HelperCl, Cl] of helpers){
@@ -157,17 +141,34 @@ export default class CPickSelection extends CSelection
                     }
                 }
                 if(!bracket){
-                    bracket = new Bracket(component.object3D);
-
+                    bracket = new Bracket(object3D);
                 }
+                object3D.add(bracket);
                 this._brackets.set(component, bracket);
+            }
+            
+            if(transform){
+                let o = new Origin(transform.object3D);
+                this._brackets.set(transform, o);
+                transform.object3D.add(o);
+            }else{
+                console.warn("Component has no transform");
             }
         }
         else {
-            const bracket = this._brackets.get(component);
-            if (bracket) {
-                this._brackets.delete(component);
-                bracket.dispose();
+            if(object3D){
+                const bracket = this._brackets.get(component);
+                if (bracket) {
+                    this._brackets.delete(component);
+                    bracket.dispose();
+                }
+            }
+            if(transform){
+                const bracket = this._brackets.get(transform);
+                if (bracket) {
+                    this._brackets.delete(transform);
+                    bracket.dispose();
+                }
             }
         }
 
