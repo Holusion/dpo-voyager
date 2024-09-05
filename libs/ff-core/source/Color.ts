@@ -299,26 +299,20 @@ export default class Color implements IVector4
     {
         color = color.trim().toLowerCase();
         color = Color.presets[color] || color;
-
-        let result = color.match(/^#?([0-9a-f]{3})$/i);
-        if (result) {
-            const text = result[1];
+        let text = /^#?([0-9a-f]{3,8})$/i.exec(color)?.[1];
+        if (text && (text.length === 3 || text.length == 4)) {
             const factor = 1 / 15;
             this.x = Number.parseInt(text.charAt(0), 16) * factor;
             this.y = Number.parseInt(text.charAt(1), 16) * factor;
             this.z = Number.parseInt(text.charAt(2), 16) * factor;
-            this.w = alpha;
+            this.w = (text.length == 4)? Number.parseInt(text.charAt(3), 16) * factor:alpha;
             return this;
-        }
-
-        result = color.match(/^#?([0-9a-f]{6})$/i);
-        if (result) {
-            const text = result[1];
+        }else if (text && (text.length === 6 || text.length == 8) ) {
             const factor = 1 / 255;
             this.x = Number.parseInt(text.substr(0,2), 16) * factor;
             this.y = Number.parseInt(text.substr(2,2), 16) * factor;
             this.z = Number.parseInt(text.substr(4,2), 16) * factor;
-            this.w = alpha;
+            this.w =  (text.length == 8)? Number.parseInt(text.substr(6,2), 16) * factor:alpha;
             return this;
         }
 
