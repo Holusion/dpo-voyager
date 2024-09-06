@@ -17,7 +17,7 @@
 
 //import resolvePathname from "resolve-pathname";
 import UberPBRAdvMaterial from "client/shaders/UberPBRAdvMaterial";
-import { LoadingManager, Object3D, Scene, Mesh, MeshStandardMaterial, SRGBColorSpace } from "three";
+import { LoadingManager, Object3D, Scene, Mesh, MeshStandardMaterial, SRGBColorSpace, Texture } from "three";
 
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js';
 import {MeshoptDecoder} from "three/examples/jsm/libs/meshopt_decoder.module.js";
@@ -40,6 +40,8 @@ export default class ModelReader
     protected gltfLoader :GLTFLoader;
 
     protected customDracoPath = null;
+
+    private queue = Promise.resolve();
 
     set dracoPath(path: string) 
     {
@@ -119,9 +121,10 @@ export default class ModelReader
         });
     }
 
-    protected createModelGroup(gltf): Object3D
+    protected async createModelGroup(gltf): Promise<Object3D>
     {
         const scene: Scene = gltf.scene;
+        let textures = [];
 
         scene.traverse((object: any) => {
             if (object.type === "Mesh") {
@@ -156,11 +159,25 @@ export default class ModelReader
                         console.log("ModelReader.createModelGroup - objectSpaceNormals: ", true);
                     }
                 }
+                for(let prop in uberMat){
+                    if(!(uberMat[prop] instanceof Texture)) continue;
+                    textures.push(uberMat[prop])
+                }
 
                 mesh.material = uberMat;
             }
         });
-
+        const webRenderer= this.renderer?.views[0]?.renderer;
+        for(let tex of textures){
+            if(!tex) continue;
+            this.queue = this.queue.then(()=>new Promise((resolve=>{
+                requestAnimationFrame(()=>{
+                    webRenderer.initTexture(tex);
+                    resolve();
+                });
+            })));
+        }
+        await this.queue;
         return scene;
     }
 }
