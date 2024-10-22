@@ -106,6 +106,7 @@ export default class CCamera extends CObject3D
      * Sets the position, rotation, and order properties from the given 4x4 transform matrix.
      * Updating the properties then also updates the matrix of the internal universal camera object.
      * @param matrix A 4x4 transform matrix. If omitted, properties are updated from the matrix of the internal camera.
+     * @deprecated use `Property.linkFrom` to drive camera properties
      */
     setPropertiesFromMatrix(matrix?: THREE.Matrix4)
     {

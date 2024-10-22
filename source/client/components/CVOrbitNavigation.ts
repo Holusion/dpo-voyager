@@ -15,13 +15,13 @@
  * limitations under the License.
  */
 
-import { Box3 } from "three";
+import { Box3, Euler, Quaternion, Vector3 } from "three";
 
 import CObject3D, { Node, types } from "@ff/scene/components/CObject3D";
 
 import CameraController from "@ff/three/CameraController";
 import { IKeyboardEvent, IPointerEvent, ITriggerEvent } from "@ff/scene/RenderView";
-import CScene, { IRenderContext } from "@ff/scene/components/CScene";
+import CScene, { IActiveCameraEvent, IRenderContext } from "@ff/scene/components/CScene";
 import CTransform, { ERotationOrder } from "@ff/scene/components/CTransform";
 import { EProjection } from "@ff/three/UniversalCamera";
 
@@ -30,6 +30,7 @@ import { INavigation } from "client/schema/setup";
 import CVScene from "./CVScene";
 import CVAssetManager from "./CVAssetManager";
 import CVARManager from "./CVARManager";
+import { RAD2DEG } from "three/src/math/MathUtils";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -46,6 +47,10 @@ _orientationPresets[EViewPreset.Back] = [ 0, 180, 0 ];
 _orientationPresets[EViewPreset.Top] = [ -90, 0, 0 ];
 _orientationPresets[EViewPreset.Bottom] = [ 90, 0, 0 ];
 
+const _eul = new Euler();
+const _quat = new Quaternion();
+const _vec3a = new Vector3();
+const _vec3b = new Vector3();
 
 const _replaceNull = function(vector: number[], replacement: number)
 {
@@ -88,7 +93,13 @@ export default class CVOrbitNavigation extends CObject3D
         promptActive: types.Boolean("Navigation.PromptActive", false)
     };
 
+    protected static readonly outs = {
+        position: types.Vector3("Current.Position", [ -0, 0, 0 ]),
+        rotation: types.Vector3("Current.Rotation", [ -0, 0, 0 ]),
+    }
+
     ins = this.addInputs<CObject3D, typeof CVOrbitNavigation.ins>(CVOrbitNavigation.ins);
+    outs = this.addOutputs<CObject3D, typeof CVOrbitNavigation.outs>(CVOrbitNavigation.outs);
 
     private _controller = new CameraController();
     private _scene: CScene = null;
@@ -145,6 +156,7 @@ export default class CVOrbitNavigation extends CObject3D
         this.system.on<IPointerEvent>(["pointer-down", "pointer-up", "pointer-move"], this.onPointer, this);
         this.system.on<ITriggerEvent>("wheel", this.onTrigger, this);
         this.system.on<IKeyboardEvent>("keydown", this.onKeyboard, this);
+        this.scene.on<IActiveCameraEvent>("active-camera", this.onActiveCamera, this);
 
         this.assetManager.outs.completed.on("value", this.onLoadingCompleted, this);
     }
@@ -157,7 +169,20 @@ export default class CVOrbitNavigation extends CObject3D
         this.system.off<ITriggerEvent>("wheel", this.onTrigger, this);
         this.system.off<IKeyboardEvent>("keydown", this.onKeyboard, this);
 
+        this.scene.off<IActiveCameraEvent>("active-camera", this.onActiveCamera, this);
+
         super.dispose();
+    }
+
+    onActiveCamera({ previous, next }:IActiveCameraEvent){
+        if(previous){
+            previous.transform.ins.position.unlinkFrom(this.outs.position);
+            previous.transform.ins.rotation.unlinkFrom(this.outs.rotation);
+        }
+        if(next){
+            next.transform.ins.position.linkFrom(this.outs.position);
+            next.transform.ins.rotation.linkFrom(this.outs.rotation);
+        }
     }
 
     update()
@@ -304,6 +329,17 @@ export default class CVOrbitNavigation extends CObject3D
             controller.offset.toArray(ins.offset.value);
             ins.offset.set(true);
 
+            let obj = (transform ?? cameraComponent).object3D;
+            obj.matrix.decompose(_vec3a, _quat, _vec3b);
+            _vec3a.toArray(this.outs.position.value);
+            this.outs.position.set(true);
+            
+            _eul.setFromQuaternion(_quat, "XYZ");
+            _vec3a.setFromEuler(_eul).multiplyScalar(RAD2DEG);
+            _vec3a.toArray(this.outs.rotation.value);
+            this.outs.rotation.set(true);
+
+
             // if camera has moved, set preset to "None"
             if (ins.preset.value !== EViewPreset.None && !ins.preset.changed) {
                 ins.preset.setValue(EViewPreset.None, true);
@@ -311,13 +347,6 @@ export default class CVOrbitNavigation extends CObject3D
             
             if(!ins.isInUse.value && this._hasChanged) {
                 ins.isInUse.setValue(true);
-            }
-
-            if (transform) {
-                transform.setPropertiesFromMatrix();
-            }
-            else {
-                cameraComponent.setPropertiesFromMatrix();
             }
 
             return true;

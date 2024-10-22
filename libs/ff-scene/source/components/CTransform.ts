@@ -119,7 +119,9 @@ export default class CTransform extends CHierarchy implements ICObject3D
 
         super.dispose();
     }
-
+    /**
+     * @deprecated use `Property.linkFrom` instead
+     */
     setPropertiesFromMatrix(matrix?: Matrix4)
     {
         const silent = !matrix;
