@@ -16,6 +16,14 @@ import HTMLSprite from "./HTMLSprite";
 
 export { HTMLSprite };
 
+interface IViewport{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    overlay: HTMLElement;
+}
+
 /**
  * THREE 3D object, grouping a number of HTML sprites.
  */
@@ -69,17 +77,17 @@ export default class HTMLSpriteGroup extends Object3D
      * @param container HTML container element for the HTML elements.
      * @param camera The camera used to render the 3D scene.
      */
-    render(container: HTMLElement, camera: Camera)
+    render(viewport: IViewport, camera: Camera)
     {
         if (!this.visible) {
             return;
         }
         //Only get bounds once to prevent forced reflows while looping
-        const bounds = container.getBoundingClientRect();
+        const bounds = new DOMRect(viewport.x, viewport.y, viewport.width, viewport.height);
         const children = this.children as HTMLSprite[];
         for (let i = 0, n = children.length; i < n; ++i) {
             const child = children[i];
-            const element = child.getHTMLElement(container);
+            const element = child.getHTMLElement(viewport.overlay);
             if (element) {
                 child.renderHTMLElement(element, bounds, camera);
             }

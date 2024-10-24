@@ -123,7 +123,7 @@ export default class CVStaticAnnotationView extends CObject3D
         }
 
         const spriteGroup = this.object3D as HTMLSpriteGroup;
-        spriteGroup.render(viewport.overlay, context.camera);
+        spriteGroup.render(viewport, context.camera);
     }
 
     dispose()

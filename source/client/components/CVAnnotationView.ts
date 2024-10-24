@@ -330,7 +330,7 @@ export default class CVAnnotationView extends CObject3D
         }
 
         const spriteGroup = this.object3D as HTMLSpriteGroup;
-        spriteGroup.render(viewport.overlay, context.camera);
+        spriteGroup.render(viewport, context.camera);
 
         // Handle locking truncation for view animation only after 
         // the sprite has a chance to do an initial update.
