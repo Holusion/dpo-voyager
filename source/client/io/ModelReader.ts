@@ -102,6 +102,16 @@ export default class ModelReader
 
     get(url: string): Promise<Object3D>
     {
+        // workerConfig is not a public interface
+        // But it is used to detect initialization
+        // here: https://github.com/mrdoob/three.js/blob/master/examples/jsm/loaders/KTX2Loader.js#L241
+        if((this.gltfLoader as any).ktx2Loader && !(this.gltfLoader as any).ktx2Loader.workerConfig){
+            const glRenderer = this.renderer.views[0]?.renderer;
+            if(!glRenderer){
+                console.warn("Fetching a model when ktx2Loader has not been initialized");
+            }
+            ((this.gltfLoader as any).ktx2Loader as KTX2Loader).detectSupport(glRenderer);
+        }
         return new Promise((resolve, reject) => {
             this.gltfLoader.load(url, gltf => {
                 resolve(this.createModelGroup(gltf));
