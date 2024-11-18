@@ -492,8 +492,11 @@ $color-component-meta-light: #d9d998;
 }
 
 @container (width < 350px){
-  .sv-property-view .sv-property-group{
-    flex-direction: column;
+  .sv-property-view{
+    max-height: initial;
+    .sv-property-group{
+      flex-direction: column;
+    }
   }
 }
 
