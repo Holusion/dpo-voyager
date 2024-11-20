@@ -74,10 +74,6 @@ export default class ModelReader
         const ktx2Loader = new KTX2Loader(this.loadingManager);
         ktx2Loader.setTranscoderPath(DEFAULT_SYSTEM_ASSET_PATH + "/js/basis/");
         this.gltfLoader.setKTX2Loader(ktx2Loader);
-        setTimeout(()=>{
-            //Allow an update to happen. @todo check how robust it is
-            ktx2Loader.detectSupport(this.renderer.views[0].renderer);
-        }, 0);
     }
 
     dispose()
