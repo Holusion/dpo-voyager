@@ -25,6 +25,8 @@ import CVLanguageManager from "../../components/CVLanguageManager";
 import {getFocusableElements, focusTrap} from "../../utils/focusHelpers";
 import CVTours from "client/components/CVTours";
 
+import { unsafeHTML } from "lit-html/directives/unsafe-html";
+
 ////////////////////////////////////////////////////////////////////////////////
 
 @customElement("sv-reader-view")
@@ -77,7 +79,7 @@ export default class ReaderView extends DocumentView
         return html`<div class="sv-left"></div><div class="sv-article" @keydown=${e =>this.onKeyDown(e, reader.activeArticle.id)} >
                 <ff-button class="sv-nav-button" inline title=${language.getLocalizedString("Close Article Reader")} icon="close" @click=${this.onClickClose}></ff-button>
                 ${menuButton}
-                <div role="region" aria-live="polite" aria-atomic="true" title="article" class="sv-container"></div>
+                <div role="region" aria-live="polite" aria-atomic="true" title="article" class="sv-container">${unsafeHTML(reader.outs.content.value)}</div>
             </div><div class="sv-right"></div>`;
     }
 
@@ -104,17 +106,14 @@ export default class ReaderView extends DocumentView
         super.updated(changedProperties);
 
         const reader = this.reader;
-
+        
         if (reader) {
-            if(reader.activeArticle) {
-                const container = this.getElementsByClassName("sv-container").item(0) as HTMLElement;
-                container.innerHTML = reader.outs.content.value;
 
-                // Hack so that initial article display is detected by screen readers.
-                if(this.firstRender) {
-                    setTimeout(() => {container.insertAdjacentHTML("beforeend","<div>-end of article-</div>");}, 200);
-                    this.firstRender = false;
-                }
+            // Hack so that initial article display is detected by screen readers.
+            if(reader.activeArticle && this.firstRender) {
+                const container = this.getElementsByClassName("sv-container").item(0) as HTMLElement;
+                setTimeout(() => {container.insertAdjacentHTML("beforeend",`<div class="sr-only">-end of article-</div>`);}, 200);
+                this.firstRender = false;
             }
             if(reader.ins.focus.value) {
                 this.setFocus();
