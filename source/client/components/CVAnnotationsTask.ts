@@ -277,6 +277,12 @@ export default class CVAnnotationsTask extends CVTask
 
         annotation.language = language;
         annotation.title = languageManager.getLocalizedString("New Annotation");
+
+        if (languageManager.ins.language.value != ELanguageType[languageManager.defaultLanguage]){
+            //Ensure that there is a title in the default language of the scene
+            const defaultLocalized = languageManager.getLocalizedStringInDefaultLanguage("New Annotation");
+            annotation.titleInLanguage(defaultLocalized, ELanguageType[languageManager.defaultLanguage]);
+        }
         const data = annotation.data;
         data.position = position;
         data.direction = direction;
