@@ -1,6 +1,6 @@
 /**
  * 3D Foundation Project
- * Copyright 2024 Smithsonian Institution
+ * Copyright 2025 Smithsonian Institution
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ export default class CVToursTask extends CVTask
         stepCurve: types.Enum("Step.Curve", EEasingCurve),
         stepDuration: types.Number("Step.Duration", 1),
         stepThreshold: types.Percent("Step.Threshold", 0.5),
+        stepAltText: types.String("Step.AltText")
     };
 
     protected static readonly outs = {
@@ -120,6 +121,7 @@ export default class CVToursTask extends CVTask
                 stepList.splice(stepIndex + 1, 0, {
                     title: "",
                     titles: {},
+                    altTexts: {},
                     id
                 });
                 stepList[stepIndex + 1].titles[DEFAULT_LANGUAGE] = "New Step #" + _nextStepIndex++;
@@ -130,9 +132,11 @@ export default class CVToursTask extends CVTask
 
             if (step) {
                 if (ins.stepTitle.changed || ins.stepCurve.changed ||
-                        ins.stepDuration.changed || ins.stepThreshold.changed) {
+                        ins.stepDuration.changed || ins.stepThreshold.changed || 
+                        ins.stepAltText.changed) {
 
                     tours.stepTitle = ins.stepTitle.value;
+                    tours.stepAltText = ins.stepAltText.value;
                     machine.ins.curve.setValue(ins.stepCurve.value);
                     machine.ins.duration.setValue(ins.stepDuration.value);
                     machine.ins.threshold.setValue(ins.stepThreshold.value);
@@ -288,6 +292,7 @@ export default class CVToursTask extends CVTask
         const state = step ? this.machine.getState(step.id) : null;
 
         ins.stepTitle.setValue(step ? this.tours.stepTitle : "", true);
+        ins.stepAltText.setValue(step ? this.tours.stepAltText : "", true);
         ins.stepCurve.setValue(state ? state.curve : EEasingCurve.Linear, true);
         ins.stepDuration.setValue(state ? state.duration : 1, true);
         ins.stepThreshold.setValue(state ? state.threshold : 0.5, true);

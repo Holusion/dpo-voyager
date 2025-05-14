@@ -1,6 +1,6 @@
 /**
  * 3D Foundation Project
- * Copyright 2024 Smithsonian Institution
+ * Copyright 2025 Smithsonian Institution
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
                 <sv-property-view .property=${inProps.article}></sv-property-view>
                 <sv-property-view .property=${inProps.tags}></sv-property-view>
                 <sv-property-view .property=${inProps.title}></sv-property-view>
-                <div class="sv-label" style="${overLimit ? "color: red" : ""}">Lead&nbsp&nbsp&nbsp${this._leadCharCount}/${limitText}</div>
+                <div class="sv-label" style="${overLimit ? "color: red" : ""}" @click=${(e)=>this.onClickLimit(e)}>Lead&nbsp&nbsp&nbsp${this._leadCharCount}/${limitText}</div>
                 <ff-text-edit name="lead" text=${inProps.lead.value} rows=3 maxLength=${this._leadLimit} @change=${this.onTextEdit}></ff-text-edit>
             </div>
             <div class="sv-label">View Point</div>
@@ -225,6 +225,18 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
          this.task.deleteAnnotationView();
          this.requestUpdate();
      }
+
+      /**
+     * SUPER SECRET LIMIT OVERRIDE (shhh!)
+     */
+      protected onClickLimit(e: MouseEvent)
+      {
+        if(e.ctrlKey && e.shiftKey) {
+            this._leadLimit = 0;
+            (this.getElementsByTagName("ff-text-edit")[0] as HTMLElement).blur();
+            this.requestUpdate();
+        }
+      }
 
     /**
      * User clicked an entry in the annotation list.

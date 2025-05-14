@@ -1,6 +1,6 @@
 /**
  * 3D Foundation Project
- * Copyright 2024 Smithsonian Institution
+ * Copyright 2025 Smithsonian Institution
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,6 +95,7 @@ export default class SceneView extends SystemView
         this.srAnnouncement = this.appendElement("div");
         this.srAnnouncement.classList.add("sr-only");
         this.srAnnouncement.setAttribute("aria-live", "polite");
+        this.srAnnouncement.setAttribute("id", "sceneview-sr");
 
         this.canvas = this.appendElement("canvas", {
             display: "block",

@@ -1,6 +1,6 @@
 /**
  * 3D Foundation Project
- * Copyright 2019 Smithsonian Institution
+ * Copyright 2025 Smithsonian Institution
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ export default class PropertyEvent extends PropertyBase
         const text = this.text;
 
         return html`<label id="${name}-label" class="ff-label ff-off">${name}</label>
-            <div class="sv-options >
+            <div class="sv-options">
                 <ff-button ?disabled=${this.ariaDisabled === "true"} aria-labelledby="${name}-label" icon="zoom" .text=${text} @click=${this.onButtonClick}></ff-button>
             </div>`;
     }
