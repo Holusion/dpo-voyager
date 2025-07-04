@@ -339,9 +339,9 @@ Version: ${ENV_VERSION}
         else if (props.geometry) {
             // third loading priority: geometry (plus optional color texture)
             props.geometry = manager.getAssetName(props.geometry);
-            props.texture = manager.getAssetName(props.texture);
-            props.occlusion = manager.getAssetName(props.occlusion);
-            props.normals = manager.getAssetName(props.normals);
+            props.texture = props.texture ? manager.getAssetName(props.texture) : null;
+            props.occlusion = props.occlusion ? manager.getAssetName(props.occlusion) : null;
+            props.normals = props.normals ? manager.getAssetName(props.normals) : null;
 
             this.assetReader.getText(props.geometry)    // make sure we have a valid geometry path   
             .then(() => {
@@ -689,7 +689,7 @@ Version: ${ENV_VERSION}
         const id = languageID.toUpperCase();
 
         if(id in ELanguageType) {
-            languageIns.language.setValue(ELanguageType[id]);
+            languageIns.activeLanguage.setValue(ELanguageType[id]);
         }
         else {
             console.error("Error: setLanguage param is not a valid language id.");

@@ -21,13 +21,14 @@ import { LoadingManager, Object3D, Scene, Mesh, MeshStandardMaterial, SRGBColorS
 
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js';
 import {MeshoptDecoder} from "three/examples/jsm/libs/meshopt_decoder.module.js";
-import {GLTF, GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {GLTF, GLTFLoader, GLTFParser} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 
 import UberPBRMaterial from "../shaders/UberPBRMaterial";
 import CRenderer from "@ff/scene/components/CRenderer";
 import { DEFAULT_SYSTEM_ASSET_PATH } from "client/components/CVAssetReader";
 import { disposeObject } from "@ff/three/helpers";
+import { Dictionary } from "@ff/core/types";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -44,12 +45,18 @@ export default class ModelReader
 
     protected customDracoPath = null;
 
+    private _gltfParserCache: Dictionary<GLTFParser> = {};
+
     set dracoPath(path: string) 
     {
         this.customDracoPath = path;
         if(this.gltfLoader.dracoLoader !== null) {
             this.gltfLoader.dracoLoader.setDecoderPath(this.customDracoPath);
         }
+    }
+
+    getGLTFParser(uuid: string) {
+        return this._gltfParserCache[uuid];
     }
 
 
@@ -109,7 +116,17 @@ export default class ModelReader
         let resourcePath = LoaderUtils.extractUrlBase( url );
         return this.loadModel(url, {signal})
         .then(data=>this.gltfLoader.parseAsync(data, resourcePath))
-        .then(gltf=>this.createModelGroup(gltf, {signal}))
+        .then(gltf=> {
+            if(gltf.userData.gltfExtensions) {
+                const variantsExtension = gltf.userData.gltfExtensions[ 'KHR_materials_variants' ];
+                if(variantsExtension) {
+                    gltf.scene["variants"] = variantsExtension.variants;
+                    gltf.scene["variants"].variantMaterials = {};
+                    this._gltfParserCache[gltf.scene.uuid] = gltf.parser;
+                }
+            }
+            return this.createModelGroup(gltf, {signal})
+        })
         .catch((e)=> {
             this.loadingManager.itemError(url);
             throw e;
@@ -144,28 +161,29 @@ export default class ModelReader
             signal.addEventListener("abort", onAbort);
         }
 
-        if(!this.loading[url]?.listeners.length){
+        if(!this.loading[url]){
     
-            this.loading[url] = {listeners:[], abortController: new AbortController()};
+            const {listeners, abortController:{signal}} = this.loading[url] = {listeners:[], abortController: new AbortController()};
     
             fetch(url, {
-                signal: this.loading[url].abortController.signal,
+                signal,
             }).then(r=>{
                 if(!r.ok){
                     throw new Error( `fetch for "${r.url}" responded with ${r.status}: ${r.statusText}`);
                 }
                 //Skip all the progress tracking from FileLoader since we don't use it.
                 return r.arrayBuffer();
+            }).finally(()=>{
+                delete this.loading[url];
             }).then(data=> {
-                this.loading[url].listeners.forEach(({onload})=>onload(data));
+                if(signal.aborted) return; //Might have aborted during the r.arrayBuffer() call
+                listeners.forEach(({onload})=>onload(data));
             }, (e)=>{
-                this.loading[url].listeners.forEach(({onerror})=>onerror(e));
+                listeners.forEach(({onerror})=>onerror(e));
                 if(e.name != "AbortError" && e.name != "ABORT_ERR"){
                     console.error(e);
                 }
-            }).finally(()=>{
-                delete this.loading[url];
-            });
+            })
         }
 
         return new Promise((onload, onerror)=>{
@@ -181,6 +199,8 @@ export default class ModelReader
         scene.traverse((object: any) => {
             if (object.type === "Mesh") {
                 const mesh: Mesh = object;
+                mesh.castShadow = true;
+                mesh.animations = gltf.animations;
                 const material = mesh.material as MeshStandardMaterial;
 
                 if (material.map) {
@@ -190,6 +210,13 @@ export default class ModelReader
                 mesh.geometry.computeBoundingBox();
 
                 const uberMat = material.type === "MeshPhysicalMaterial" ? new UberPBRAdvMaterial() : new UberPBRMaterial();
+
+                uberMat.onBeforeCompile = (shader) => {
+                    shader.vertexShader = uberMat.vertexShader;
+                    shader.fragmentShader = uberMat.fragmentShader;
+
+                    shader.uniforms = uberMat.uniforms;
+                }
 
                 if (material.flatShading) {
                     mesh.geometry.computeVertexNormals();

@@ -90,7 +90,7 @@ export default class CVModel2 extends CObject3D
         name: types.String("Model.Name"),
         globalUnits: types.Enum("Model.GlobalUnits", EUnitType, EUnitType.cm),
         localUnits: types.Enum("Model.LocalUnits", EUnitType, EUnitType.cm),
-        quality: types.Enum("Model.Quality", EDerivativeQuality, EDerivativeQuality.High),
+        quality: types.Enum("Model.Quality", EDerivativeQuality, EDerivativeQuality.Thumb),
         tags: types.String("Model.Tags"),
         renderOrder: types.Number("Model.RenderOrder", 0),
         castShadow: types.Boolean("Model.CastShadow", true),
@@ -102,6 +102,7 @@ export default class CVModel2 extends CObject3D
         rotation: types.Vector3("Model.Rotation"),
         center: types.Event("Model.Center"),
         shader: types.Enum("Material.Shader", EShaderMode, EShaderMode.Default),
+        variant: types.Option("Material.Variant", [], 0),
         overlayMap: types.Option("Material.OverlayMap", ["None"], 0),
         slicerEnabled: types.Boolean("Material.SlicerEnabled", true),
         override: types.Boolean("Material.Override", false),
@@ -119,7 +120,8 @@ export default class CVModel2 extends CObject3D
         unitScale: types.Number("UnitScale", { preset: 1, precision: 5 }),
         quality: types.Enum("LoadedQuality", EDerivativeQuality),
         updated: types.Event("Updated"),
-        overlayMap: types.Option("Material.OverlayMap", ["None"], 0)
+        overlayMap: types.Option("Material.OverlayMap", ["None"], 0),
+        variant: types.Option("Material.Variant", [], 0),
     };
 
     ins = this.addInputs<CObject3D, typeof CVModel2.ins>(CVModel2.ins);
@@ -137,6 +139,7 @@ export default class CVModel2 extends CObject3D
             this.ins.receiveShadow,
             this.ins.shadowSide,
             this.ins.shader,
+            this.ins.variant,
             this.ins.overlayMap,
             this.ins.slicerEnabled,
             this.ins.override,
@@ -181,6 +184,7 @@ export default class CVModel2 extends CObject3D
             this.ins.overlayMap,
             this.ins.override,
             this.ins.opacity,
+            this.ins.variant,
             this.ins.roughness,
             this.ins.metalness,
             this.ins.color,
@@ -249,18 +253,6 @@ export default class CVModel2 extends CObject3D
         const av = this.node.createComponent(CVAnnotationView);
         av.ins.unitScale.linkFrom(this.outs.unitScale);
 
-        // set quality based on max texture size
-        const maxTextureSize = this.renderer.outs.maxTextureSize.value;
-
-        if (maxTextureSize < 2048) {
-            this.ins.quality.setValue(EDerivativeQuality.Low);
-        }
-        else if (maxTextureSize < 4096) {
-            this.ins.quality.setValue(EDerivativeQuality.Medium);
-        }
-        else {
-            this.ins.quality.setValue(EDerivativeQuality.High);
-        }
     }
 
     update()
@@ -313,7 +305,13 @@ export default class CVModel2 extends CObject3D
         }
 
         if (!this.activeDerivative && ins.autoLoad.changed && ins.autoLoad.value) {
-            this.autoLoad(ins.quality.value);
+            this.autoLoad().then(()=> {
+                let setup = this.getGraphComponent(CVSetup);
+                 if (!setup.derivatives.ins.enabled.value){
+                    const derivative = this.derivatives.select(EDerivativeUsage.Web3D, EDerivativeQuality.High);
+                    this.ins.quality.setValue(derivative.data.quality);
+                 }
+            });
         }
         else if (ins.quality.changed) {
             const derivative = this.derivatives.select(EDerivativeUsage.Web3D, ins.quality.value);
@@ -340,6 +338,10 @@ export default class CVModel2 extends CObject3D
 
         if (ins.overlayMap.changed) {
             this.updateOverlayMap();
+        }
+
+        if (ins.variant.changed) {
+            this.updateVariant();
         }
 
         if (ins.shadowSide.changed) {
@@ -519,6 +521,8 @@ export default class CVModel2 extends CObject3D
         // trigger automatic loading of derivatives if active
         this.ins.autoLoad.set();
 
+        this.assetManager.initialLoad = true;
+
         return node.model;
     }
 
@@ -651,6 +655,68 @@ export default class CVModel2 extends CObject3D
         }
     }
 
+    protected updateVariant()
+    {
+        if(!this.activeDerivative) {
+            return;
+        }
+
+        const variantName = this.ins.variant.getOptionText();
+        const variantIndex = this.activeDerivative.model["variants"].findIndex( ( v ) => v.name.includes( variantName ) );
+
+        if(variantIndex < 0) {
+            return;
+        }
+
+        const parser = this.assetReader.getGLTFParser(this.activeDerivative.model.uuid);
+
+        this.object3D.traverse( async ( subobject ) => {
+            var object = subobject as any;
+
+            if ( ! object.isMesh || ! object.userData.gltfExtensions ) return;
+            
+            const meshVariantDef = object.userData.gltfExtensions[ 'KHR_materials_variants' ];
+
+            if ( ! meshVariantDef ) return;
+
+            if ( ! object.userData.originalMaterial ) {
+                object.userData.originalMaterial = object.material;
+            }
+
+            const mapping = meshVariantDef.mappings
+                .find( ( mapping ) => mapping.variants.includes( variantIndex ) );
+
+            if ( mapping ) {
+                const variantMat = await parser.getDependency( 'material', mapping.material );
+                object.material.copy( variantMat);
+                //parser.assignFinalMaterial( object );
+                this.activeDerivative.model["variants"].variantMaterials[variantMat.uuid] = variantMat;
+
+                // cache variant
+                const material = object.material;
+                this._materialCache[material.uuid] = {
+                    color: material.color.toArray(),
+                    opacity: material.opacity,
+                    hiddenOpacity: this.ins.hiddenOpacity.schema.preset,
+                    roughness: material.roughness,
+                    metalness: material.metalness,
+                    occlusion: material.aoMapIntensity,
+                    doubleSided: material.side == DoubleSide,
+                    transparent: material.transparent
+                }
+            } else {
+                object.material = object.userData.originalMaterial;
+            }
+
+            if (this.ins.override.value) {
+                this.updateMaterial();
+            }
+            this.outs.variant.setValue(this.ins.variant.value);
+        } );
+        
+        this.outs.updated.set();
+    }
+
     // helper function to update overlay map state
     protected updateOverlayMaterial(texture: Texture, uri: string)
     {
@@ -758,8 +824,11 @@ export default class CVModel2 extends CObject3D
 
     protected updateRenderOrder(model: Object3D, value: number)
     {
+ 
+
+        const delta = value - model.renderOrder;
         model.renderOrder = value;
-        model.children.forEach(child => this.updateRenderOrder(child, value));
+        model.children.forEach(child => this.updateRenderOrder(child, delta));
     }
 
     /**
@@ -768,36 +837,28 @@ export default class CVModel2 extends CObject3D
      * loads the desired quality level.
      * @param quality
      */
-    protected autoLoad(quality: EDerivativeQuality): Promise<void>
+    protected autoLoad(): Promise<void>
     {
-        const sequence : Derivative[] = [];
 
-        const targetQualityDerivative = this.derivatives.select(EDerivativeUsage.Web3D, quality);
-        if(targetQualityDerivative && targetQualityDerivative.isCached()){
-            return (()=> this.loadDerivative(targetQualityDerivative))();
-        }
-
-        const lowestQualityDerivative = this.derivatives.select(EDerivativeUsage.Web3D, EDerivativeQuality.Thumb);
-        const firstCachedDerivative = this.derivatives.getByUsage(EDerivativeUsage.Web3D).find(derivative => derivative.isCached());
-        if (firstCachedDerivative) {
-            sequence.push(firstCachedDerivative);
-        }else if (lowestQualityDerivative) {
-            sequence.push(lowestQualityDerivative);
-        }
-
-        if (targetQualityDerivative && targetQualityDerivative !== lowestQualityDerivative) {
-            sequence.push(targetQualityDerivative);
-        }
-
-        if (sequence.length === 0) {
+        const nearestDerivative = this.derivatives.select(EDerivativeUsage.Web3D, this.ins.quality.value);
+        if (nearestDerivative) {
+            return this.loadDerivative(nearestDerivative); 
+        }else {
             Notification.show(`No 3D derivatives available for '${this.displayName}'.`);
             return Promise.resolve();
-        }
+        };
+    }
 
-        // load sequence of derivatives one by one
-        return sequence.reduce((promise, derivative) => {
-            return promise.then(() => this.loadDerivative(derivative)); 
-        }, Promise.resolve());
+    public unload(){
+        if (this._activeDerivative) {
+            if(this._activeDerivative.model) this.removeObject3D(this._activeDerivative.model);
+            this._activeDerivative.unload();
+            this._activeDerivative = null;
+        }
+    }
+
+    public isLoading(){
+        return !!this._loadingDerivative;
     }
 
     /**
@@ -846,10 +907,7 @@ export default class CVModel2 extends CObject3D
                     this.assetManager.initialLoad = true; 
                 }
 
-                if (this._activeDerivative) {
-                    if(this._activeDerivative.model) this.removeObject3D(this._activeDerivative.model);
-                    this._activeDerivative.unload();
-                }
+                this.unload();
                 this._activeDerivative = derivative;
                 this._loadingDerivative = null;
                 this.addObject3D(derivative.model);
@@ -917,6 +975,16 @@ export default class CVModel2 extends CObject3D
                     overlay.asset = image;
                     overlay.fromFile = true;
                 });
+
+                // load variants
+                const variants = derivative.model["variants"] ? derivative.model["variants"].map( ( variant ) => variant.name ) : null;
+                if(variants) {
+                    const variantSet = new Set(this.ins.variant.schema.options);
+                    variants.forEach(variantSet.add, variantSet);
+                    this.ins.variant.setOptions([...variantSet]);
+                    this.ins.variant.setOption(variants[0],true,true);
+                    this.updateVariant();
+                }
 
                 if(this.ins.overlayMap.value !== 0) {
                     this.ins.overlayMap.set();

@@ -187,7 +187,7 @@ export default class CVAnnotationsTask extends CVTask
     {
         const machine = this._machine;
         const annotation = this._activeAnnotations.activeAnnotation;
-
+        
         // If activeAnnotation is being tracked, make sure it is set
         const activeIdx = machine.getTargetProperties().findIndex(prop => prop.name == "ActiveId");
         if(activeIdx >= 0) {
@@ -246,7 +246,7 @@ export default class CVAnnotationsTask extends CVTask
 
             if (mode === EAnnotationsTaskMode.Create) {
                 this.createAnnotation(position, normal);
-                event.stopPropagation = true;
+                event.stopPropagation = true;           
             }
             else if (mode === EAnnotationsTaskMode.Move) {
                 this.moveAnnotation(position, normal);
@@ -258,7 +258,8 @@ export default class CVAnnotationsTask extends CVTask
     protected createAnnotation(position: number[], direction: number[])
     {
         const languageManager = this.activeDocument.setup.language;
-        const language = languageManager.ins.language.value;
+        const primarySceneLanguage = languageManager.ins.primarySceneLanguage.value;
+
         const annotations = this.activeAnnotations;
         if (!annotations) {
             return;
@@ -274,8 +275,8 @@ export default class CVAnnotationsTask extends CVTask
 
         const model = annotations.getComponent(CVModel2);
         const annotation = new Annotation(template);
+        annotation.language = primarySceneLanguage;
 
-        annotation.language = language;
         annotation.title = languageManager.getLocalizedString("New Annotation");
         const data = annotation.data;
         data.position = position;
@@ -290,6 +291,7 @@ export default class CVAnnotationsTask extends CVTask
         annotations.addAnnotation(annotation);
         annotations.activeAnnotation = annotation;
 
+        //languageManager.ins.activeLanguage.setValue(primarySceneLanguage);
     }
 
     protected moveAnnotation(position: number[], direction: number[])
@@ -315,12 +317,12 @@ export default class CVAnnotationsTask extends CVTask
 
         if(previous) {
             previous.setup.audio.outs.updated.off("value", this.synchAudioOptions, this);
-            previous.setup.language.outs.language.off("value", this.update, this);
+            previous.setup.language.outs.activeLanguage.off("value", this.update, this);
 
             this._machine = null;
         }
         if (next) {          
-            next.setup.language.outs.language.on("value", this.update, this);
+            next.setup.language.outs.activeLanguage.on("value", this.update, this);
             next.setup.audio.outs.updated.on("value", this.synchAudioOptions, this);
 
             this._machine = next.setup.snapshots;

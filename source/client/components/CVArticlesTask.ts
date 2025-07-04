@@ -122,17 +122,22 @@ export default class CVArticlesTask extends CVTask
 
         if (meta && ins.create.changed) {
             const article = new Article();
+
             const defaultFolder = CVMediaManager.articleFolder;
 
             //Set language first otherwise other keys are in the wrong locale
-            article.language = languageManager.ins.language.value;
+            //in eCorpus we create the article for "activeLanguage" instead of "primarySceneLanguage"
+            // because we don't switch current language on article creation
+            article.language = languageManager.ins.activeLanguage.value;
             article.title = languageManager.getLocalizedString("New Article");
-            article.uri = `${defaultFolder}/new-article-${article.id}-${ELanguageType[languageManager.ins.language.value]}.html`;
+            article.uri = `${defaultFolder}/new-article-${article.id}-${ELanguageType[article.language]}.html`;
 
 
             this.createEditArticle(article);
             meta.articles.append(article);
             this.reader.outs.count.setValue(meta.articles.length);
+            //Disable in eCorpus to prevent unwanted language switches
+            //languageManager.ins.activeLanguage.setValue(languageManager.ins.primarySceneLanguage.value);
         }
         else if(activeArticle && ins.version.changed) {
             this.createEditArticle(activeArticle);
@@ -263,7 +268,7 @@ export default class CVArticlesTask extends CVTask
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
         if (previous) {
-            previous.setup.language.outs.language.off("value", this.onDocumentLanguageChange, this);
+            previous.setup.language.outs.activeLanguage.off("value", this.onDocumentLanguageChange, this);
             this.mediaManager.off<IAssetRenameEvent>("asset-rename", this.onAssetRename, this);
             this.reader.outs.article.off("value", this.onArticleChange, this);
             this.reader = null;
@@ -272,7 +277,7 @@ export default class CVArticlesTask extends CVTask
             this.reader = next.setup.reader;
             this.reader.outs.article.on("value", this.onArticleChange, this);
             this.mediaManager.on<IAssetRenameEvent>("asset-rename", this.onAssetRename, this);
-            next.setup.language.outs.language.on("value", this.onDocumentLanguageChange, this);
+            next.setup.language.outs.activeLanguage.on("value", this.onDocumentLanguageChange, this);
         }
     }
 

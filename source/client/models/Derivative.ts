@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Object3D, Mesh, Texture } from "three";
+import { Object3D, Mesh, Texture, Material } from "three";
 
 import { disposeObject } from "@ff/three/helpers";
 
@@ -146,8 +146,8 @@ export default class Derivative extends Document<IDerivative, IDerivativeJSON>
         }
 
         if(this.abortControl){
-            console.warn("Aborting inflight derivative load");
-            this.abortControl.abort("Derivative load cancelled"); //This should not happen, but if in doubt, cancel duplicates
+            ENV_DEVELOPMENT && console.warn("Aborting inflight derivative load");
+            this.abortControl.abort(new Error("Derivative load cancelled")); //This should not happen, but if in doubt, cancel duplicates
         }
         this.abortControl = new AbortController();
         const modelAsset = this.findAsset(EAssetType.Model);
@@ -170,6 +170,7 @@ export default class Derivative extends Document<IDerivative, IDerivativeJSON>
             return assetReader.getGeometry(geoAsset.data.uri)
             .then(geometry => {
                 this.model = new Mesh(geometry, new UberPBRMaterial());
+                this.model.castShadow = true;
 
                 return Promise.all(imageAssets.map(asset => assetReader.getTexture(asset.data.uri)))
                 .catch(error => {
@@ -196,6 +197,24 @@ export default class Derivative extends Document<IDerivative, IDerivativeJSON>
     {
         this.abortControl?.abort();
         if (this.model) {
+            // handle disposing variants
+            if(this.model["variants"]) {
+                const materials = this.model["variants"].variantMaterials;
+                for (let key_a in materials) {
+                    const material = materials[key_a] as Material;
+                    if (material) {
+                        for (let key_b in material) {
+                            const texture = material[key_b] as Texture;
+                            if (texture && texture.isTexture) {
+                                texture.dispose();
+                            }
+                        }
+                        material.dispose();
+                    }
+                };
+                this.model["variants"].variantMaterials = null;
+            }
+
             Derivative._cache.unref(this.model, (model)=>disposeObject(model));
             this.model = null;
         }

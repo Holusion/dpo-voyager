@@ -17,14 +17,14 @@
 
 import { Box3, Mesh } from "three";
 
-import Component, { types } from "@ff/graph/Component";
+import Component, { IComponentEvent, types } from "@ff/graph/Component";
 
 import { ISlicer, ESliceAxis, TSliceAxis } from "client/schema/setup";
 
 import UberPBRMaterial from "../shaders/UberPBRMaterial";
 
 import CVScene from "./CVScene";
-import CVModel2 from "./CVModel2";
+import CVModel2, { IModelLoadEvent } from "./CVModel2";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -86,6 +86,14 @@ export default class CVSlicer extends Component
 
         const scene = this.getGraphComponent(CVScene);
         this.ins.boundingBox.linkFrom(scene.outs.boundingBox);
+
+        this.graph.components.on(CVModel2, this.onModelComponent, this);
+    }
+
+    dispose()
+    {
+        this.graph.components.off(CVModel2, this.onModelComponent, this);
+        super.dispose();
     }
 
     update(context)
@@ -182,5 +190,24 @@ export default class CVSlicer extends Component
 
         material.cutPlaneDirection.fromArray(this.plane);
         material.cutPlaneColor.fromArray(ins.color.value);
+    }
+
+    protected onModelComponent(event: IComponentEvent<CVModel2>)
+    {
+        const component = event.object;
+
+        if (event.add) {
+            component.outs.variant.on("value", this.refreshMaterial, this);
+            component.on<IModelLoadEvent>("model-load", this.refreshMaterial, this);
+        }
+        else if (event.remove) {
+            component.off<IModelLoadEvent>("model-load", this.refreshMaterial, this);
+            component.outs.variant.off("value", this.refreshMaterial, this);
+        }
+    }
+
+    // material refresh helper
+    protected refreshMaterial() {
+        this.ins.enabled.set(); // trigger refresh of material
     }
 }

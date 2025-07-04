@@ -138,6 +138,12 @@ ff-tab-header, ff-dock-panel-header {
       }
     }
   }
+
+  .sv-property-view .sv-property {
+    font-size: 0.85em;
+    display: block;
+    align-self: flex-end;
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -392,6 +398,10 @@ $color-component-meta-light: #d9d998;
   border-left-color: #343434;
 }
 
+.sv-missing-translation {
+  color: #cc3d3d;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // TARGETS
 
@@ -497,6 +507,23 @@ $color-component-meta-light: #d9d998;
     > textarea, > input{
       width: 100%;
       max-width: 100%;
+    }
+  }
+
+  //Special styling for named properties
+  &[data-path="Model.Position"],
+  &[data-path="Model.Rotation"],
+  &[data-path="Transform.Position"],
+  &[data-path="Transform.Rotation"],
+  &[data-path="Transform.Scale"]{
+    [name="X"] .ff-label{
+      color: #a63b4a;
+    }
+    [name="Y"] .ff-label{
+      color: #6fa21c;
+    }
+    [name="Z"] .ff-label{
+      color: #2f83e1;
     }
   }
 }
