@@ -258,7 +258,7 @@ export default class CVAnnotationsTask extends CVTask
     protected createAnnotation(position: number[], direction: number[])
     {
         const languageManager = this.activeDocument.setup.language;
-        const primarySceneLanguage = languageManager.ins.primarySceneLanguage.value;
+        const activeLanguage = languageManager.ins.activeLanguage.value;
 
         const annotations = this.activeAnnotations;
         if (!annotations) {
@@ -275,9 +275,9 @@ export default class CVAnnotationsTask extends CVTask
 
         const model = annotations.getComponent(CVModel2);
         const annotation = new Annotation(template);
-        annotation.language = primarySceneLanguage;
+        annotation.language = activeLanguage;
 
-        annotation.title = languageManager.getLocalizedString("New Annotation");
+        annotation.title = (annotation.title == "Missing content")? languageManager.getLocalizedString("New Annotation") : annotation.title;
         const data = annotation.data;
         data.position = position;
         data.direction = direction;
