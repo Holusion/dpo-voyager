@@ -589,6 +589,13 @@ $color-component-meta-light: #d9d998;
   }
 }
 
+// Fix the height of the textarea in the source code editor dialog window
+.tox .tox-textarea-wrap {
+  height: 100%;
+  textarea {
+    height: 100%;
+  }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // MISC
