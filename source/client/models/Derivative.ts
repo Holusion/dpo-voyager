@@ -198,8 +198,8 @@ export default class Derivative extends Document<IDerivative, IDerivativeJSON>
         this.abortControl?.abort();
         if (this.model) {
             // handle disposing variants
-            if(this.model["variants"]) {
-                const materials = this.model["variants"].variantMaterials;
+            if(this.model.userData["variants"]) {
+                const materials = this.model.userData["variants"].variantMaterials;
                 for (let key_a in materials) {
                     const material = materials[key_a] as Material;
                     if (material) {
@@ -212,7 +212,7 @@ export default class Derivative extends Document<IDerivative, IDerivativeJSON>
                         material.dispose();
                     }
                 };
-                this.model["variants"].variantMaterials = null;
+                this.model.userData["variants"].variantMaterials = null;
             }
 
             Derivative._cache.unref(this.model, (model)=>disposeObject(model));

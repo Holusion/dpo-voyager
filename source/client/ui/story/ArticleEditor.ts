@@ -37,9 +37,9 @@ import 'tinymce/plugins/media';
 import 'tinymce/plugins/code';
 
 /* Import content css */
-import contentUiCss from '!!raw-loader!./editor_css/content.ui.min.css';
-import contentCss from '!!raw-loader!./editor_css/content.min.css';
-import contentOverrides from '!!raw-loader!./editor_css/overrides.css';
+import contentUiCss from './editor_css/content.ui.min.css?raw';
+import contentCss from './editor_css/content.min.css?raw';
+import contentOverrides from './editor_css/overrides.css?raw';
 
 import Notification from "@ff/ui/Notification";
 import MessageBox from "@ff/ui/MessageBox";
@@ -224,6 +224,7 @@ export default class ArticleEditor extends SystemView
             link_assume_external_targets: 'https',
             paste_as_text: true,
             content_css: false,
+            font_css: this.assetReader.getSystemAssetUrl("fonts/fonts.css"),
             content_style: [contentCss, contentUiCss, contentOverrides].join('\n'),
             convert_urls: false,
             image_caption: true,

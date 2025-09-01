@@ -18,8 +18,8 @@
 import { Vector3, Vector4, Color, Side, UniformsUtils, ShaderLib, NoBlending, DoubleSide, 
     AdditiveBlending, FrontSide, Texture, MeshPhysicalMaterial, MeshPhysicalMaterialParameters, ObjectSpaceNormalMap } from "three";
 
-const fragmentShader = require("./uberPBRShader.frag").default;
-const vertexShader = require("./uberPBRShader.vert").default;
+import fragmentShader from "./uberPBRShader.frag";
+import vertexShader from "./uberPBRShader.vert";
 
 import { EShaderMode } from "client/schema/setup";
 
@@ -104,6 +104,13 @@ export default class UberPBRMaterial extends MeshPhysicalMaterial
 
         if (params) {
             this.setValues(params);
+        }
+
+        this.onBeforeCompile = function(shader) {
+            shader.vertexShader = this.vertexShader;
+            shader.fragmentShader = this.fragmentShader;
+
+            shader.uniforms = this.uniforms;
         }
     }
 
