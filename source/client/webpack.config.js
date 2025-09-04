@@ -163,7 +163,8 @@ module.exports = function(env, argv)
             minimizer: [
                 new TerserPlugin({ parallel: true }),
                 new CSSMinimizerPlugin(),
-            ]
+            ],
+            splitChunks: false, //Disable common chunks splitting (keeps ajv inlined in the validateDocument worker chunk)
         },
 
         plugins: [
