@@ -97,6 +97,21 @@ export default class Component extends Publisher implements ILinkable
     changed: boolean = true;
     updated: boolean = false;
 
+    get dirty(){
+        const ins = this.ins.properties;
+        for (let i = 0, n = ins.length; i < n; ++i) {
+            if(ins[i].dirty) return true;
+        }
+        return false;
+    }
+    
+    set dirty(value: boolean){
+        const ins = this.ins.properties;
+        for (let i = 0, n = ins.length; i < n; ++i) {
+            ins[i].dirty = value;
+        }
+    }
+
     private _name: string = "";
     private _tags = new Set<string>();
     private _trackers: ComponentTracker[] = [];

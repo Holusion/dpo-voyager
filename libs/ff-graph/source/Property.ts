@@ -45,7 +45,15 @@ export interface IPropertyDisposeEvent extends ITypedEvent<"dispose">
 export default class Property<T = any> extends Publisher
 {
     value: T;
-    changed: boolean;
+
+    get changed(){
+        return this._changed;
+    }
+    set changed(value: boolean){
+        this._changed = value;
+        if(value) this.dirty = true;
+    }
+    dirty: boolean = false;
 
     readonly type: ValueType;
     readonly schema: IPropertySchema<T>;
@@ -58,6 +66,7 @@ export default class Property<T = any> extends Publisher
     private _group: PropertyGroup;
     private _key: string;
     private _path: string;
+    private _changed: boolean;
 
     /**
      * Creates a new linkable property.
