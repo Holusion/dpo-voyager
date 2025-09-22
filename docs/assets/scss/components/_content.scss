@@ -1,3 +1,5 @@
+@use 'sass:color';
+
 .content {
   -webkit-font-smoothing: antialiased;
   .highlight {
@@ -64,7 +66,7 @@
     font-family: $font-family-base;
     font-size: 1rem;
     line-height: 1.4;
-    color: lighten($black, 10%);
+    color: color.adjust($black, $lightness: 10%);
     font-weight: 400;
   }
   h1 {
