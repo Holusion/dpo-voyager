@@ -85,6 +85,7 @@ export default class Viewport extends Publisher implements IViewportManip
     {
         super();
         this.addEvent("dispose");
+        this.addEvent("resize");
 
         this.next = null;
 
@@ -201,6 +202,7 @@ export default class Viewport extends Publisher implements IViewportManip
         relRect.height = height;
 
         this.updateGeometry();
+        this.emit("resize", {...this._absRect});
     }
 
     /**

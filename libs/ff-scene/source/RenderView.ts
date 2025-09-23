@@ -5,7 +5,15 @@
  * License: MIT
  */
 
-import { WebGLRenderer, Object3D, Camera, Scene, Box3, Vector3, SRGBColorSpace } from "three";
+import { WebGLRenderer, Object3D, Camera, Scene, Box3, Vector3, SRGBColorSpace, WebGLRenderTarget } from "three";
+
+import { EffectComposer, Pass } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass"; 
+import { SSRPass } from 'three/examples/jsm/postprocessing/SSRPass.js';
+
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass";
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 import Publisher from "@ff/core/Publisher";
 import System from "@ff/graph/System";
@@ -20,7 +28,8 @@ import {
 } from "@ff/browser/ManipTarget";
 
 import Viewport, {
-    IBaseEvent as IViewportBaseEvent
+    IBaseEvent as IViewportBaseEvent,
+    IViewportRect
 } from "@ff/three/Viewport";
 
 import ViewportOverlay from "@ff/three/ui/ViewportOverlay";
@@ -53,9 +62,11 @@ export default class RenderView extends Publisher implements IManip
 {
     readonly system: System;
     readonly renderer: WebGLRenderer;
+
     readonly canvas: HTMLCanvasElement;
     readonly overlay: HTMLElement;
     readonly viewports: Viewport[] = [];
+    composers: EffectComposer[] = [];
 
     protected rendererComponent: CRenderer = null;
 
@@ -112,19 +123,92 @@ export default class RenderView extends Publisher implements IManip
         const width = this.canvasWidth;
         const height = this.canvasHeight;
 
-        this.viewports.forEach(viewport => viewport.setCanvasSize(width, height));
-        this.renderer.setSize(width, height, false);
 
         this.rendererComponent = this.system.getComponent(CRenderer, true);
         this.rendererComponent.attachView(this);
+        this.rendererComponent.on("active-scene", this.updatePostProcessing, this);
+        this.rendererComponent.on("active-camera", this.updatePostProcessing, this);
+        this.updatePostProcessing();
+
+
+        this.viewports.forEach((viewport, index )=> {
+            viewport.setCanvasSize(width, height);
+        });
+        this.renderer.setSize(width, height, false);
     }
 
     detach()
     {
         this.rendererComponent = this.system.getComponent(CRenderer, true);
         this.rendererComponent.detachView(this);
+        this.rendererComponent.off("active-scene", this.updatePostProcessing, this);
+        this.rendererComponent.off("active-camera", this.updatePostProcessing, this);
+
         this.rendererComponent = null;
     }
+
+    updatePostProcessing(){
+        console.debug("Update post-processing pipe");
+        const sceneComponent = this.rendererComponent?.activeSceneComponent;
+
+        let scene = sceneComponent?.scene;
+        let camera = sceneComponent?.activeCamera;
+
+        if (!scene || !camera) {
+            if (ENV_DEVELOPMENT) {
+                console.warn(!scene ? !camera ? "no scene/camera" : "no scene" : "no camera");
+            }
+
+            scene = this.defaultScene;
+            camera = this.defaultCamera;
+        }
+        this.composers.forEach(c => {
+            c.passes.forEach(pass=>pass.dispose());
+            c.dispose();
+        });
+
+        this.composers = this.viewports.map(viewport =>{
+            /** @fixme configure antialiasing samples */
+            const c = new EffectComposer(this.renderer, new WebGLRenderTarget(viewport.width, viewport.height, {samples: 8}));
+            const renderPass = new RenderPass(scene, camera);
+            c.addPass(renderPass);
+            const ssrPass = new SSRPass({
+                width: viewport.width,
+                height: viewport.height,
+                renderer: this.renderer,
+                scene,
+                camera,
+                isBouncing: false,
+                selects: null,
+                groundReflector: null,
+            });
+            ssrPass.opacity = 0.5;
+            ssrPass.fresnel = true;
+            ssrPass.output = SSRPass.OUTPUT.Default
+            c.addPass(ssrPass);
+
+            // const effectFXAA = new ShaderPass( FXAAShader );
+            // effectFXAA.uniforms[ 'resolution' ].value.set( 1 / viewport.width, 1 / viewport.height );
+            // c.addPass( effectFXAA );
+            c.addPass(new OutputPass());
+
+            function onViewportResize(rect:IViewportRect){
+                console.debug("Resize : ", rect);
+                c.setSize(rect.width, rect.height);
+            }
+
+            function onViewportDispose(){
+                viewport.off("resize", onViewportResize);
+                viewport.off("dispose", onViewportDispose);
+            }
+
+            viewport.on("resize", onViewportResize);
+            viewport.on("dispose", onViewportDispose);
+
+            return c;
+        });
+    }
+
 
     renderImage(width: number, height: number, format: string, quality: number)
     {
@@ -163,24 +247,20 @@ export default class RenderView extends Publisher implements IManip
             camera = this.defaultCamera;
         }
 
+
         const renderer = this.renderer;
         renderer.clear();
         renderer["__view"] = this;
 
         const viewports = this.viewports;
-
         for (let i = 0, n = viewports.length; i < n; ++i) {
             const viewport = viewports[i];
-
-            // Remove when Webkit bug is fixed: https://bugs.webkit.org/show_bug.cgi?id=237230
-            let gl = renderer.getContext();
-            gl.clear(gl.DEPTH_BUFFER_BIT);
-            gl.finish(); 
-
+            const composer = this.composers[i];
             renderer["__viewport"] = viewport;
-            const currentCamera = viewport.updateCamera(camera);
+            (composer.passes[0] as RenderPass).scene = scene;
+            (composer.passes[0] as RenderPass).camera = viewport.updateCamera(camera);
             viewport.applyViewport(this.renderer);
-            renderer.render(scene, currentCamera);
+            composer.render();
         }
     }
 
@@ -189,7 +269,10 @@ export default class RenderView extends Publisher implements IManip
         this.canvas.width = width;
         this.canvas.height = height;
 
-        this.viewports.forEach(viewport => viewport.setCanvasSize(width, height));
+        this.viewports.forEach((viewport, index) =>{
+            viewport.setCanvasSize(width, height);
+        });
+        console.debug("Resized viewports and composers");
 
         if(!this.renderer.xr.isPresenting) {
             this.renderer.setSize(width, height, false);
@@ -222,6 +305,7 @@ export default class RenderView extends Publisher implements IManip
         }
 
         viewports.length = count;
+        this.updatePostProcessing();
     }
 
     getViewportCount()
