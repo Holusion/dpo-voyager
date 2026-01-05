@@ -34,6 +34,8 @@ export default class CVSpotLight extends CSpotLight implements ICVLight
 
     get settingProperties() {
         return [
+            this.ins.name,
+            this.ins.enabled,
             this.ins.color,
             this.ins.intensity,
             this.ins.distance,
@@ -43,6 +45,7 @@ export default class CVSpotLight extends CSpotLight implements ICVLight
             this.ins.shadowEnabled,
             this.ins.shadowResolution,
             this.ins.shadowBlur,
+            this.ins.shadowIntensity
         ];
     }
 
@@ -74,9 +77,11 @@ export default class CVSpotLight extends CSpotLight implements ICVLight
             throw new Error("light type mismatch: not a spot light");
         }
 
+        ins.name.setValue(node.name);
         data.spot = data.spot || {} as any;
 
         ins.copyValues({
+            enabled: data.enabled !== undefined ? data.enabled : ins.enabled.schema.preset,
             color: data.color !== undefined ? data.color : ins.color.schema.preset,
             intensity: data.intensity !== undefined ? data.intensity : ins.intensity.schema.preset,
 
@@ -91,6 +96,7 @@ export default class CVSpotLight extends CSpotLight implements ICVLight
             shadowEnabled: data.shadowEnabled || false,
             shadowResolution: data.shadowResolution !== undefined ? EShadowMapResolution[data.shadowResolution] || 1 : 1,
             shadowBlur: data.shadowBlur !== undefined ? data.shadowBlur : ins.shadowBlur.schema.preset,
+            shadowIntensity: data.shadowIntensity !== undefined ? data.shadowIntensity : ins.shadowIntensity.schema.preset,
         });
 
         return node.light;
@@ -101,6 +107,7 @@ export default class CVSpotLight extends CSpotLight implements ICVLight
         const ins = this.ins;
 
         const data = {
+            enabled: ins.enabled.value,
             color: ins.color.cloneValue() as ColorRGB,
             intensity: ins.intensity.value,
             spot: {
@@ -121,6 +128,9 @@ export default class CVSpotLight extends CSpotLight implements ICVLight
             }
             if (!ins.shadowResolution.isDefault()) {
                 data.shadowResolution = EShadowMapResolution[ins.shadowResolution.value];
+            }
+            if (!ins.shadowIntensity.isDefault()) {
+                data.shadowIntensity = ins.shadowIntensity.value;
             }
         }
 

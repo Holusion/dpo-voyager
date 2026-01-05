@@ -33,6 +33,8 @@ export default class CVRectLight extends CRectLight implements ICVLight
 
     get settingProperties() {
         return [
+            this.ins.name,
+            this.ins.enabled,
             this.ins.color,
             this.ins.intensity,
         ];
@@ -62,7 +64,10 @@ export default class CVRectLight extends CRectLight implements ICVLight
             throw new Error(`light type mismatch: not a directional light (${data.type})`);
         }
 
+        ins.name.setValue(node.name);
+
         ins.copyValues({
+            enabled: data.enabled !== undefined ? data.enabled : ins.enabled.schema.preset,
             color: data.color !== undefined ? data.color : ins.color.schema.preset,
             intensity: data.intensity !== undefined ? data.intensity : ins.intensity.schema.preset,
 
@@ -78,6 +83,7 @@ export default class CVRectLight extends CRectLight implements ICVLight
         const ins = this.ins;
 
         const data = {
+            enabled: ins.enabled.value,
             color: ins.color.cloneValue() as ColorRGB,
             intensity: ins.intensity.value
         } as ILight;

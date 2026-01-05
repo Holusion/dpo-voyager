@@ -44,8 +44,8 @@ export interface IImage
     usage?: TImageUsage;
 }
 
-export type TImageQuality = "Thumb" | "Low" | "Medium" | "High";
-export type TImageUsage = "Render" | "ARCode";
+export type TImageQuality = "Thumb" | "Low" | "Medium" | "High" | "HDR";
+export type TImageUsage = "Render" | "Environment" | "ARCode";
 
 /**
  * Refers to an external document or a media file (audio, video, image).
