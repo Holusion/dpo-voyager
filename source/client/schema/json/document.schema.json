@@ -218,7 +218,8 @@
                         "point",
                         "spot",
                         "hemisphere",
-                        "rect"
+                        "rect",
+                        "environment"
                     ]
                 },
                 "color": {

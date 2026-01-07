@@ -387,6 +387,9 @@ Version: ${ENV_VERSION}
         if(props.lang) {
             this.setLanguage(props.lang);
         }
+
+        // Make sure environment is properly initialized
+        this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.environment.ins.initialize.set();
     }
 
     ////////////////////////////////////////////
@@ -645,6 +648,13 @@ Version: ${ENV_VERSION}
         }
     }
 
+    // Get Tours informations
+    getTours()
+    {
+        const toursIns = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.tours.tours;
+        return toursIns;
+    }
+
     // enable/disable camera controls
     enableNavigation(enable: string)
     {
@@ -701,12 +711,29 @@ Version: ${ENV_VERSION}
         }
     }
 
+    // get active language
+    getActiveLanguage()
+    {
+        const activeLanguage = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.language.ins.activeLanguage;
+        return ELanguageType[activeLanguage.value];
+    }
+
+    // get available languages
+    getLanguages(){
+        const languages = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.language.sceneLanguages;
+        return languages.map((lang)=>{return ELanguageType[lang.id]});
+    }
+    
     // set the active article
     setActiveArticle(id: string)
     {
         const reader = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.reader;
         reader.ins.enabled.setValue(true);
         reader.ins.articleId.setValue(id);
+    }
+
+    resetViewer(){
+        this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.resetViewer();
     }
 
     // helper function to standardize parsing boolean string params
@@ -722,6 +749,7 @@ Version: ${ENV_VERSION}
         }
         return output;
     }
+
 }
 
 window["VoyagerExplorer"] = ExplorerApplication;

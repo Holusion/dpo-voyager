@@ -19,10 +19,19 @@ import System from "@ff/graph/System";
 
 import Tree, { customElement, property, PropertyValues, html } from "@ff/ui/Tree";
 
+import { lightTypes } from "../../applications/coreTypes";
 import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDocumentProvider";
+import CVLanguageManager from "../../components/CVLanguageManager";
 import CVNodeProvider, { IActiveNodeEvent, INodesEvent } from "../../components/CVNodeProvider";
+import { ELightType, ICVLight } from "../../components/lights/CVLight";
 import NVNode from "../../nodes/NVNode";
 import NVScene from "../../nodes/NVScene";
+import CLight from "@ff/scene/components/CLight";
+import ConfirmDeleteLightMenu from "./ConfirmDeleteLightMenu";
+import CreateLightMenu from "./CreateLightMenu";
+import CVScene from "client/components/CVScene";
+import unitScaleFactor from "client/utils/unitScaleFactor";
+import { EUnitType } from "client/schema/common";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -85,14 +94,22 @@ class NodeTree extends Tree<NVNode>
     protected renderNodeHeader(node: NVNode)
     {
         let icons = [];
+        let buttons = [];
+
         if (node.scene) {
             icons.push(html`<ff-icon class="sv-icon-scene" name=${node.scene.icon}></ff-icon>`);
         }
         if (node.model) {
             icons.push(html`<ff-icon class="sv-icon-model" name=${node.model.icon}></ff-icon>`);
         }
+        if (node.name === "Lights") {
+            buttons.push(html`<ff-button icon="create" title="Create Light" class="sv-add-light-btn" @click=${(e: MouseEvent) => this.onClickAddLight(e, node)}></ff-button>`);
+        }
         if (node.light) {
-            icons.push(html`<ff-icon class="sv-icon-light" name=${node.light.icon}></ff-icon>`);
+            icons.push(html`<ff-icon class="${node.light.ins.enabled.value ? "sv-icon-light ff-icon": "sv-icon-disabled ff-icon"}" name=${node.light.icon}></ff-icon>`);
+            if(node.light.canDelete) {
+                buttons.push(html`<ff-button icon="trash" title="Delete Light" class="sv-delete-light-btn" @click=${(e: MouseEvent) => this.onClickDeleteLight(e, node)}></ff-button>`);
+            }
         }
         if (node.camera) {
             icons.push(html`<ff-icon class="sv-icon-camera" name=${node.camera.icon}></ff-icon>`);
@@ -101,8 +118,7 @@ class NodeTree extends Tree<NVNode>
             icons.push(html`<ff-icon class="sv-icon-meta" name=${node.meta.icon}></ff-icon>`);
         }
 
-
-        return html`${icons}<div class="ff-text ff-ellipsis">${node.displayName}</div>`;
+        return html`${icons}<div class="ff-text ff-ellipsis">${node.displayName}</div>${buttons}`;
     }
 
     protected isNodeSelected(node: NVNode): boolean
@@ -119,7 +135,8 @@ class NodeTree extends Tree<NVNode>
             return "sv-node-model";
         }
         if (treeNode.light) {
-            return "sv-node-light";
+            const light = treeNode.transform.getComponent(CLight);
+            return light.ins.enabled.value ? "sv-node-light" : "sv-node-light disabled";
         }
         if (treeNode.camera) {
             return "sv-node-camera";
@@ -168,14 +185,64 @@ class NodeTree extends Tree<NVNode>
         }
     }
 
-    protected onNodeDrop(event: DragEvent, targetTreeNode: NVNode){
-        super.onNodeDrop(event, targetTreeNode);
-        const sourceId = event.dataTransfer.getData(Tree.dragDropMimeType);
-        const source = targetTreeNode.getNodeById(sourceId) as NVNode;
-        if(source === targetTreeNode) return; //Drop on self
-        
-        source.transform.parent.removeChild(source.transform);
-        targetTreeNode.transform.addChild(source.transform); 
-        this.onUpdate();
+    protected onClickAddLight(event: MouseEvent, parentNode: NVNode)
+    {
+        event.stopPropagation();
+
+        const mainView = document.getElementsByTagName('voyager-story')[0] as HTMLElement;
+        const language: CVLanguageManager = this.documentProvider.activeComponent.setup.language;
+
+        CreateLightMenu
+            .show(mainView, language)
+            .then(([selectedType, name]) => {
+                const lightNode = NodeTree.createLightNode(parentNode, selectedType, name);
+                parentNode.transform.addChild(lightNode.transform);
+                this.nodeProvider.activeNode = lightNode;
+
+                this.setExpanded(parentNode, true);
+                this.requestUpdate();
+            })
+            .catch(e => console.error("Error creating light:", e));
+    }
+
+    static createLightNode(parentNode: NVNode, newType: ELightType, name: string): NVNode {
+        const lightType = lightTypes.find(lt => lt.type === ELightType[newType].toString());
+        if (!lightType) throw new Error(`Unsupported light type: '${newType}'`);
+ 
+        const lightNode: NVNode = parentNode.graph.createCustomNode(parentNode);
+        const newLight: ICVLight = lightNode.transform.createComponent<ICVLight>(lightType);
+
+        // Set reasonable initial size
+        const scene: CVScene = newLight.getGraphComponent(CVScene);
+        let scale = unitScaleFactor(EUnitType.m, scene.ins.units.value)*0.5;
+        scale *= newType === ELightType.rect ? 0.05 : 0.5;
+        newLight.transform.ins.scale.setValue([scale,scale,scale]);
+
+        newLight.ins.name.setValue(name);
+        newLight.update(this);  // trigger light update before helper creation to ensure proper init
+
+        newLight.getGraphComponent(CVScene).ins.lightUpdated.set();
+
+        return lightNode;
+    }
+
+    protected onClickDeleteLight(event: MouseEvent, node: NVNode) {
+        event.stopPropagation();
+        if (!node.light) return;
+        const mainView = document.getElementsByTagName('voyager-story')[0] as HTMLElement;
+        const language: CVLanguageManager = this.documentProvider.activeComponent.setup.language;
+
+        ConfirmDeleteLightMenu.show(mainView, language, node.name)
+            .then(confirmed => {
+                if (confirmed) {
+                    if (this.nodeProvider.activeNode === node) {
+                        this.nodeProvider.activeNode = node.transform.parent?.node as NVNode;
+                    }
+                    node.dispose();
+                    this.requestUpdate();
+                }
+            });
     }
 }
+
+export default NodeTree;

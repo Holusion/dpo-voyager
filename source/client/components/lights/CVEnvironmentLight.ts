@@ -15,36 +15,57 @@
  * limitations under the License.
  */
 
-import CAmbientLight from "@ff/scene/components/CAmbientLight";
+import CLight from "@ff/scene/components/CLight";
 
 import { IDocument, INode, ILight, ColorRGB, TLightType } from "client/schema/document";
 
 import { ICVLight } from "./CVLight";
+import CVEnvironment from "../CVEnvironment";
+import NVNode from "client/nodes/NVNode";
+import { INodeChangeEvent } from "@ff/graph/Node";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-export default class CVAmbienLight extends CAmbientLight implements ICVLight
+export default class CVEnvironmentLight extends CLight implements ICVLight
 {
-    static readonly typeName: string = "CVAmbientLight";
-    static readonly type: TLightType = "ambient";
+    static readonly typeName: string = "CVEnvironmentLight";
+    static readonly type: TLightType = "environment";
 
-    static readonly text: string = "Ambient Light";
+    static readonly text: string = "Environment Light";
     static readonly icon: string = "globe";
+    
+    canDelete: boolean = false;
 
     get settingProperties() {
         return [
-            this.ins.name,
             this.ins.enabled,
-            this.ins.color,
             this.ins.intensity,
         ];
     }
 
-    get snapshotProperties() {
-        return [
-            this.ins.color,
-            this.ins.intensity,
-        ];
+    protected environment = null;
+
+    create()
+    {
+        super.create();
+
+        // link inputs with environment
+        this.environment = this.getSystemComponent(CVEnvironment);
+        const envIns = this.environment.ins;
+        envIns.intensity.linkFrom(this.ins.intensity);
+        envIns.enabled.linkFrom(this.ins.enabled);
+
+        this.node.name = "Environment";
+        this.ins.name.setValue("Environment");
+        (this.node as NVNode).transform.addTag("no_settings");
+    }
+
+    update() {
+        if(this.ins.enabled.changed) {
+            this.node.emit<INodeChangeEvent>({ type: "change", what: "enabled", node: this.node });
+        }
+
+        return true;
     }
 
     dispose(): void {
@@ -60,16 +81,14 @@ export default class CVAmbienLight extends CAmbientLight implements ICVLight
         const data = document.lights[node.light];
         const ins = this.ins;
 
-        if (data.type !== CVAmbienLight.type) {
-            throw new Error("light type mismatch: not an ambient light");
+        if (data.type !== CVEnvironmentLight.type) {
+            throw new Error("light type mismatch: not an environment light");
         }
 
-        ins.name.setValue(node.name);
         data.point = data.point || {} as any;
 
         ins.copyValues({
             enabled: data.enabled !== undefined ? data.enabled : ins.enabled.schema.preset,
-            color: data.color !== undefined ? data.color : ins.color.schema.preset,
             intensity: data.intensity !== undefined ? data.intensity : ins.intensity.schema.preset,
         });
 
@@ -82,11 +101,10 @@ export default class CVAmbienLight extends CAmbientLight implements ICVLight
 
         const data = {
             enabled: ins.enabled.value,
-            color: ins.color.cloneValue() as ColorRGB,
             intensity: ins.intensity.value,
         } as ILight;
 
-        data.type = CVAmbienLight.type;
+        data.type = CVEnvironmentLight.type;
 
         document.lights = document.lights || [];
         const lightIndex = document.lights.length;
