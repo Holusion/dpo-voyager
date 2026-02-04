@@ -893,7 +893,7 @@ $pad: $canvas-border-width + $main-menu-button-size + 8px;
     &:focus {
       outline: none;
       background-color: #808080;
-      box-shadow: 0 0 3pt 2pt lighten($color-primary, 50%);
+      box-shadow: 0 0 3pt 2pt color.adjust($color-primary, $lightness: 50%);
     }
 
     &:focus:not(:focus-visible) {
@@ -904,10 +904,10 @@ $pad: $canvas-border-width + $main-menu-button-size + 8px;
     &:focus-visible {
       outline: none;
       background: #a0a0a0;
-      box-shadow: 0 0 3pt 2pt lighten($color-primary, 50%);
+      box-shadow: 0 0 3pt 2pt color.adjust($color-primary, $lightness: 50%);
     }
 
-    &:hover { background-color: lighten(#5e5e5e, 10%) }
+    &:hover { background-color: color.adjust(#5e5e5e, $lightness: 10%) }
   }
 }
 
