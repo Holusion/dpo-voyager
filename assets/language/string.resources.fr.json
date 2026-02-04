@@ -133,5 +133,8 @@
   "View Point" : "Point de vue",
   "Wireframe": "Fil de fer",
   "XRay": "Rayons X",
-  "Zoom Extents": "Recadrer"
+  "Zoom Extents": "Recadrer",
+  "Remove tag": "Supprimer le tag",
+  "Select...": "Sélectionner...",
+  "New tag...": "Nouveau tag..."
 }

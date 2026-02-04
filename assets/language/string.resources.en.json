@@ -69,5 +69,8 @@
 	"Position" : "Position",
 	"Step" : "Step",
 	"of" : "of",
-	"Tour" : "Tour"
+	"Tour" : "Tour",
+	"Remove tag" : "Remove tag",
+	"Select..." : "Select...",
+	"New tag..." : "New tag..."
 }
