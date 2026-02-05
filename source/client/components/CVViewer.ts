@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { ACESFilmicToneMapping, NeutralToneMapping, NoToneMapping, Mesh } from "three";
+import { NeutralToneMapping, NoToneMapping, Mesh } from "three";
 
 import Component, { IComponentEvent, types } from "@ff/graph/Component";
 import CRenderer from "@ff/scene/components/CRenderer";
@@ -30,6 +30,7 @@ import CVLanguageManager from "./CVLanguageManager";
 import CVARManager from "./CVARManager";
 import {getFocusableElements} from "../utils/focusHelpers";
 import CVSetup from "./CVSetup";
+import CVOrbitNavigation from "./CVOrbitNavigation";
 import CPulse from "@ff/graph/components/CPulse";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -351,6 +352,12 @@ export default class CVViewer extends Component
         }
 
         this.ins.activeAnnotation.setValue(id);
+
+        const navigation = this.getGraphComponent(CVOrbitNavigation, true);
+        if (navigation) {
+            navigation.ins.autoRotation.setValue(false);
+            navigation.ins.promptActive.setValue(false);
+        }
 
         if (targetAnnotation.data.viewId && targetAnnotation.data.viewId.length > 0 && !this.ar.outs.isPresenting.value) {
             const setup = this.getGraphComponent(CVSetup);
