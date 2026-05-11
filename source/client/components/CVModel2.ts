@@ -88,8 +88,8 @@ export default class CVModel2 extends CObject3D
 
     protected static readonly ins = {
         name: types.String("Model.Name"),
-        globalUnits: types.Enum("Model.GlobalUnits", EUnitType, EUnitType.cm),
-        localUnits: types.Enum("Model.LocalUnits", EUnitType, EUnitType.cm),
+        globalUnits: types.Enum("Model.GlobalUnits", EUnitType, EUnitType.m),
+        localUnits: types.Enum("Model.LocalUnits", EUnitType, EUnitType.m),
         quality: types.Enum("Model.Quality", EDerivativeQuality, EDerivativeQuality.Thumb),
         tags: types.Tags("Model.Tags"),
         renderOrder: types.Number("Model.RenderOrder", 0),
