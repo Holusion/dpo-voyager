@@ -68,6 +68,9 @@ export default class ContentView extends DocumentView
     protected get viewer() {
         return this.activeDocument ? this.activeDocument.setup.viewer : null;
     }
+    protected get scene() {
+        return this.activeDocument ? this.activeDocument.root.scene : null;
+    }
     protected get renderer() {
         return this.system.getMainComponent(CRenderer);
     }
@@ -109,8 +112,7 @@ export default class ContentView extends DocumentView
     {
         const system = this.system;
         const isLoading = this.assetManager.outs.busy.value;
-        const isInitialLoad = this.assetManager.outs.initialLoad.value;
-        const sceneLoaded = this.viewer?.outs.sceneLoaded.value || false;
+        const sceneLoaded = this.scene?.outs.sceneLoaded.value || false;
 
         let readerVisible = false;
         let readerPosition = EReaderPosition.Overlay;
@@ -184,7 +186,7 @@ export default class ContentView extends DocumentView
                             </div>
                         </div>
                     </div>
-                    <sv-spinner ?visible=${isLoading && isInitialLoad} .assetPath=${this.assetPath}></sv-spinner>
+                    <sv-spinner ?visible=${!sceneLoaded} .assetPath=${this.assetPath}></sv-spinner>
                     ${captionView}`;
             }
             if (readerPosition === EReaderPosition.Overlay) {
@@ -192,14 +194,14 @@ export default class ContentView extends DocumentView
                     <div class="sv-reader-container">
                         <sv-reader-view .system=${system} @close=${this.onReaderClose}></sv-reader-view>
                     </div>
-                    <sv-spinner ?visible=${isLoading && isInitialLoad} .assetPath=${this.assetPath}></sv-spinner>
+                    <sv-spinner ?visible=${!sceneLoaded} .assetPath=${this.assetPath}></sv-spinner>
                     ${captionView}
                     </div>`;
             }
         }
 
         return html`<div class="ff-fullsize sv-content-only">${sceneView}</div>
-            <sv-spinner ?visible=${isLoading && isInitialLoad} .assetPath=${this.assetPath}></sv-spinner>
+            <sv-spinner ?visible=${!sceneLoaded} .assetPath=${this.assetPath}></sv-spinner>
             ${captionView}
             ${promptVisible ? html`<sv-action-prompt></sv-action-prompt>` : null}`;
     }
@@ -220,7 +222,8 @@ export default class ContentView extends DocumentView
                 next.setup.reader.ins.position,
                 next.setup.reader.ins.enabled,
                 next.setup.tours.outs.tourIndex,
-                next.setup.navigation.ins.isInUse
+                next.setup.navigation.ins.isInUse,
+                next.root.scene.outs.sceneLoaded,
             );
         }
 
