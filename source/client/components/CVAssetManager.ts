@@ -40,14 +40,12 @@ export default class CVAssetManager extends Component
         busy: types.Boolean("State.Busy"),
         //baseUrl: types.String("Settings.BaseURL"),
         baseUrlValid: types.Boolean("Settings.BaseURLValid"),
-        initialLoad: types.Boolean("Settings.InitialLoad", false)
     };
 
     protected static readonly outs = {
         busy: types.Boolean("State.Busy"),
         completed: types.Event("State.Completed"),
         //baseUrl: types.String("Settings.BaseURL"),
-        initialLoad: types.Boolean("Settings.InitialLoad", false)
     };
 
     ins = this.addInputs(CVAssetManager.ins);
@@ -127,11 +125,6 @@ export default class CVAssetManager extends Component
 
             if (!isBusy) {
                 outs.completed.set();
-            }
-
-            if(ins.initialLoad.value) {
-                outs.initialLoad.setValue(true);
-                ins.initialLoad.setValue(false);
             }
         }
 

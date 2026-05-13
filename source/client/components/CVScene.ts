@@ -26,6 +26,8 @@ import { IDocument, IScene } from "client/schema/document";
 
 import CVNode from "./CVNode";
 import CVModel2 from "./CVModel2";
+import CVAnalytics from "./CVAnalytics";
+import CVAssetManager from "./CVAssetManager";
 import unitScaleFactor from "client/utils/unitScaleFactor";
 import CTransform from "client/../../libs/ff-scene/source/components/CTransform";
 import CVCamera from "./CVCamera";
@@ -74,6 +76,11 @@ export default class CVScene extends CVNode
         units: types.Enum("Scene.Units", EUnitType, EUnitType.cm),
         boundingBox: types.Object("Models.BoundingBox", Box3),
         boundingRadius: types.Number("Models.BoundingRadius"),
+        /**
+         * True when every model in the scene has reached a viewable state.
+         * See {@link CVModel2.isReady} for the per-model predicate.
+         */
+        sceneLoaded: types.Boolean("State.SceneLoaded", false),
     };
 
     ins = this.addInputs<CVNode, typeof CVScene.ins>(CVScene.ins);
@@ -103,6 +110,12 @@ export default class CVScene extends CVNode
     protected get renderer() {
         return this.getMainComponent(CRenderer);
     }
+    protected get assetManager() {
+        return this.getMainComponent(CVAssetManager);
+    }
+    protected get analytics() {
+        return this.getMainComponent(CVAnalytics);
+    }
 
     create()
     {
@@ -111,11 +124,15 @@ export default class CVScene extends CVNode
         this.outs.boundingBox.setValue(new Box3());
 
         this.graph.components.on(CVModel2, this.onModelComponent, this);
+        this.assetManager.outs.busy.on("value", this.onAssetsBusyChange, this);
 
         this.models.forEach(model => {
             model.ins.globalUnits.linkFrom(this.ins.units);
             this.ins.modelUpdated.linkFrom(model.outs.updated);
+            this.trackModelLoadState(model);
         });
+
+        this.updateSceneLoaded();
     }
 
     update(context)
@@ -147,6 +164,7 @@ export default class CVScene extends CVNode
 
     dispose()
     {
+        this.assetManager.outs.busy.off("value", this.onAssetsBusyChange, this);
         this.graph.components.off(CVModel2, this.onModelComponent, this);
         super.dispose();
     }
@@ -169,9 +187,64 @@ export default class CVScene extends CVNode
         if (event.add) {
             model.ins.globalUnits.linkFrom(this.ins.units);
             this.ins.modelUpdated.linkFrom(model.outs.updated);
+            this.trackModelLoadState(model);
+        }
+        else if (event.remove) {
+            this.untrackModelLoadState(model);
         }
 
+        this.updateSceneLoaded();
+
         //this.updateModelBoundingBox();
+    }
+
+    protected trackModelLoadState(model: CVModel2)
+    {
+        model.outs.loaded.on("value", this.updateSceneLoaded, this);
+        model.outs.failed.on("value", this.updateSceneLoaded, this);
+        model.ins.autoLoad.on("value", this.updateSceneLoaded, this);
+    }
+
+    protected untrackModelLoadState(model: CVModel2)
+    {
+        model.outs.loaded.off("value", this.updateSceneLoaded, this);
+        model.outs.failed.off("value", this.updateSceneLoaded, this);
+        model.ins.autoLoad.off("value", this.updateSceneLoaded, this);
+    }
+
+    protected updateSceneLoaded = () =>
+    {
+        const models = this.models;
+        // An empty scene is not "loaded" - nothing has been requested yet.
+        // sceneLoaded transitions to true only after at least one model exists and all are ready.
+        const loaded = models.length > 0 && models.every(model => model.isReady);
+        const wasLoaded = this.outs.sceneLoaded.value;
+        this.outs.sceneLoaded.setValue(loaded);
+        if (loaded !== wasLoaded) {
+            this.dispatchSceneLoadedEvent(loaded);
+        }
+    }
+
+    protected dispatchSceneLoadedEvent(loaded: boolean)
+    {
+        if (loaded) {
+            this.analytics.sendProperty("Loading_Time", this.analytics.getTimerTime() / 1000);
+            this.analytics.resetTimer();
+        }
+        const root = this.setup?.viewer?.rootElement;
+        if (!root) {
+            return;
+        }
+        root.dispatchEvent(new CustomEvent(loaded ? "scene-loaded" : "scene-loading"));
+    }
+
+    protected onAssetsBusyChange = () =>
+    {
+        const root = this.setup?.viewer?.rootElement;
+        if (!root) {
+            return;
+        }
+        root.dispatchEvent(new CustomEvent(this.assetManager.outs.busy.value ? "assets-loading" : "assets-idle"));
     }
 
     protected updateModelBoundingBox()

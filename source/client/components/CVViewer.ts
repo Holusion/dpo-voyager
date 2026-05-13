@@ -21,7 +21,7 @@ import Component, { IComponentEvent, types } from "@ff/graph/Component";
 import CRenderer from "@ff/scene/components/CRenderer";
 
 import { EShaderMode, IViewer, TShaderMode } from "client/schema/setup";
-import { EDerivativeQuality, EDerivativeUsage } from "client/schema/model";
+import { EDerivativeQuality } from "client/schema/model";
 
 import CVModel2, { IModelLoadEvent } from "./CVModel2";
 import CVAnnotationView, { IActiveTagUpdateEvent, IAnnotationClickEvent, ITagUpdateEvent } from "./CVAnnotationView";
@@ -44,7 +44,6 @@ export default class CVViewer extends Component
 
     private _rootElement: HTMLElement = null;
     private _needsAnnoFocus: boolean = false;
-    private _modelLoadCount: number = 0;
 
     protected static readonly ins = {
         annotationsVisible: types.Boolean("Annotations.Visible"),
@@ -66,7 +65,6 @@ export default class CVViewer extends Component
 
     protected static readonly outs = {
         tagCloud: types.Tags("Tags.Cloud"),
-        sceneLoaded: types.Boolean("ViewerR.SceneLoaded", false),
     };
 
     ins = this.addInputs(CVViewer.ins);
@@ -460,19 +458,6 @@ export default class CVViewer extends Component
             model.ins.variant.schema.options.forEach(variantSet.add, variantSet);
         });
         this.ins.variant.setOptions([...variantSet]);
-
-        // if all models in scene have loaded derivatives closest to scene quality
-        // (or greater than Thumb with LOD enabled), consider scene fully loaded.
-        if(this.assetManager.outs.initialLoad.value && 
-            (this.getGraphComponent(CVSetup).derivatives.ins.enabled.value && event.quality > EDerivativeQuality.Thumb
-            || event.quality === event.model.derivatives.select(EDerivativeUsage.Web3D, this.ins.quality.value).data.quality)) {
-            if(++this._modelLoadCount === models.length) {
-                this.analytics.sendProperty("Loading_Time", this.analytics.getTimerTime()/1000);
-                this.analytics.resetTimer();
-                this.assetManager.outs.initialLoad.setValue(false);
-                this.outs.sceneLoaded.setValue(true);
-            }
-        }
     }
 
     protected focusTags() {

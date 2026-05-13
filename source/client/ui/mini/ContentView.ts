@@ -16,7 +16,7 @@
  */
 
 
-import CVAssetManager from "../../components/CVAssetManager";
+import CVDocumentProvider from "../../components/CVDocumentProvider";
 
 import SystemView, { customElement, html } from "@ff/scene/ui/SystemView";
 import SceneView from "../SceneView";
@@ -29,8 +29,8 @@ export default class ContentView extends SystemView
 {
     protected sceneView: SceneView = null;
 
-    protected get assetManager() {
-        return this.system.getMainComponent(CVAssetManager);
+    protected get scene() {
+        return this.system.getMainComponent(CVDocumentProvider).activeComponent?.root.scene;
     }
 
     protected firstConnected()
@@ -41,19 +41,19 @@ export default class ContentView extends SystemView
 
     protected connected()
     {
-        this.assetManager.outs.busy.on("value", this.performUpdate, this);
+        this.scene?.outs.sceneLoaded.on("value", this.performUpdate, this);
     }
 
     protected disconnected()
     {
-        this.assetManager.outs.busy.off("value", this.performUpdate, this);
+        this.scene?.outs.sceneLoaded.off("value", this.performUpdate, this);
     }
 
     protected render()
     {
-        const isLoading = this.assetManager.outs.busy.value;
+        const sceneLoaded = this.scene?.outs.sceneLoaded.value || false;
 
         return html`${this.sceneView}
-            <sv-spinner ?visible=${isLoading}></sv-spinner>`;
+            <sv-spinner ?visible=${!sceneLoaded}></sv-spinner>`;
     }
 }
