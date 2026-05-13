@@ -120,6 +120,8 @@ export default class CVModel2 extends CObject3D
         updated: types.Event("Updated"),
         overlayMap: types.Option("Material.OverlayMap", ["None"], 0),
         variant: types.Option("Material.Variant", [], 0),
+        loaded: types.Boolean("State.Loaded", false),
+        failed: types.Boolean("State.Failed", false),
     };
 
     ins = this.addInputs<CObject3D, typeof CVModel2.ins>(CVModel2.ins);
@@ -200,6 +202,25 @@ export default class CVModel2 extends CObject3D
     }
     get localBoundingBox(): Readonly<Box3> {
         return this._localBoundingBox;
+    }
+
+    /**
+     * True when this model is in a state where the scene can be considered
+     * "ready" with respect to it. This is the case if:
+     *  - an active derivative has been loaded, or
+     *  - the last load attempt failed (we won't wait further), or
+     *  - autoLoad is disabled (the integrator is intentionally not requesting display), or
+     *  - the model is configured (its derivative list has been populated) but
+     *    has no Web3D derivative to load (e.g. AR-only). The "configured" guard
+     *    is what distinguishes that case from the transient window between
+     *    component construction and fromDocument()/appendModel() populating
+     *    the derivative list.
+     */
+    get isReady(): boolean {
+        if (this.outs.loaded.value || this.outs.failed.value) return true;
+        if (!this.ins.autoLoad.value) return true;
+        return this._derivatives.getArray().length > 0
+            && this._derivatives.getByUsage(EDerivativeUsage.Web3D).length === 0;
     }
 
     protected get assetManager() {
@@ -838,6 +859,7 @@ export default class CVModel2 extends CObject3D
             if(this._activeDerivative.model) this.removeObject3D(this._activeDerivative.model);
             this._activeDerivative.unload();
             this._activeDerivative = null;
+            this.outs.loaded.setValue(false);
         }
     }
 
@@ -886,7 +908,12 @@ export default class CVModel2 extends CObject3D
                     return;
                 }
 
-                this.unload();
+                // Don't call this.unload() here: it would flip outs.loaded to false,
+                // which fires synchronously, even though the model never becomes unloaded.
+                if (this._activeDerivative) {
+                    if (this._activeDerivative.model) this.removeObject3D(this._activeDerivative.model);
+                    this._activeDerivative.unload();
+                }
                 this._activeDerivative = derivative;
                 this._loadingDerivative = null;
                 this.addObject3D(derivative.model);
@@ -972,12 +999,21 @@ export default class CVModel2 extends CObject3D
                     this.ins.overlayMap.set();
                 }
 
+                this.outs.failed.setValue(false);
+                this.outs.loaded.setValue(true);
+
                 this.emit<IModelLoadEvent>({ type: "model-load", quality: derivative.data.quality, model: this });
                 //this.getGraphComponent(CVSetup).navigation.ins.zoomExtents.set(); 
             }).catch(error =>{
                 if(error.name == "AbortError" || error.name == "ABORT_ERR") return;
                 console.error(error);
                 Notification.show(`Failed to load model derivative: ${error.message}`)
+                if (!this._activeDerivative) {
+                    // Only flag as failed if we have nothing else on display. An LOD upgrade
+                    // that errors out is not a scene-level failure as long as a previous
+                    // derivative is still active.
+                    this.outs.failed.setValue(true);
+                }
             });
     }
 
