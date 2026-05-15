@@ -143,7 +143,6 @@ export default class CVReader extends Component
             //outs.node.setValue(entry && entry.node);
             outs.article.setValue(article);
             outs.content.setValue("");
-            ins.focus.setValue(true);
 
             if (article) {
                 this.readArticle(article);
