@@ -63,7 +63,10 @@ class ObjectCache<T extends object>{
         if(!cached) return false;
         if(cached.ref == 0){
             cached.asset.then((a)=>{
-                console.debug("Dispose of ", id)
+
+                if (ENV_DEVELOPMENT) {
+                    console.debug("Dispose of ", id);
+                }
                 destructor(a);
             });
             this.#refs.delete(id);
@@ -81,7 +84,10 @@ class ObjectCache<T extends object>{
             console.debug("referencing cached asset %s : %d ", id, cached.ref);
             return cached.asset;
         }
-        console.debug("Fetch object %s", id);
+
+        if (ENV_DEVELOPMENT) {
+            console.debug("Fetch object %s", id);
+        }
         const asset = getter().then((a)=>{
             this.#rlookup.set(a, id);
             return a;
