@@ -91,6 +91,10 @@ export interface IExplorerApplicationProps
     reader?: string;
     /** ISO 639-1 language code to change active component language */
     lang?: string;
+    /** When false, the application is constructed paused: neither
+        `evaluateProps()` nor the render loop runs until `start()` is
+        called. Defaults to true to preserve existing behaviour. */
+    autoplay?: boolean;
 }
 
 /**
@@ -121,6 +125,10 @@ Version: ${ENV_VERSION}
     readonly props: IExplorerApplicationProps;
     readonly system: System;
 
+    protected engine: NVEngine = null;
+    protected embedded: boolean = false;
+    protected _started: boolean = false;
+
     protected get assetManager() {
         return this.system.getMainComponent(CVAssetManager);
     }
@@ -137,6 +145,7 @@ Version: ${ENV_VERSION}
     constructor(parent: HTMLElement, props?: IExplorerApplicationProps, embedded?: boolean)
     {
         this.props = props || {};
+        this.embedded = !!embedded;
         // register components
         const registry = new TypeRegistry();
 
@@ -145,12 +154,12 @@ Version: ${ENV_VERSION}
 
         const system = this.system = new System(registry);
 
-        const engine = system.graph.createCustomNode(NVEngine);
+        this.engine = system.graph.createCustomNode(NVEngine);
         system.graph.createCustomNode(NVTools);
         system.graph.createCustomNode(NVDocuments);
 
         // start timing load
-        this.analytics.startTimer(); 
+        this.analytics.startTimer();
 
         if (parent) {
             // create a view and attach to parent
@@ -160,7 +169,6 @@ Version: ${ENV_VERSION}
         if (!embedded) {
             // initialize default document
             this.documentProvider.createDocument(documentTemplate as any);
-            this.evaluateProps();
         }
 
         //*** Support message passing over channel 2 ***//	
@@ -202,8 +210,24 @@ Version: ${ENV_VERSION}
             window.createImageBitmap = undefined;
         }
 
-        // start rendering
-        engine.pulse.start();
+        if (this.props.autoplay !== false) {
+            this.start();
+        }
+    }
+
+    /** Kick off scene loading and start the render loop. No-op after the first call. */
+    start()
+    {
+        if (this._started) {
+            return;
+        }
+        this._started = true;
+
+        if (!this.embedded) {
+            this.evaluateProps();
+        }
+
+        this.engine.pulse.start();
     }
 
     dispose()

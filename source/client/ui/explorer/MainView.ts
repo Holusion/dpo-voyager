@@ -18,6 +18,7 @@
 import CFullscreen from "@ff/scene/components/CFullscreen";
 import CVARManager from "client/components/CVARManager";
 import CVViewer from "client/components/CVViewer";
+import CVDocumentProvider from "client/components/CVDocumentProvider";
 
 import CustomElement, { customElement, html } from "@ff/ui/CustomElement";
 
@@ -28,8 +29,33 @@ import ExplorerApplication, { IExplorerApplicationProps } from "../../applicatio
 
 import ContentView from "./ContentView";
 import ChromeView from "./ChromeView";
+import SplashScreen from "./SplashScreen";
 
 import styles from "./styles.scss";
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Returns true when this embedding context permits "autoplay" — i.e. it is
+ * acceptable for Voyager to start downloading scene assets and running its
+ * render loop without an explicit user gesture. An element-level `autoplay`
+ * attribute takes precedence; otherwise the browser Permissions Policy
+ * (legacy Feature Policy) is consulted.
+ */
+function autoplayAllowed(el: HTMLElement): boolean
+{
+    const attr = el.getAttribute("autoplay");
+    if (attr !== null) {
+        return attr.toLowerCase() !== "false";
+    }
+
+    const fp: any = (document as any).permissionsPolicy ?? (document as any).featurePolicy;
+    if (fp && typeof fp.allowsFeature === "function") {
+        return fp.allowsFeature("autoplay");
+    }
+
+    return true;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // EXPLORER ICONS
@@ -84,7 +110,7 @@ export default class MainView extends CustomElement
 {
     application: ExplorerApplication = null;
 
-    static get observedAttributes() { return ['root', 'document']; }
+    static get observedAttributes() { return ['root', 'document', 'autoplay']; }
 
     constructor(application?: ExplorerApplication)
     {
@@ -111,6 +137,8 @@ export default class MainView extends CustomElement
     {
         super.firstConnected();
 
+        const gate = !autoplayAllowed(this);
+
         if (!this.application) {
             const props: IExplorerApplicationProps = {
                 root: this.getAttribute("root"),
@@ -127,7 +155,8 @@ export default class MainView extends CustomElement
                 controls: this.getAttribute("controls"),
                 prompt: this.getAttribute("prompt"),
                 reader: this.getAttribute("reader"),
-                lang: this.getAttribute("lang")
+                lang: this.getAttribute("lang"),
+                autoplay: !gate,
             };
 
             this.application = new ExplorerApplication(null, props);
@@ -143,7 +172,8 @@ export default class MainView extends CustomElement
 
         const system = this.application.system;
         shadowRoot.appendChild(new ContentView(system));
-        shadowRoot.appendChild(new ChromeView(system));
+        const chromeView = new ChromeView(system);
+        shadowRoot.appendChild(chromeView);
 
         const notifications = document.createElement("div");
         notifications.setAttribute("id", Notification.stackId);
@@ -156,6 +186,26 @@ export default class MainView extends CustomElement
         introAnnouncement.setAttribute("id", "sr-intro");
         introAnnouncement.setAttribute("aria-live", "polite");
         shadowRoot.appendChild(introAnnouncement);
+
+        if (gate) {
+            this.showAutoplayGate(chromeView);
+        }
+    }
+
+    protected showAutoplayGate(parent: HTMLElement)
+    {
+        const setup = this.application.system
+            .getMainComponent(CVDocumentProvider).activeComponent.setup;
+        const language = setup.language;
+        const intro = language.getLocalizedString(
+            "This page contains an interactive 3D model that requires user " +
+            "interaction before it can be loaded."
+        );
+        const action = language.getLocalizedString("Click to load 3D content.");
+        const content = `<p>${intro}</p><p><b>${action}</b></p>`;
+
+        SplashScreen.show(parent, language, content)
+            .then(() => this.application && this.application.start());
     }
 
     protected connected()
