@@ -28,8 +28,38 @@ import ExplorerApplication, { IExplorerApplicationProps } from "../../applicatio
 
 import ContentView from "./ContentView";
 import ChromeView from "./ChromeView";
+import SplashScreen from "./SplashScreen";
 
 import styles from "./styles.scss";
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Returns true when it is acceptable for Voyager to start downloading scene
+ * assets and running its render loop without an explicit user gesture.
+ *
+ * Resolution order:
+ *   1. an `autoplay` attribute on the element;
+ *   2. an `autoplay` query-string parameter on the page URL (useful when the
+ *      explorer is embedded in an iframe whose `src` carries the flag);
+ *   3. default to true, preserving existing behaviour.
+ * In each case the value enables autoplay unless it is explicitly "false",
+ * mirroring HTMLMediaElement attribute semantics.
+ */
+function autoplayAllowed(el: HTMLElement): boolean
+{
+    const attr = el.getAttribute("autoplay");
+    if (attr !== null) {
+        return attr.toLowerCase() !== "false";
+    }
+
+    const query = new URLSearchParams(window.location.search).get("autoplay");
+    if (query !== null) {
+        return query.toLowerCase() !== "false";
+    }
+
+    return true;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // EXPLORER ICONS
@@ -84,7 +114,7 @@ export default class MainView extends CustomElement
 {
     application: ExplorerApplication = null;
 
-    static get observedAttributes() { return ['root', 'document']; }
+    static get observedAttributes() { return ['root', 'document', 'autoplay']; }
 
     constructor(application?: ExplorerApplication)
     {
@@ -111,6 +141,8 @@ export default class MainView extends CustomElement
     {
         super.firstConnected();
 
+        const gate = !autoplayAllowed(this);
+
         if (!this.application) {
             const props: IExplorerApplicationProps = {
                 root: this.getAttribute("root"),
@@ -127,7 +159,8 @@ export default class MainView extends CustomElement
                 controls: this.getAttribute("controls"),
                 prompt: this.getAttribute("prompt"),
                 reader: this.getAttribute("reader"),
-                lang: this.getAttribute("lang")
+                lang: this.getAttribute("lang"),
+                autoplay: !gate,
             };
 
             this.application = new ExplorerApplication(null, props);
@@ -143,7 +176,8 @@ export default class MainView extends CustomElement
 
         const system = this.application.system;
         shadowRoot.appendChild(new ContentView(system));
-        shadowRoot.appendChild(new ChromeView(system));
+        const chromeView = new ChromeView(system);
+        shadowRoot.appendChild(chromeView);
 
         const notifications = document.createElement("div");
         notifications.setAttribute("id", Notification.stackId);
@@ -156,6 +190,33 @@ export default class MainView extends CustomElement
         introAnnouncement.setAttribute("id", "sr-intro");
         introAnnouncement.setAttribute("aria-live", "polite");
         shadowRoot.appendChild(introAnnouncement);
+
+        if (gate) {
+            this.showAutoplayGate(chromeView);
+        }
+    }
+
+    protected showAutoplayGate(chromeView: ChromeView)
+    {
+        const setup = this.application.documentProvider.activeComponent.setup;
+        const language = setup.language;
+        const intro = language.getLocalizedString(
+            "This page contains an interactive 3D model that requires user " +
+            "interaction before it can be loaded."
+        );
+        const action = language.getLocalizedString("Click to load 3D content.");
+        const content = `<p>${intro}</p><p><b>${action}</b></p>`;
+
+        // SplashScreen is a Popup that adds itself (and a modal plane) as
+        // light-DOM children of its parent. ChromeView renders into its own
+        // light DOM and clears the render root on its *first* lit render, so
+        // injecting the splash before that throws "node to be removed is not a
+        // child". Wait for the first render to complete — this mirrors how the
+        // intro splash is shown from within ChromeView.render().
+        chromeView.updateComplete.then(() => {
+            SplashScreen.show(chromeView, language, content)
+                .then(() => this.application && this.application.start());
+        });
     }
 
     protected connected()
