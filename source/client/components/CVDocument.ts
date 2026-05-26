@@ -194,7 +194,24 @@ export default class CVDocument extends CRenderGraph
             callback?.(null);
             return;
         }
-        const worker = new Worker(new URL("../io/validateDocument.ts", import.meta.url));
+        // Cross-origin Worker construction is blocked by browsers. This happens
+        // when the voyager bundle is loaded via <script> from a different
+        // origin than the host page. The URL is recomputed at the `new Worker`
+        // call site because webpack only rewrites the literal
+        // `new Worker(new URL(string, import.meta.url))` pattern.
+        if(new URL("../io/validateDocument.ts", import.meta.url).origin !== window.location.origin){
+            console.warn(`Couldn't validate document: worker script is cross-origin to page ${window.location.origin}`);
+            callback?.(null);
+            return;
+        }
+        let worker: Worker;
+        try {
+            worker = new Worker(new URL("../io/validateDocument.ts", import.meta.url));
+        } catch (e) {
+            console.warn("Couldn't validate document: failed to create worker:", (e as Error).message);
+            callback?.(null);
+            return;
+        }
         worker.onmessage = (ev: MessageEvent<ValidationResult>) => {
             worker.terminate();
             const {error} = ev.data;
