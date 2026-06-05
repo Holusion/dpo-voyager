@@ -36,6 +36,7 @@ import { ELanguageType } from "client/schema/common";
 
 import sanitizeHtml from 'sanitize-html';
 import CVMediaManager from "client/components/CVMediaManager";
+import CVDocument from "../../components/CVDocument";
 
 ////////////////////////////////////////////////////////////////////////////////
 export const MAX_LEAD_CHARS = 200;
@@ -58,14 +59,23 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         this.sceneview = explorer.shadowRoot.querySelector(".sv-scene-view") as HTMLElement;
         
         this.task.on("update", this.onUpdate, this);
-        this.activeDocument.setup.language.ins.activeLanguage.on("value", this.onUpdate, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
+    }
+
+    protected onActiveDocument(previous: CVDocument, next: CVDocument)
+    {
+        super.onActiveDocument(previous, next);
+        if (previous) {
+            previous.setup.language.ins.activeLanguage.off("value", this.onUpdate, this);
+            previous.setup.language.ins.primarySceneLanguage.off("value", this.onUpdate, this);
+        }
+        if (next) {
+            next.setup.language.ins.activeLanguage.on("value", this.onUpdate, this);
+            next.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
+        }
     }
 
     protected disconnected()
     {
-        this.activeDocument.setup.language.ins.activeLanguage.off("value", this.onUpdate, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
         this.task.off("update", this.onUpdate, this);
 
         // set cursor to grab when leaving

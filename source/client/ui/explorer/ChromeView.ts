@@ -68,10 +68,6 @@ export default class ChromeView extends DocumentView
     {
         super.connected();
         this.toolProvider.ins.visible.on("value", this.onUpdate, this);
-        this.activeDocument.setup.language.outs.activeLanguage.on("value", this.onUpdate, this);
-        this.activeDocument.setup.audio.outs.isPlaying.on("value", this.onUpdate, this);
-        this.activeDocument.setup.audio.outs.narrationPlaying.on("value", this.onUpdate, this);
-        this.activeDocument.setup.audio.ins.captionsEnabled.on("value", this.onUpdate, this);
         this.titleElement = this.createElement("div", null);
         this.titleElement.classList.add("ff-ellipsis");
         this.assetPath = this.assetReader.getSystemAssetUrl("");
@@ -81,10 +77,6 @@ export default class ChromeView extends DocumentView
     protected disconnected()
     {
         this.removeEventListener("keydown", this.onKeyDown);
-        this.activeDocument.setup.audio.ins.captionsEnabled.off("value", this.onUpdate, this);
-        this.activeDocument.setup.audio.outs.narrationPlaying.off("value", this.onUpdate, this);
-        this.activeDocument.setup.audio.outs.isPlaying.off("value", this.onUpdate, this);
-        this.activeDocument.setup.language.outs.activeLanguage.off("value", this.onUpdate, this);
         this.toolProvider.ins.visible.off("value", this.onUpdate, this);
         super.disconnected();
     }
@@ -258,6 +250,10 @@ export default class ChromeView extends DocumentView
                 setup.reader.ins.enabled,
                 setup.tours.ins.enabled,
                 setup.tours.outs.tourIndex,
+                setup.language.outs.activeLanguage,
+                setup.audio.outs.isPlaying,
+                setup.audio.outs.narrationPlaying,
+                setup.audio.ins.captionsEnabled,
             );
         }
 

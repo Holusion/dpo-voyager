@@ -22,6 +22,7 @@ import "./PropertyView";
 
 import CVAudioTask from "../../components/CVAudioTask";
 import { TaskView, customElement, html, property } from "../../components/CVTask";
+import CVDocument from "../../components/CVDocument";
 import List from "client/../../libs/ff-ui/source/List";
 import { IAudioClip } from "client/schema/meta";
 import Notification from "@ff/ui/Notification";
@@ -41,16 +42,25 @@ export default class AudioTaskView extends TaskView<CVAudioTask>
     {
         super.connected();
         this.task.on("update", this.onUpdate, this);
-        this.activeDocument.setup.audio.outs.narrationPlaying.on("value", this.onUpdate, this);
 
         //this.addEventListener("drop", this.onDropFile);
+    }
+
+    protected onActiveDocument(previous: CVDocument, next: CVDocument)
+    {
+        super.onActiveDocument(previous, next);
+        if (previous) {
+            previous.setup.audio.outs.narrationPlaying.off("value", this.onUpdate, this);
+        }
+        if (next) {
+            next.setup.audio.outs.narrationPlaying.on("value", this.onUpdate, this);
+        }
     }
 
     protected disconnected()
     {
         //this.removeEventListener("drop", this.onDropFile);
 
-        this.activeDocument.setup.audio.outs.narrationPlaying.off("value", this.onUpdate, this);
         this.task.off("update", this.onUpdate, this);
         super.disconnected();
     }

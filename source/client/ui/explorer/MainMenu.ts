@@ -68,14 +68,9 @@ export default class MainMenu extends DocumentView
         super.connected();
         this.fullscreen.outs.fullscreenActive.on("value", this.onUpdate, this);
         this.toolProvider.ins.visible.on("value", this.onUpdate, this);
-        this.activeDocument.setup.language.outs.activeLanguage.on("value", this.onUpdate, this);
-        this.activeDocument.setup.audio.outs.narrationEnabled.on("value", this.onUpdate, this);
-        this.activeDocument.setup.tours.ins.closed.on("value", this.setTourFocus, this);
-        this.activeDocument.setup.reader.ins.closed.on("value", this.setReaderFocus, this);
-        this.activeDocument.setup.viewer.ins.annotationExit.on("value", this.setAnnotationFocus, this);
         this.toolProvider.ins.closed.on("value", this.setToolsFocus, this);
 
-        if(!this.resizeObserver) { 
+        if(!this.resizeObserver) {
             this.resizeObserver = new ResizeObserver(() => this.onResize());
         }
         this.resizeObserver.observe(this);
@@ -86,11 +81,6 @@ export default class MainMenu extends DocumentView
         this.resizeObserver.disconnect();
 
         this.toolProvider.ins.closed.off("value", this.setToolsFocus, this);
-        this.activeDocument.setup.viewer.ins.annotationExit.off("value", this.setAnnotationFocus, this);
-        this.activeDocument.setup.reader.ins.closed.off("value", this.setReaderFocus, this);
-        this.activeDocument.setup.tours.ins.closed.off("value", this.setTourFocus, this);
-        this.activeDocument.setup.audio.outs.narrationEnabled.off("value", this.onUpdate, this);
-        this.activeDocument.setup.language.outs.activeLanguage.off("value", this.onUpdate, this);
         this.toolProvider.ins.visible.off("value", this.onUpdate, this);
         this.fullscreen.outs.fullscreenActive.off("value", this.onUpdate, this);
         super.disconnected();
@@ -304,6 +294,11 @@ export default class MainMenu extends DocumentView
     {
         if (previous) {
             this.documentProps.off();
+
+            const setup = previous.setup;
+            setup.tours.ins.closed.off("value", this.setTourFocus, this);
+            setup.reader.ins.closed.off("value", this.setReaderFocus, this);
+            setup.viewer.ins.annotationExit.off("value", this.setAnnotationFocus, this);
         }
         if (next) {
             const setup = next.setup;
@@ -316,8 +311,14 @@ export default class MainMenu extends DocumentView
                 setup.tours.outs.count,
                 setup.viewer.ins.annotationsVisible,
                 setup.audio.outs.narrationPlaying,
-                this.toolProvider.ins.visible
+                this.toolProvider.ins.visible,
+                setup.language.outs.activeLanguage,
+                setup.audio.outs.narrationEnabled,
             );
+
+            setup.tours.ins.closed.on("value", this.setTourFocus, this);
+            setup.reader.ins.closed.on("value", this.setReaderFocus, this);
+            setup.viewer.ins.annotationExit.on("value", this.setAnnotationFocus, this);
         }
 
         this.requestUpdate();

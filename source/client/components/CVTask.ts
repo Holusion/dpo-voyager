@@ -203,16 +203,19 @@ export class TaskView<T extends CVTask = CVTask> extends NodeView
         super(task.system);
         this.task = task;
     }
-    protected connected()
-    {
-        super.connected();
-        this.activeDocument.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
-    }
 
-    protected disconnected()
+    protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
-        this.activeDocument.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
-        super.disconnected();
+        super.onActiveDocument(previous, next);
+
+        // never assume a document is present: bind document-specific listeners
+        // when a document becomes active and release them when it goes away
+        if (previous) {
+            previous.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
+        }
+        if (next) {
+            next.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
+        }
     }
 
     protected firstConnected()

@@ -77,7 +77,6 @@ export default class TourPanel extends DocumentView
 
         const task = this.toursTask;
         task && task.outs.isActive.on("value", this.onUpdate, this);
-        this.activeDocument.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
     }
 
     protected disconnected()
@@ -86,7 +85,6 @@ export default class TourPanel extends DocumentView
         task && task.outs.isActive.off("value", this.onUpdate, this);
 
         this.system.components.off(CVToursTask, this.onToursTask, this);
-        this.activeDocument.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
         super.disconnected();
     }
 
@@ -199,7 +197,8 @@ export default class TourPanel extends DocumentView
             this.subscriber.on(
                 this.tours.ins.enabled,
                 this.tours.ins.tourIndex,
-                this.tours.outs.stepIndex
+                this.tours.outs.stepIndex,
+                next.setup.language.outs.uiLanguage
             );
         }
 

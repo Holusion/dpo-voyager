@@ -36,6 +36,7 @@ import { INote } from "client/schema/meta";
 import NodeView, { customElement, html } from "../explorer/NodeView";
 import NVNode from "../../nodes/NVNode";
 import CVMeta from "../../components/CVMeta";
+import CVDocument from "../../components/CVDocument";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -75,12 +76,21 @@ export default class NotesPanel extends NodeView
     protected connected()
     {
         super.connected();
-        this.activeDocument.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
+    }
+
+    protected onActiveDocument(previous: CVDocument, next: CVDocument)
+    {
+        super.onActiveDocument(previous, next);
+        if (previous) {
+            previous.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
+        }
+        if (next) {
+            next.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
+        }
     }
     
     protected disconnected()
     {
-        this.activeDocument.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
         super.disconnected();
     }
     

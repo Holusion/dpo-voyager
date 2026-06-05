@@ -27,6 +27,7 @@ import Article from "../../models/Article";
 
 import CVArticlesTask from "../../components/CVArticlesTask";
 import { TaskView } from "../../components/CVTask";
+import CVDocument from "../../components/CVDocument";
 import { DEFAULT_LANGUAGE, ELanguageType } from "client/schema/common";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -38,13 +39,22 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
     {
         super.connected();
         this.task.outs.article.on("value", this.onArticleChange, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
+    }
+
+    protected onActiveDocument(previous: CVDocument, next: CVDocument)
+    {
+        super.onActiveDocument(previous, next);
+        if (previous) {
+            previous.setup.language.ins.primarySceneLanguage.off("value", this.onUpdate, this);
+        }
+        if (next) {
+            next.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
+        }
     }
 
     protected disconnected()
     {
         this.task.outs.article.off("value", this.onArticleChange, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.off("value", this.onUpdate, this);
         super.disconnected();
     }
 
