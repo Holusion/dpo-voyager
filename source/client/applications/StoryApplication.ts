@@ -19,7 +19,6 @@ import System from "@ff/graph/System";
 
 import CPickSelection from "@ff/scene/components/CPickSelection";
 
-import documentTemplate from "client/templates/default.svx.json";
 
 import ExplorerApplication, { IExplorerApplicationProps } from "./ExplorerApplication";
 
@@ -109,8 +108,8 @@ export default class StoryApplication
             new MainView(this).appendTo(parent);
         }
 
-        // initialize default document
-        this.documentProvider.createDocument(documentTemplate as any);
+        // the embedded explorer already created the single persistent document;
+        // evaluateProps loads content into it (default template in authoring mode)
         this.evaluateProps();
     }
 
@@ -120,12 +119,13 @@ export default class StoryApplication
         this.mediaManager.rootUrl = url;
     }
 
-    loadDocument(documentPath: string, merge?: boolean): Promise<CVDocument>
+    loadDocument(documentPath: string): Promise<CVDocument>
     {
         this.documentProvider.setLoading();
         return this.assetReader.getJSON(documentPath)
         .then(data => {
-            const document = this.documentProvider.amendDocument(data, documentPath, merge);
+            // repopulate the persistent document in place
+            const document = this.documentProvider.openDocument(data, documentPath);
             this.documentProvider.setReady();
             return document;
         })
@@ -138,20 +138,14 @@ export default class StoryApplication
 
     loadModel(modelPath: string, quality: string)
     {
-        this.documentProvider.setLoading();
-        const document = this.documentProvider.appendModel(modelPath, quality);
-        this.documentProvider.setReady();
-        return document;
+        return this.documentProvider.appendModel(modelPath, quality);
     }
 
     loadGeometry(geoPath: string, colorMapPath?: string,
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
-        this.documentProvider.setLoading();
-        const document = this.documentProvider.appendGeometry(
+        return this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
-        this.documentProvider.setReady();
-        return document;
     }
 
     protected evaluateProps()

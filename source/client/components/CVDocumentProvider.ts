@@ -23,9 +23,9 @@ import CComponentProvider, {
     IScopedComponentsEvent
 } from "@ff/graph/components/CComponentProvider";
 
-import CVDocument, { IDocument } from "./CVDocument";
-
 import { EDocumentState } from "client/schema/document";
+
+import CVDocument, { IDocument } from "./CVDocument";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -34,10 +34,21 @@ export { EDocumentState };
 export type IActiveDocumentEvent = IActiveComponentEvent<CVDocument>;
 export type IDocumentsEvent = IScopedComponentsEvent;
 
+/**
+ * Owns a single, persistent document. The document component is created once
+ * (see ensureDocument) and exists for the lifetime of the system; loading a
+ * document repopulates it in place (see openDocument) rather than creating a new
+ * one, so the document object, its CVSetup and its viewer are stable.
+ *
+ * The lifecycle state (outs.state) is driven explicitly by the load methods
+ * (setLoading / setReady / setError). "Ready" means the scene graph is built and
+ * interactable; model derivative quality is a separate concern (see setReady).
+ */
 export default class CVDocumentProvider extends CComponentProvider<CVDocument>
 {
     static readonly typeName: string = "CVDocumentProvider";
     static readonly componentType = CVDocument;
+    static readonly isSystemSingleton = true;
 
     protected static readonly outs = {
         activeDocument: types.Object("Documents.Active", CVDocument),
@@ -56,9 +67,38 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
         this.scope = EComponentScope.Node;
     }
 
-    // -- lifecycle state -------------------------------------------------------
-    // Driven explicitly by the load methods, so the state is reliable on failure
-    // and on model-less scenes (rather than inferred from asset-manager flags).
+    /** The single persistent document (alias of activeComponent). */
+    get document() {
+        return this.activeComponent;
+    }
+
+    /**
+     * Ensures the single persistent document exists, creating it empty on the
+     * first call and returning the existing one thereafter. The document is
+     * never replaced, so callers may keep a reference to it.
+     */
+    ensureDocument(): CVDocument
+    {
+        const document = this.activeComponent || this.node.createComponent(CVDocument);
+        if (this.activeComponent !== document) {
+            this.activeComponent = document;
+        }
+        this.updateState();
+        return document;
+    }
+
+    /**
+     * Loads document data into the persistent document, replacing its scene
+     * content in place (the document object, its CVSetup and viewer instances
+     * are kept). This does not create a new document.
+     */
+    openDocument(data: IDocument, path?: string): CVDocument
+    {
+        const document = this.ensureDocument();
+        document.openDocument(data, path);
+        this.updateState();
+        return document;
+    }
 
     /** Marks a load as in flight (fetching / parsing / building the scene graph). */
     setLoading()
@@ -103,6 +143,8 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
 
     protected updateState()
     {
+        // the persistent document always exists, so "not loading, not error"
+        // means the scene graph is built and interactable
         let state: EDocumentState;
         if (this._error) {
             state = EDocumentState.Error;
@@ -115,29 +157,6 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
         }
 
         this.outs.state.setValue(state);
-    }
-
-    createDocument(data?: IDocument, path?: string)
-    {
-        const document = this.node.createComponent(CVDocument);
-        this.activeComponent = document;
-
-        if (data) {
-            document.openDocument(data, path);
-        }
-
-        return document;
-    }
-
-    amendDocument(data: IDocument, path: string, merge: boolean)
-    {
-        const document = this.activeComponent;
-        if (!document) {
-            throw new Error("no active document, can't amend");
-        }
-
-        document.openDocument(data, path, merge);
-        return document;
     }
 
     refreshDocument()
@@ -193,6 +212,7 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
     protected onActiveComponent(previous: CVDocument, next: CVDocument)
     {
         this.outs.activeDocument.setValue(next);
+        this.updateState();
     }
 
     protected onScopedComponents()

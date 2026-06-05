@@ -99,7 +99,8 @@ export default class MiniApplication
             new MainView(this).appendTo(parent);
         }
 
-        this.documentProvider.createDocument(documentTemplate as any);
+        // create the single, persistent document up front (empty), then load
+        this.documentProvider.ensureDocument();
         this.evaluateProps();
 
         //*** Support message passing over channel 2 ***//
@@ -136,17 +137,15 @@ export default class MiniApplication
         this.assetManager.baseUrl = url;
     }
 
-    loadDocument(documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
+    loadDocument(documentPath: string, quality?: string): Promise<CVDocument>
     {
         const dq = EDerivativeQuality[quality];
         this.documentProvider.setLoading();
 
         return this.assetReader.getJSON(documentPath)
         .then(data => {
-            merge = merge === undefined ? !data.lights && !data.cameras : merge;
-            return this.documentProvider.amendDocument(data, documentPath, merge);
-        })
-        .then(document => {
+            // repopulate the persistent document in place
+            const document = this.documentProvider.openDocument(data, documentPath);
             if (isFinite(dq)) {
                 document.setup.viewer.ins.quality.setValue(dq);
             }
@@ -163,6 +162,7 @@ export default class MiniApplication
     loadModel(modelPath: string, quality: string)
     {
         this.documentProvider.setLoading();
+        this.documentProvider.openDocument(documentTemplate as any);
         const document = this.documentProvider.appendModel(modelPath, quality);
         this.documentProvider.setReady();
         return document;
@@ -172,6 +172,7 @@ export default class MiniApplication
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
         this.documentProvider.setLoading();
+        this.documentProvider.openDocument(documentTemplate as any);
         const document = this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
         this.documentProvider.setReady();
@@ -196,7 +197,7 @@ export default class MiniApplication
 
         if (props.document) {
             props.document = props.root ? props.document : manager.getAssetName(props.document);
-            this.loadDocument(props.document, undefined, props.quality);
+            this.loadDocument(props.document, props.quality);
         }
         else if (props.model) {
             props.model = props.root ? props.model : manager.getAssetName(props.model);
@@ -209,7 +210,7 @@ export default class MiniApplication
         }
         else {
             // if nothing else specified, try to read "document.svx.json" from the current folder
-            this.loadDocument("document.svx.json", undefined).catch(() => {});
+            this.loadDocument("document.svx.json").catch(() => {});
         }
     }
 }

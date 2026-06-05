@@ -159,9 +159,11 @@ Version: ${ENV_VERSION}
             new MainView(this).appendTo(parent);
         }
 
+        // create the single, persistent document up front (empty, no placeholder
+        // scene); evaluateProps then loads the real content into it in place
+        this.documentProvider.ensureDocument();
+
         if (!embedded) {
-            // initialize default document
-            this.documentProvider.createDocument(documentTemplate as any);
             this.evaluateProps();
         }
 
@@ -227,7 +229,7 @@ Version: ${ENV_VERSION}
         this.assetManager.baseUrl = url; 
     }
 
-    loadDocument(documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
+    loadDocument(documentPath: string, quality?: string): Promise<CVDocument>
     {
         const dq = EDerivativeQuality[quality];
         this.documentProvider.setLoading();
@@ -235,14 +237,11 @@ Version: ${ENV_VERSION}
 
         return this.assetReader.getJSON(documentPath)
             .then(data => {
-                merge = merge === undefined ? !data.lights && !data.cameras : merge;
-                return this.documentProvider.amendDocument(data, documentPath, merge);
-            })
-            .then(document => {
+                // (re)populate the persistent document in place - no swap
+                const document = this.documentProvider.openDocument(data, documentPath);
                 if (isFinite(dq)) {
                     document.setup.viewer.ins.quality.setValue(dq);
                 }
-
                 this.documentProvider.setReady();
                 return document;
             })
@@ -252,22 +251,23 @@ Version: ${ENV_VERSION}
             })
             .finally(() => {
                 // Make sure load-dependent properties initialized
-                const setup = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup;
+                const setup = this.documentProvider.activeComponent.setup;
                 setup.environment.ins.initialize.set();
             });
     }
 
     reloadDocument()
     {
-        const oldDocument = this.documentProvider.activeComponent;
-        this.documentProvider.createDocument(documentTemplate as any);
+        // re-run the load decision; loadDocument repopulates the same document in place
         this.evaluateProps();
-        oldDocument?.dispose();
     }
 
     loadModel(modelPath: string, quality: string)
     {
         this.documentProvider.setLoading();
+        this.assetManager.ins.initialLoad.setValue(true);
+        // host the raw model in the persistent document's default scene
+        this.documentProvider.openDocument(documentTemplate as any);
         const document = this.documentProvider.appendModel(modelPath, quality);
         this.documentProvider.setReady();
         return document;
@@ -277,6 +277,9 @@ Version: ${ENV_VERSION}
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
         this.documentProvider.setLoading();
+        this.assetManager.ins.initialLoad.setValue(true);
+        // host the raw geometry in the persistent document's default scene
+        this.documentProvider.openDocument(documentTemplate as any);
         const document = this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
         this.documentProvider.setReady();
@@ -346,7 +349,7 @@ Version: ${ENV_VERSION}
         if (props.document) {
             // first loading priority: document
             props.document = manager.getAssetName(props.document);
-            this.loadDocument(props.document, undefined, props.quality)
+            this.loadDocument(props.document, props.quality)
             .then(() => this.postLoadHandler(props))
             .catch(error => Notification.show(`Failed to load document: ${error.message}`, "error"));
         }
@@ -377,9 +380,16 @@ Version: ${ENV_VERSION}
         }
         else if (props.root) {
             // if nothing else specified, try to read "scene.svx.json" from the current folder
-            this.loadDocument("scene.svx.json", undefined)
+            this.loadDocument("scene.svx.json")
             .then(() => this.postLoadHandler(props))
             .catch(() => {});
+        }
+        else {
+            // standalone with no asset: show the default template scene in the
+            // persistent document
+            this.documentProvider.openDocument(documentTemplate as any);
+            this.documentProvider.setReady();
+            this.postLoadHandler(props);
         }
     }
 
