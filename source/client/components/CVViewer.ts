@@ -391,7 +391,9 @@ export default class CVViewer extends Component
         const id = event.annotation ? event.annotation.id : "";
         this.ins.activeAnnotation.setValue(id);
 
-        this.rootElement.dispatchEvent(new CustomEvent('annotation-active', { detail: id }));
+        // see onModelLoad: rootElement (the host element) is the public event
+        // target and is unset in the mini viewer
+        this.rootElement?.dispatchEvent(new CustomEvent('annotation-active', { detail: id }));
     }
 
     protected onModelComponent(event: IComponentEvent<CVModel2>)
@@ -450,7 +452,12 @@ export default class CVViewer extends Component
     }
 
     protected onModelLoad(event: IModelLoadEvent) {
-        this.rootElement.dispatchEvent(new CustomEvent('model-load', { detail: EDerivativeQuality[event.quality] }));
+        // rootElement is the host custom element (e.g. <voyager-explorer>) and is
+        // the public event target consumers listen on; the explorer MainView binds
+        // it to the active document's viewer. It is null in the mini viewer, whose
+        // minimal MainView binds no host element (so host-targeted DOM events are
+        // not surfaced there) and briefly before the host binds.
+        this.rootElement?.dispatchEvent(new CustomEvent('model-load', { detail: EDerivativeQuality[event.quality] }));
         this.refreshTagCloud();
 
         // update variant list
