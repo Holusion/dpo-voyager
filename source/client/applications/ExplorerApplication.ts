@@ -39,6 +39,7 @@ import NVTools from "../nodes/NVTools";
 
 import MainView from "../ui/explorer/MainView";
 import { EDerivativeQuality } from "client/schema/model";
+import { EDocumentState } from "client/schema/document";
 import CVARManager from "client/components/CVARManager";
 import { EUIElements } from "client/components/CVInterface";
 import { EBackgroundStyle } from "client/schema/setup";
@@ -160,8 +161,8 @@ Version: ${ENV_VERSION}
         }
 
         if (!embedded) {
-            // initialize default document
-            this.documentProvider.createDocument(documentTemplate as any);
+            // evaluateProps creates exactly one document from the provided props
+            // (no eager placeholder document that would immediately be replaced)
             this.evaluateProps();
         }
 
@@ -210,15 +211,20 @@ Version: ${ENV_VERSION}
 
     dispose()
     {
-        // Clean up assuming a component disconnect means it won't be reconnected
-        // TODO: More complete clean up that doesn't interfere with component disconnect
         this.assetReader.dispose();
 
-        this.documentProvider.activeComponent.setup.floor.dispose();
-        this.documentProvider.activeComponent.setup.tape.dispose();
-        this.documentProvider.activeComponent.setup.grid.dispose();
-        
-        this.documentProvider.activeComponent.clearNodeTree();
+        // Detach the active document before disposing it: clearing the active
+        // document lets its views unsubscribe from the document's setup (via the
+        // active-component event) while it is still alive, then the whole
+        // document - scene graph and setup - is disposed. No view assumes a
+        // document is present, so this is safe during element teardown.
+        const document = this.documentProvider.activeComponent;
+        if (document) {
+            this.documentProvider.activeComponent = null;
+            document.dispose();
+        }
+
+        // dispose the system-level render views last, after the document
         this.system.getMainComponent(CRenderer).views.forEach(view => view.dispose());
     }
 
@@ -227,16 +233,15 @@ Version: ${ENV_VERSION}
         this.assetManager.baseUrl = url; 
     }
 
-    loadDocument(documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
+    loadDocument(documentPath: string, quality?: string): Promise<CVDocument>
     {
         const dq = EDerivativeQuality[quality];
         this.assetManager.ins.initialLoad.setValue(true);
 
         return this.assetReader.getJSON(documentPath)
-            .then(data => {
-                merge = merge === undefined ? !data.lights && !data.cameras : merge;
-                return this.documentProvider.amendDocument(data, documentPath, merge);
-            })
+            // a provided document is the first and only document ever loaded:
+            // build it from scratch, disposing any previous scene graph
+            .then(data => this.documentProvider.createDocument(data, documentPath))
             .then(document => {
                 if (isFinite(dq)) {
                     document.setup.viewer.ins.quality.setValue(dq);
@@ -244,29 +249,37 @@ Version: ${ENV_VERSION}
 
                 return document;
             })
+            .catch(error => {
+                this.documentProvider.setError();
+                throw error;
+            })
             .finally(() => {
                 // Make sure load-dependent properties initialized
-                const setup = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup;
-                setup.environment.ins.initialize.set();
+                const document = this.documentProvider.activeComponent;
+                document?.setup.environment.ins.initialize.set();
             });
     }
 
     reloadDocument()
     {
-        const oldDocument = this.documentProvider.activeComponent;
-        this.documentProvider.createDocument(documentTemplate as any);
+        // re-run the load decision; createDocument disposes the previous document atomically
         this.evaluateProps();
-        oldDocument?.dispose();
     }
 
     loadModel(modelPath: string, quality: string)
     {
+        // a raw model gets its own document built from the default template
+        this.assetManager.ins.initialLoad.setValue(true);
+        this.documentProvider.createDocument(documentTemplate as any);
         return this.documentProvider.appendModel(modelPath, quality);
     }
 
     loadGeometry(geoPath: string, colorMapPath?: string,
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
+        // a raw geometry gets its own document built from the default template
+        this.assetManager.ins.initialLoad.setValue(true);
+        this.documentProvider.createDocument(documentTemplate as any);
         return this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
     }
@@ -297,14 +310,95 @@ Version: ${ENV_VERSION}
         const url = props.root || props.document || props.model || props.geometry;
         this.setBaseUrl(new URL(url || ".", window.location as any).href);
 
-        // Config custom UI layout
+        // system-level config that needs no active document
+        if(props.dracoRoot) {
+            // Set custom Draco path
+            this.assetReader.setDracoPath(props.dracoRoot);
+        }
+
+        if(props.resourceRoot) {
+            // Set custom resource path
+            this.assetReader.setSystemAssetPath(props.resourceRoot);
+        }
+
+        // document-dependent config (uiMode, lang, ...) is applied in
+        // postLoadHandler, once exactly one document has been created below
+
+        if (props.document) {
+            // first loading priority: document
+            props.document = manager.getAssetName(props.document);
+            this.loadDocument(props.document, props.quality)
+            .then(() => this.postLoadHandler(props))
+            .catch(error => {
+                Notification.show(`Failed to load document: ${error.message}`, "error");
+                this.createDefaultDocument();
+            });
+        }
+        else if (props.model) {
+            // second loading priority: model
+            props.model = manager.getAssetName(props.model);
+
+            this.assetReader.getText(props.model)       // make sure we have a valid model path
+            .then(() => {
+                this.loadModel(props.model, props.quality);
+                this.postLoadHandler(props);
+            })
+            .catch(error => {
+                Notification.show(`Bad Model Path: ${error.message}`, "error");
+                this.createDefaultDocument();
+            });
+        }
+        else if (props.geometry) {
+            // third loading priority: geometry (plus optional color texture)
+            props.geometry = manager.getAssetName(props.geometry);
+            props.texture = props.texture ? manager.getAssetName(props.texture) : null;
+            props.occlusion = props.occlusion ? manager.getAssetName(props.occlusion) : null;
+            props.normals = props.normals ? manager.getAssetName(props.normals) : null;
+
+            this.assetReader.getText(props.geometry)    // make sure we have a valid geometry path
+            .then(() => {
+                this.loadGeometry(props.geometry, props.texture, props.occlusion, props.normals, props.quality);
+                this.postLoadHandler(props);
+            })
+            .catch(error => {
+                Notification.show(`Bad Geometry Path: ${error.message}`, "error");
+                this.createDefaultDocument();
+            });
+        }
+        else if (props.root) {
+            // if nothing else specified, try to read "scene.svx.json" from the current folder
+            this.loadDocument("scene.svx.json")
+            .then(() => this.postLoadHandler(props))
+            .catch(() => this.createDefaultDocument());
+        }
+        else {
+            // standalone with no asset specified: show the default template scene
+            this.documentProvider.createDocument(documentTemplate as any);
+            this.postLoadHandler(props);
+        }
+    }
+
+    /** Creates the default template document as a fallback (e.g. after a failed
+     * load) when no document is active, so the viewer always has a valid scene.
+     * No-op if a document is already active, to avoid wiping a loaded scene. */
+    protected createDefaultDocument()
+    {
+        if (!this.documentProvider.activeComponent) {
+            this.documentProvider.createDocument(documentTemplate as any);
+        }
+    }
+
+    protected postLoadHandler(props: IExplorerApplicationProps) {
+        this.assetManager.ins.baseUrlValid.setValue(true);
+
+        // Config custom UI layout (needs the active document's setup)
         if (props.uiMode) {
             let elementValues = 0;
             let hasValidParam = false;
-            
+
             const enumNames = Object.values(EUIElements).filter(value => typeof value === 'string') as string[];
             const uiParams = props.uiMode.split('|');
-            uiParams.forEach(param => { 
+            uiParams.forEach(param => {
                 const stdParam = param.toLowerCase();
                 if(enumNames.includes(stdParam)) {
                     elementValues += EUIElements[stdParam];
@@ -317,62 +411,6 @@ Version: ${ENV_VERSION}
             }
         }
 
-        if(props.dracoRoot) {
-            // Set custom Draco path
-            this.assetReader.setDracoPath(props.dracoRoot);
-        }
-
-        if(props.resourceRoot) {
-            // Set custom resource path
-            this.assetReader.setSystemAssetPath(props.resourceRoot);
-        }
-
-        if(props.lang) {
-            this.setLanguage(props.lang);
-        }
-
-        if (props.document) {
-            // first loading priority: document
-            props.document = manager.getAssetName(props.document);
-            this.loadDocument(props.document, undefined, props.quality)
-            .then(() => this.postLoadHandler(props))
-            .catch(error => Notification.show(`Failed to load document: ${error.message}`, "error"));
-        }
-        else if (props.model) {
-            // second loading priority: model
-            props.model = manager.getAssetName(props.model);
-
-            this.assetReader.getText(props.model)       // make sure we have a valid model path
-            .then(() => {
-                this.loadModel(props.model, props.quality);
-                this.postLoadHandler(props);
-            })
-            .catch(error => Notification.show(`Bad Model Path: ${error.message}`, "error"));
-        }
-        else if (props.geometry) {
-            // third loading priority: geometry (plus optional color texture)
-            props.geometry = manager.getAssetName(props.geometry);
-            props.texture = props.texture ? manager.getAssetName(props.texture) : null;
-            props.occlusion = props.occlusion ? manager.getAssetName(props.occlusion) : null;
-            props.normals = props.normals ? manager.getAssetName(props.normals) : null;
-
-            this.assetReader.getText(props.geometry)    // make sure we have a valid geometry path   
-            .then(() => {
-                this.loadGeometry(props.geometry, props.texture, props.occlusion, props.normals, props.quality);
-                this.postLoadHandler(props);
-            })
-            .catch(error => Notification.show(`Bad Geometry Path: ${error.message}`, "error"));
-        }
-        else if (props.root) {
-            // if nothing else specified, try to read "scene.svx.json" from the current folder
-            this.loadDocument("scene.svx.json", undefined)
-            .then(() => this.postLoadHandler(props))
-            .catch(() => {});
-        }
-    }
-
-    protected postLoadHandler(props: IExplorerApplicationProps) {
-        this.assetManager.ins.baseUrlValid.setValue(true);
         if(props.bgColor) {
             const colors = props.bgColor.split(" ");
             this.setBackgroundColor(colors[0], colors[1] || null);
@@ -401,6 +439,14 @@ Version: ${ENV_VERSION}
     ////////////////////////////////////////////
     //** API functions for external control **//
     ////////////////////////////////////////////
+
+    /** Returns the current document lifecycle state, one of the EDocumentState
+     * names: "Initializing", "Loading", "Ready" or "Error". */
+    getState(): string
+    {
+        return EDocumentState[this.documentProvider.outs.state.value];
+    }
+
     toggleAnnotations()
     {
         const viewerIns = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.viewer.ins;

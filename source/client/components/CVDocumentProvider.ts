@@ -23,24 +23,46 @@ import CComponentProvider, {
     IScopedComponentsEvent
 } from "@ff/graph/components/CComponentProvider";
 
+import { EDocumentState } from "client/schema/document";
+
+import CVAssetManager from "./CVAssetManager";
 import CVDocument, { IDocument } from "./CVDocument";
 
 ////////////////////////////////////////////////////////////////////////////////
 
+export { EDocumentState };
+
 export type IActiveDocumentEvent = IActiveComponentEvent<CVDocument>;
 export type IDocumentsEvent = IScopedComponentsEvent;
 
+/**
+ * Owns the lifecycle of the active document. There is exactly one active
+ * document at a time; switching documents always builds a fresh scene graph
+ * (see createDocument) and disposes the previous one.
+ *
+ * This provider is a *system* component (it lives in the main graph and
+ * outlives every document). The scene graph it manages lives inside
+ * CVDocument.innerGraph and is created/destroyed per document. See
+ * docs/architecture-lifecycle.md for the full contract.
+ */
 export default class CVDocumentProvider extends CComponentProvider<CVDocument>
 {
     static readonly typeName: string = "CVDocumentProvider";
     static readonly componentType = CVDocument;
 
+    // document-independent system component: exactly one per system
+    static readonly isSystemSingleton = true;
+
     protected static readonly outs = {
         activeDocument: types.Object("Documents.Active", CVDocument),
         changedDocuments: types.Event("Documents.Changed"),
+        state: types.Enum("Documents.State", EDocumentState, EDocumentState.Initializing),
     };
 
     outs = this.addOutputs(CVDocumentProvider.outs);
+
+    // set true when the last load failed; cleared when the next load starts
+    private _error = false;
 
     constructor(node: Node, id: string)
     {
@@ -48,27 +70,88 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
         this.scope = EComponentScope.Node;
     }
 
+    protected get assetManager() {
+        return this.getMainComponent(CVAssetManager);
+    }
+
+    create()
+    {
+        super.create();
+
+        // derive the lifecycle state from the existing loading signals
+        const assetManager = this.assetManager;
+        assetManager.outs.initialLoad.on("value", this.recomputeState, this);
+        assetManager.outs.busy.on("value", this.recomputeState, this);
+    }
+
+    dispose()
+    {
+        const assetManager = this.assetManager;
+        assetManager.outs.initialLoad.off("value", this.recomputeState, this);
+        assetManager.outs.busy.off("value", this.recomputeState, this);
+
+        super.dispose();
+    }
+
+    /**
+     * Builds a brand-new document and makes it the active one, disposing the
+     * previously active document (and its entire scene graph) afterwards. This
+     * is the single entry point for switching scenes; the swap is atomic so the
+     * renderer never observes a half-built graph.
+     */
     createDocument(data?: IDocument, path?: string)
     {
-        const document = this.node.createComponent(CVDocument);
-        this.activeComponent = document;
+        const previous = this.activeComponent;
 
+        // the new document is constructed inactive/hidden, so it is neither
+        // rendered nor ticked until it becomes the active component
+        const document = this.node.createComponent(CVDocument);
         if (data) {
             document.openDocument(data, path);
+        }
+
+        // atomic switch: deactivates the previous document, activates the new one
+        this.activeComponent = document;
+
+        // tear down the old document only once the new one is active
+        if (previous) {
+            previous.dispose();
         }
 
         return document;
     }
 
-    amendDocument(data: IDocument, path: string, merge: boolean)
+    /**
+     * Flags that the last load failed. The state is reset to a loading or ready
+     * state the next time a document load starts.
+     */
+    setError()
     {
-        const document = this.activeComponent;
-        if (!document) {
-            throw new Error("no active document, can't amend");
+        this._error = true;
+        this.recomputeState();
+    }
+
+    protected recomputeState()
+    {
+        const assetManager = this.assetManager;
+        let state: EDocumentState;
+
+        if (assetManager.outs.initialLoad.value) {
+            // a new load is in flight: clear any previous error
+            this._error = false;
+            state = EDocumentState.Loading;
+        }
+        else if (this._error) {
+            state = EDocumentState.Error;
+        }
+        else if (this.activeComponent) {
+            state = EDocumentState.Ready;
+        }
+        else {
+            state = EDocumentState.Initializing;
         }
 
-        document.openDocument(data, path, merge);
-        return document;
+        this.outs.state.setValue(state);
     }
 
     refreshDocument()
@@ -123,7 +206,16 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
 
     protected onActiveComponent(previous: CVDocument, next: CVDocument)
     {
+        // track the precise "interactable" signal of the active document's viewer
+        if (previous) {
+            previous.setup.viewer.outs.sceneLoaded.off("value", this.recomputeState, this);
+        }
+        if (next) {
+            next.setup.viewer.outs.sceneLoaded.on("value", this.recomputeState, this);
+        }
+
         this.outs.activeDocument.setValue(next);
+        this.recomputeState();
     }
 
     protected onScopedComponents()

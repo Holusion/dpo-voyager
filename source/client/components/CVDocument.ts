@@ -173,32 +173,27 @@ export default class CVDocument extends CRenderGraph
         return true;
     }
 
-    clearNodeTree()
-    {
-        const children = this.root.transform.children.slice();
-        children.forEach(child => child.node.dispose());
-    }
-
     /**
-     * Loads the document from the given document data. The data is validated first.
-     * If a parent node/scene is given, the data is attached to the given parent.
+     * Populates this document's scene graph from the given document data (which
+     * is validated first). This is expected to run on a freshly-created, empty
+     * document: switching documents disposes the whole previous document (its
+     * scene graph and its setup) and builds a new one rather than reusing one,
+     * so there is no existing content or setup to clear or merge here. To add
+     * raw models/geometry to the document use appendModel/appendGeometry.
      * @param documentData The document data to be loaded.
      * @param assetPath The path to the document asset to be loaded.
-     * @param mergeParent If true or a scene or node, appends to the root or the given scene/node.
      */
-    openDocument(documentData: IDocument, assetPath?: string, mergeParent?: boolean | NVNode | NVScene)
+    openDocument(documentData: IDocument, assetPath?: string)
     {
         if (ENV_DEVELOPMENT) {
-            console.log("CVDocument.openDocument - assetPath: %s, mergeParent: %s", assetPath, mergeParent);
+            console.log("CVDocument.openDocument - assetPath: %s", assetPath);
+            if (this.root.transform.children.length > 0) {
+                console.warn("CVDocument.openDocument called on a non-empty document");
+            }
         }
 
         if (!CVDocument.validator.validate(documentData)) {
             throw new Error("document schema validation failed");
-        }
-
-        if (!mergeParent) {
-            this.clearNodeTree();
-            this.ins.title.setValue(null);
         }
 
         this.ins.copyright.setValue(documentData.asset.copyright ?? this.ins.copyright.schema.preset);
@@ -206,25 +201,8 @@ export default class CVDocument extends CRenderGraph
         // listen to load events on scene meta component
         this.onMetaComponent({ type: "CVMeta", object: this.root.meta, add: true, remove: false });
 
-        let parent = (typeof mergeParent === "object" ? mergeParent : this.root);
-        if (parent.graph !== this.innerGraph) {
-            throw new Error("invalid parent node");
-        }
-
         const pathMap = new Map<string, Component>();
-
-        if (parent instanceof NVScene) {
-            parent.fromDocument(documentData, documentData.scene, pathMap);
-        }
-        else {
-            // if we append to a node, skip the document's root scene and append the scene's child nodes
-            const rootIndices = documentData.scenes[documentData.scene].nodes;
-            rootIndices.forEach(rootIndex => {
-                const rootNode = this.innerGraph.createCustomNode(NVNode);
-                parent.transform.addChild(rootNode.transform);
-                rootNode.fromDocument(documentData, rootIndex, pathMap);
-            });
-        }
+        this.root.fromDocument(documentData, documentData.scene, pathMap);
 
         //pathMap.forEach((comp, path) => console.log("CVDocument - pathMap: %s - '%s'", path, comp.displayName));
 

@@ -18,6 +18,8 @@
 import CFullscreen from "@ff/scene/components/CFullscreen";
 import CVARManager from "client/components/CVARManager";
 import CVViewer from "client/components/CVViewer";
+import CVDocumentProvider, { IActiveDocumentEvent } from "client/components/CVDocumentProvider";
+import { EDocumentState } from "client/schema/document";
 
 import CustomElement, { customElement, html } from "@ff/ui/CustomElement";
 
@@ -84,6 +86,11 @@ export default class MainView extends CustomElement
 {
     application: ExplorerApplication = null;
 
+    // last observed document lifecycle state, used to derive transition events
+    private _lastState: EDocumentState = EDocumentState.Initializing;
+    // whether we are currently subscribed to the document provider's events
+    private _providerSubscribed = false;
+
     static get observedAttributes() { return ['root', 'document']; }
 
     constructor(application?: ExplorerApplication)
@@ -104,7 +111,11 @@ export default class MainView extends CustomElement
         return this.application.system.getMainComponent(CVARManager);
     }
     protected get viewer() {
-        return this.application.system.getComponent(CVViewer);
+        // the active document's viewer; may be absent while no document is loaded
+        return this.application.system.getComponent(CVViewer, true);
+    }
+    protected get documentProvider() {
+        return this.application.system.getMainComponent(CVDocumentProvider);
     }
 
     protected firstConnected()
@@ -161,19 +172,79 @@ export default class MainView extends CustomElement
     protected connected()
     {
         this.fullscreen.fullscreenElement = this;
-        this.viewer.rootElement = this;
+        const viewer = this.viewer;
+        if (viewer) {
+            viewer.rootElement = this;
+        }
         this.arManager.shadowRoot = this.shadowRoot;
+
+        // each document gets its own viewer; keep its rootElement pointed at this
+        // element and surface the document lifecycle as DOM events on this element.
+        // Guarded so the manual connected() calls (on attribute changes) don't
+        // subscribe more than once.
+        if (!this._providerSubscribed) {
+            this._providerSubscribed = true;
+            const provider = this.documentProvider;
+            provider.on<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
+            provider.outs.state.on("value", this.onDocumentState, this);
+        }
     }
 
     protected disconnected()
     {
         super.disconnected();
+
+        if (this._providerSubscribed) {
+            this._providerSubscribed = false;
+            const provider = this.documentProvider;
+            provider.off<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
+            provider.outs.state.off("value", this.onDocumentState, this);
+        }
+
         this.fullscreen.fullscreenElement = null;
-        this.viewer.rootElement = null;
+        const viewer = this.viewer;
+        if (viewer) {
+            viewer.rootElement = null;
+        }
         if(!window["VoyagerStory"]) {
             this.application.dispose();
             this.application = null;
         }
+    }
+
+    // point the newly active document's viewer at this element so it can dispatch
+    // DOM events (e.g. model-load) and render into the right root
+    protected onActiveDocument(event: IActiveDocumentEvent)
+    {
+        if (event.next) {
+            event.next.setup.viewer.rootElement = this;
+        }
+    }
+
+    // translate document lifecycle state transitions into DOM CustomEvents:
+    // - "load-start"     when a load begins
+    // - "load-end"       when a load ends
+    // - "scene-ready"    when the scene becomes interactable
+    // - "document-state" on every transition (detail: state name)
+    protected onDocumentState()
+    {
+        const state = this.documentProvider.outs.state.value as EDocumentState;
+        const previous = this._lastState;
+        if (state === previous) {
+            return;
+        }
+        this._lastState = state;
+
+        if (state === EDocumentState.Loading) {
+            this.dispatchEvent(new CustomEvent("load-start"));
+        }
+        else if (previous === EDocumentState.Loading) {
+            this.dispatchEvent(new CustomEvent("load-end"));
+        }
+        if (state === EDocumentState.Ready) {
+            this.dispatchEvent(new CustomEvent("scene-ready"));
+        }
+        this.dispatchEvent(new CustomEvent("document-state", { detail: EDocumentState[state] }));
     }
 
     attributeChangedCallback(name: string, old: string | null, value: string | null)
@@ -388,6 +459,14 @@ export default class MainView extends CustomElement
     {
         if(this.application) {
             return this.application.getActiveLanguage();
+        }
+    }
+
+    // current document lifecycle state ("Initializing" | "Loading" | "Ready" | "Error")
+    getState()
+    {
+        if(this.application) {
+            return this.application.getState();
         }
     }
     

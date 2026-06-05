@@ -19,7 +19,6 @@ import System from "@ff/graph/System";
 
 import CPickSelection from "@ff/scene/components/CPickSelection";
 
-import documentTemplate from "client/templates/default.svx.json";
 
 import ExplorerApplication, { IExplorerApplicationProps } from "./ExplorerApplication";
 
@@ -109,8 +108,8 @@ export default class StoryApplication
             new MainView(this).appendTo(parent);
         }
 
-        // initialize default document
-        this.documentProvider.createDocument(documentTemplate as any);
+        // the embedded explorer's evaluateProps creates exactly one document
+        // (the default template in authoring/standalone mode, or the loaded scene)
         this.evaluateProps();
     }
 
@@ -120,10 +119,11 @@ export default class StoryApplication
         this.mediaManager.rootUrl = url;
     }
 
-    loadDocument(documentPath: string, merge?: boolean): Promise<CVDocument>
+    loadDocument(documentPath: string): Promise<CVDocument>
     {
+        this.assetManager.ins.initialLoad.setValue(true);
         return this.assetReader.getJSON(documentPath)
-        .then(data => this.documentProvider.amendDocument(data, documentPath, merge))
+        .then(data => this.documentProvider.createDocument(data, documentPath))
         .catch(error => {
             console.warn(`error while loading document: ${error.message}`);
             throw error;

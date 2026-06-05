@@ -99,7 +99,8 @@ export default class MiniApplication
             new MainView(this).appendTo(parent);
         }
 
-        this.documentProvider.createDocument(documentTemplate as any);
+        // evaluateProps creates exactly one document from the provided props
+        // (no eager placeholder document that would immediately be replaced)
         this.evaluateProps();
 
         //*** Support message passing over channel 2 ***//
@@ -136,15 +137,15 @@ export default class MiniApplication
         this.assetManager.baseUrl = url;
     }
 
-    loadDocument(documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
+    loadDocument(documentPath: string, quality?: string): Promise<CVDocument>
     {
         const dq = EDerivativeQuality[quality];
+        this.assetManager.ins.initialLoad.setValue(true);
 
         return this.assetReader.getJSON(documentPath)
-        .then(data => {
-            merge = merge === undefined ? !data.lights && !data.cameras : merge;
-            return this.documentProvider.amendDocument(data, documentPath, merge);
-        })
+        // a provided document is the first and only document loaded: build it
+        // from scratch, disposing any previous scene graph
+        .then(data => this.documentProvider.createDocument(data, documentPath))
         .then(document => {
             if (isFinite(dq)) {
                 document.setup.viewer.ins.quality.setValue(dq);
@@ -152,6 +153,7 @@ export default class MiniApplication
             return document;
         })
         .catch(error => {
+            this.documentProvider.setError();
             console.warn(`error while loading document: ${error.message}`);
             throw error;
         });
@@ -159,14 +161,29 @@ export default class MiniApplication
 
     loadModel(modelPath: string, quality: string)
     {
+        // a raw model gets its own document built from the default template
+        this.assetManager.ins.initialLoad.setValue(true);
+        this.documentProvider.createDocument(documentTemplate as any);
         return this.documentProvider.appendModel(modelPath, quality);
     }
 
     loadGeometry(geoPath: string, colorMapPath?: string,
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
+        // a raw geometry gets its own document built from the default template
+        this.assetManager.ins.initialLoad.setValue(true);
+        this.documentProvider.createDocument(documentTemplate as any);
         return this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
+    }
+
+    /** Creates the default template document as a fallback (e.g. after a failed
+     * load) when no document is active. No-op if a document is already active. */
+    protected createDefaultDocument()
+    {
+        if (!this.documentProvider.activeComponent) {
+            this.documentProvider.createDocument(documentTemplate as any);
+        }
     }
 
     evaluateProps()
@@ -187,7 +204,7 @@ export default class MiniApplication
 
         if (props.document) {
             props.document = props.root ? props.document : manager.getAssetName(props.document);
-            this.loadDocument(props.document, undefined, props.quality);
+            this.loadDocument(props.document, props.quality).catch(() => this.createDefaultDocument());
         }
         else if (props.model) {
             props.model = props.root ? props.model : manager.getAssetName(props.model);
@@ -200,7 +217,7 @@ export default class MiniApplication
         }
         else {
             // if nothing else specified, try to read "document.svx.json" from the current folder
-            this.loadDocument("document.svx.json", undefined).catch(() => {});
+            this.loadDocument("document.svx.json").catch(() => this.createDefaultDocument());
         }
     }
 }
