@@ -25,7 +25,11 @@ import CComponentProvider, {
 
 import CVDocument, { IDocument } from "./CVDocument";
 
+import { EDocumentState } from "client/schema/document";
+
 ////////////////////////////////////////////////////////////////////////////////
+
+export { EDocumentState };
 
 export type IActiveDocumentEvent = IActiveComponentEvent<CVDocument>;
 export type IDocumentsEvent = IScopedComponentsEvent;
@@ -38,14 +42,79 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
     protected static readonly outs = {
         activeDocument: types.Object("Documents.Active", CVDocument),
         changedDocuments: types.Event("Documents.Changed"),
+        state: types.Enum("Documents.State", EDocumentState, EDocumentState.Ready),
     };
 
     outs = this.addOutputs(CVDocumentProvider.outs);
+
+    private _loading = false;
+    private _error = false;
 
     constructor(node: Node, id: string)
     {
         super(node, id);
         this.scope = EComponentScope.Node;
+    }
+
+    // -- lifecycle state -------------------------------------------------------
+    // Driven explicitly by the load methods, so the state is reliable on failure
+    // and on model-less scenes (rather than inferred from asset-manager flags).
+
+    /** Marks a load as in flight (fetching / parsing / building the scene graph). */
+    setLoading()
+    {
+        this._loading = true;
+        this._error = false;
+        this.updateState();
+    }
+
+    /**
+     * Marks the in-flight load finished: the scene graph is built and the viewer
+     * is INTERACTABLE (navigation works, the scene structure exists).
+     *
+     * This is deliberately orthogonal to model derivative quality. Individual
+     * models stream their derivatives (thumb -> full) independently and report
+     * that progress via the `model-load` event and the viewer's `sceneLoaded`
+     * output. "Ready" therefore does NOT mean "all models at target quality" -
+     * that "fully loaded" signal is a separate concern, left untouched here, so
+     * load-time-to-full-quality analytics and quality thresholds can be defined
+     * without affecting the lifecycle state. See docs/architecture-lifecycle.md.
+     */
+    setReady()
+    {
+        this._loading = false;
+        this._error = false;
+        this.updateState();
+    }
+
+    /** Marks the in-flight load as failed. */
+    setError()
+    {
+        this._loading = false;
+        this._error = true;
+        this.updateState();
+    }
+
+    /** Current lifecycle state name, for the public API. */
+    getState(): string
+    {
+        return EDocumentState[this.outs.state.value];
+    }
+
+    protected updateState()
+    {
+        let state: EDocumentState;
+        if (this._error) {
+            state = EDocumentState.Error;
+        }
+        else if (this._loading) {
+            state = EDocumentState.Loading;
+        }
+        else {
+            state = EDocumentState.Ready;
+        }
+
+        this.outs.state.setValue(state);
     }
 
     createDocument(data?: IDocument, path?: string)

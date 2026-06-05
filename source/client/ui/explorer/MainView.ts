@@ -18,6 +18,8 @@
 import CFullscreen from "@ff/scene/components/CFullscreen";
 import CVARManager from "client/components/CVARManager";
 import CVViewer from "client/components/CVViewer";
+import CVDocumentProvider from "client/components/CVDocumentProvider";
+import { EDocumentState } from "client/schema/document";
 
 import CustomElement, { customElement, html } from "@ff/ui/CustomElement";
 
@@ -84,6 +86,11 @@ export default class MainView extends CustomElement
 {
     application: ExplorerApplication = null;
 
+    // last observed lifecycle state (baselined on subscribe), and whether we're
+    // currently subscribed to state changes
+    private _lastState: EDocumentState;
+    private _stateSubscribed = false;
+
     static get observedAttributes() { return ['root', 'document']; }
 
     constructor(application?: ExplorerApplication)
@@ -105,6 +112,9 @@ export default class MainView extends CustomElement
     }
     protected get viewer() {
         return this.application.system.getComponent(CVViewer);
+    }
+    protected get documentProvider() {
+        return this.application.system.getMainComponent(CVDocumentProvider);
     }
 
     protected firstConnected()
@@ -163,17 +173,62 @@ export default class MainView extends CustomElement
         this.fullscreen.fullscreenElement = this;
         this.viewer.rootElement = this;
         this.arManager.shadowRoot = this.shadowRoot;
+
+        // surface the document lifecycle as DOM events on this element. Guarded
+        // because connected() is also called manually on attribute changes.
+        if (!this._stateSubscribed) {
+            this._stateSubscribed = true;
+            // baseline against the current state (the first load state may be set
+            // before this view subscribes); consumers can read getState() on attach
+            this._lastState = this.documentProvider.outs.state.value as EDocumentState;
+            this.documentProvider.outs.state.on("value", this.onDocumentState, this);
+        }
     }
 
     protected disconnected()
     {
         super.disconnected();
+
+        if (this._stateSubscribed) {
+            this._stateSubscribed = false;
+            this.documentProvider.outs.state.off("value", this.onDocumentState, this);
+        }
+
         this.fullscreen.fullscreenElement = null;
         this.viewer.rootElement = null;
         if(!window["VoyagerStory"]) {
             this.application.dispose();
             this.application = null;
         }
+    }
+
+    // translate document lifecycle state transitions into DOM CustomEvents:
+    // load-start / load-end / scene-ready / document-state (detail: state name)
+    protected onDocumentState()
+    {
+        const state = this.documentProvider.outs.state.value as EDocumentState;
+        const previous = this._lastState;
+        if (state === previous) {
+            return;
+        }
+        this._lastState = state;
+
+        if (state === EDocumentState.Loading) {
+            this.dispatchEvent(new CustomEvent("load-start"));
+        }
+        else if (previous === EDocumentState.Loading) {
+            this.dispatchEvent(new CustomEvent("load-end"));
+        }
+        if (state === EDocumentState.Ready) {
+            this.dispatchEvent(new CustomEvent("scene-ready"));
+        }
+        this.dispatchEvent(new CustomEvent("document-state", { detail: EDocumentState[state] }));
+    }
+
+    // current document lifecycle state ("Loading" | "Ready" | "Error")
+    getState()
+    {
+        return this.application ? this.application.getState() : undefined;
     }
 
     attributeChangedCallback(name: string, old: string | null, value: string | null)

@@ -230,6 +230,7 @@ Version: ${ENV_VERSION}
     loadDocument(documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
     {
         const dq = EDerivativeQuality[quality];
+        this.documentProvider.setLoading();
         this.assetManager.ins.initialLoad.setValue(true);
 
         return this.assetReader.getJSON(documentPath)
@@ -242,7 +243,12 @@ Version: ${ENV_VERSION}
                     document.setup.viewer.ins.quality.setValue(dq);
                 }
 
+                this.documentProvider.setReady();
                 return document;
+            })
+            .catch(error => {
+                this.documentProvider.setError();
+                throw error;
             })
             .finally(() => {
                 // Make sure load-dependent properties initialized
@@ -261,14 +267,20 @@ Version: ${ENV_VERSION}
 
     loadModel(modelPath: string, quality: string)
     {
-        return this.documentProvider.appendModel(modelPath, quality);
+        this.documentProvider.setLoading();
+        const document = this.documentProvider.appendModel(modelPath, quality);
+        this.documentProvider.setReady();
+        return document;
     }
 
     loadGeometry(geoPath: string, colorMapPath?: string,
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
-        return this.documentProvider.appendGeometry(
+        this.documentProvider.setLoading();
+        const document = this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
+        this.documentProvider.setReady();
+        return document;
     }
 
     evaluateProps()
@@ -401,6 +413,13 @@ Version: ${ENV_VERSION}
     ////////////////////////////////////////////
     //** API functions for external control **//
     ////////////////////////////////////////////
+
+    /** Current document lifecycle state: "Loading" | "Ready" | "Error". */
+    getState(): string
+    {
+        return this.documentProvider.getState();
+    }
+
     toggleAnnotations()
     {
         const viewerIns = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.viewer.ins;

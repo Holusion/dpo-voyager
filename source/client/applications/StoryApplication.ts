@@ -122,9 +122,15 @@ export default class StoryApplication
 
     loadDocument(documentPath: string, merge?: boolean): Promise<CVDocument>
     {
+        this.documentProvider.setLoading();
         return this.assetReader.getJSON(documentPath)
-        .then(data => this.documentProvider.amendDocument(data, documentPath, merge))
+        .then(data => {
+            const document = this.documentProvider.amendDocument(data, documentPath, merge);
+            this.documentProvider.setReady();
+            return document;
+        })
         .catch(error => {
+            this.documentProvider.setError();
             console.warn(`error while loading document: ${error.message}`);
             throw error;
         });
@@ -132,14 +138,20 @@ export default class StoryApplication
 
     loadModel(modelPath: string, quality: string)
     {
-        return this.documentProvider.appendModel(modelPath, quality);
+        this.documentProvider.setLoading();
+        const document = this.documentProvider.appendModel(modelPath, quality);
+        this.documentProvider.setReady();
+        return document;
     }
 
     loadGeometry(geoPath: string, colorMapPath?: string,
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
-        return this.documentProvider.appendGeometry(
+        this.documentProvider.setLoading();
+        const document = this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
+        this.documentProvider.setReady();
+        return document;
     }
 
     protected evaluateProps()

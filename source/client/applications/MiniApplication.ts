@@ -139,6 +139,7 @@ export default class MiniApplication
     loadDocument(documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
     {
         const dq = EDerivativeQuality[quality];
+        this.documentProvider.setLoading();
 
         return this.assetReader.getJSON(documentPath)
         .then(data => {
@@ -149,9 +150,11 @@ export default class MiniApplication
             if (isFinite(dq)) {
                 document.setup.viewer.ins.quality.setValue(dq);
             }
+            this.documentProvider.setReady();
             return document;
         })
         .catch(error => {
+            this.documentProvider.setError();
             console.warn(`error while loading document: ${error.message}`);
             throw error;
         });
@@ -159,14 +162,20 @@ export default class MiniApplication
 
     loadModel(modelPath: string, quality: string)
     {
-        return this.documentProvider.appendModel(modelPath, quality);
+        this.documentProvider.setLoading();
+        const document = this.documentProvider.appendModel(modelPath, quality);
+        this.documentProvider.setReady();
+        return document;
     }
 
     loadGeometry(geoPath: string, colorMapPath?: string,
                  occlusionMapPath?: string, normalMapPath?: string, quality?: string)
     {
-        return this.documentProvider.appendGeometry(
+        this.documentProvider.setLoading();
+        const document = this.documentProvider.appendGeometry(
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
+        this.documentProvider.setReady();
+        return document;
     }
 
     evaluateProps()
