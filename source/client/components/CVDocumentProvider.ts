@@ -23,24 +23,43 @@ import CComponentProvider, {
     IScopedComponentsEvent
 } from "@ff/graph/components/CComponentProvider";
 
+import { EDocumentState } from "client/schema/document";
+
 import CVDocument, { IDocument } from "./CVDocument";
 
 ////////////////////////////////////////////////////////////////////////////////
 
+export { EDocumentState };
+
 export type IActiveDocumentEvent = IActiveComponentEvent<CVDocument>;
 export type IDocumentsEvent = IScopedComponentsEvent;
 
+/**
+ * Owns a single, persistent document. The document component is created once
+ * (see ensureDocument) and exists for the lifetime of the system; loading a
+ * document repopulates it in place (see openDocument) rather than creating a new
+ * one, so the document object, its CVSetup and its viewer are stable.
+ *
+ * The lifecycle state (outs.state) is driven explicitly by the load methods
+ * (setLoading / setReady / setError). "Ready" means the scene graph is built and
+ * interactable; model derivative quality is a separate concern (see setReady).
+ */
 export default class CVDocumentProvider extends CComponentProvider<CVDocument>
 {
     static readonly typeName: string = "CVDocumentProvider";
     static readonly componentType = CVDocument;
+    static readonly isSystemSingleton = true;
 
     protected static readonly outs = {
         activeDocument: types.Object("Documents.Active", CVDocument),
         changedDocuments: types.Event("Documents.Changed"),
+        state: types.Enum("Documents.State", EDocumentState, EDocumentState.Ready),
     };
 
     outs = this.addOutputs(CVDocumentProvider.outs);
+
+    private _loading = false;
+    private _error = false;
 
     constructor(node: Node, id: string)
     {
@@ -48,27 +67,96 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
         this.scope = EComponentScope.Node;
     }
 
-    createDocument(data?: IDocument, path?: string)
+    /** The single persistent document (alias of activeComponent). */
+    get document() {
+        return this.activeComponent;
+    }
+
+    /**
+     * Ensures the single persistent document exists, creating it empty on the
+     * first call and returning the existing one thereafter. The document is
+     * never replaced, so callers may keep a reference to it.
+     */
+    ensureDocument(): CVDocument
     {
-        const document = this.node.createComponent(CVDocument);
-        this.activeComponent = document;
-
-        if (data) {
-            document.openDocument(data, path);
+        const document = this.activeComponent || this.node.createComponent(CVDocument);
+        if (this.activeComponent !== document) {
+            this.activeComponent = document;
         }
-
+        this.updateState();
         return document;
     }
 
-    amendDocument(data: IDocument, path: string, merge: boolean)
+    /**
+     * Loads document data into the persistent document, replacing its scene
+     * content in place (the document object, its CVSetup and viewer instances
+     * are kept). This does not create a new document.
+     */
+    openDocument(data: IDocument, path?: string): CVDocument
     {
-        const document = this.activeComponent;
-        if (!document) {
-            throw new Error("no active document, can't amend");
+        const document = this.ensureDocument();
+        document.openDocument(data, path);
+        this.updateState();
+        return document;
+    }
+
+    /** Marks a load as in flight (fetching / parsing / building the scene graph). */
+    setLoading()
+    {
+        this._loading = true;
+        this._error = false;
+        this.updateState();
+    }
+
+    /**
+     * Marks the in-flight load finished: the scene graph is built and the viewer
+     * is INTERACTABLE (navigation works, the scene structure exists).
+     *
+     * This is deliberately orthogonal to model derivative quality. Individual
+     * models stream their derivatives (thumb -> full) independently and report
+     * that progress via the `model-load` event and the viewer's `sceneLoaded`
+     * output. "Ready" therefore does NOT mean "all models at target quality" -
+     * that "fully loaded" signal is a separate concern, left untouched here, so
+     * load-time-to-full-quality analytics and quality thresholds can be defined
+     * without affecting the lifecycle state. See docs/architecture-lifecycle.md.
+     */
+    setReady()
+    {
+        this._loading = false;
+        this._error = false;
+        this.updateState();
+    }
+
+    /** Marks the in-flight load as failed. */
+    setError()
+    {
+        this._loading = false;
+        this._error = true;
+        this.updateState();
+    }
+
+    /** Current lifecycle state name, for the public API. */
+    getState(): string
+    {
+        return EDocumentState[this.outs.state.value];
+    }
+
+    protected updateState()
+    {
+        // the persistent document always exists, so "not loading, not error"
+        // means the scene graph is built and interactable
+        let state: EDocumentState;
+        if (this._error) {
+            state = EDocumentState.Error;
+        }
+        else if (this._loading) {
+            state = EDocumentState.Loading;
+        }
+        else {
+            state = EDocumentState.Ready;
         }
 
-        document.openDocument(data, path, merge);
-        return document;
+        this.outs.state.setValue(state);
     }
 
     refreshDocument()
@@ -124,6 +212,7 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
     protected onActiveComponent(previous: CVDocument, next: CVDocument)
     {
         this.outs.activeDocument.setValue(next);
+        this.updateState();
     }
 
     protected onScopedComponents()

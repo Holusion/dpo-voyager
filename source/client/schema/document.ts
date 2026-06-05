@@ -32,6 +32,22 @@ export type TCameraType = "perspective" | "orthographic";
 export type TLightType = "ambient" | "directional" | "point" | "spot" | "hemisphere" | "rect" | "environment" | "sun";
 
 /**
+ * Lifecycle phases of the viewer with respect to its (single, persistent)
+ * document. See docs/architecture-lifecycle.md.
+ *
+ * - Loading: a document/model load is in flight.
+ * - Ready: the document's scene graph is built and interactable. An empty or
+ *   default scene is Ready. Derivatives may still be streaming.
+ * - Error: the last load failed.
+ */
+export enum EDocumentState
+{
+    Loading,
+    Ready,
+    Error,
+}
+
+/**
  * Encapsulates a node tree representing a renderable scene.
  */
 export interface IDocument
