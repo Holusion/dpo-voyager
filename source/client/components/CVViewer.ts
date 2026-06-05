@@ -391,7 +391,8 @@ export default class CVViewer extends Component
         const id = event.annotation ? event.annotation.id : "";
         this.ins.activeAnnotation.setValue(id);
 
-        this.rootElement.dispatchEvent(new CustomEvent('annotation-active', { detail: id }));
+        // rootElement is unset in the mini viewer (see onModelLoad)
+        this.rootElement?.dispatchEvent(new CustomEvent('annotation-active', { detail: id }));
     }
 
     protected onModelComponent(event: IComponentEvent<CVModel2>)
@@ -450,7 +451,9 @@ export default class CVViewer extends Component
     }
 
     protected onModelLoad(event: IModelLoadEvent) {
-        this.rootElement.dispatchEvent(new CustomEvent('model-load', { detail: EDerivativeQuality[event.quality] }));
+        // rootElement (the host element) is the public event target; it is unset
+        // in the mini viewer, which binds no host element
+        this.rootElement?.dispatchEvent(new CustomEvent('model-load', { detail: EDerivativeQuality[event.quality] }));
         this.refreshTagCloud();
 
         // update variant list
