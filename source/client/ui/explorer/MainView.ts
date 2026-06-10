@@ -18,6 +18,10 @@
 import CFullscreen from "@ff/scene/components/CFullscreen";
 import CVARManager from "client/components/CVARManager";
 import CVViewer from "client/components/CVViewer";
+// type-only import: a runtime import would create a circular module dependency
+// (CVDocumentProvider -> CVDocument -> NVNode -> coreTypes -> NVDocuments)
+import type CVDocumentProvider from "client/components/CVDocumentProvider";
+import type { IActiveDocumentEvent } from "client/components/CVDocumentProvider";
 
 import CustomElement, { customElement, html } from "@ff/ui/CustomElement";
 
@@ -84,7 +88,28 @@ export default class MainView extends CustomElement
 {
     application: ExplorerApplication = null;
 
-    static get observedAttributes() { return ['root', 'document']; }
+    /** Maps observed element attributes (lowercase) to application props. */
+    protected static readonly attributeProps: Record<string, keyof IExplorerApplicationProps> = {
+        "root": "root",
+        "dracoroot": "dracoRoot",
+        "resourceroot": "resourceRoot",
+        "document": "document",
+        "model": "model",
+        "geometry": "geometry",
+        "texture": "texture",
+        "occlusion": "occlusion",
+        "normals": "normals",
+        "quality": "quality",
+        "uimode": "uiMode",
+        "bgcolor": "bgColor",
+        "bgstyle": "bgStyle",
+        "controls": "controls",
+        "prompt": "prompt",
+        "reader": "reader",
+        "lang": "lang",
+    };
+
+    static get observedAttributes() { return Object.keys(MainView.attributeProps); }
 
     constructor(application?: ExplorerApplication)
     {
@@ -106,29 +131,21 @@ export default class MainView extends CustomElement
     protected get viewer() {
         return this.application.system.getComponent(CVViewer);
     }
+    protected get documentProvider() {
+        return this.application.system.getMainComponent<CVDocumentProvider>("CVDocumentProvider");
+    }
 
     protected firstConnected()
     {
         super.firstConnected();
 
         if (!this.application) {
-            const props: IExplorerApplicationProps = {
-                root: this.getAttribute("root"),
-                dracoRoot: this.getAttribute("dracoRoot"),
-                resourceRoot: this.getAttribute("resourceRoot"),
-                document: this.getAttribute("document"),
-                model: this.getAttribute("model"),
-                geometry: this.getAttribute("geometry"),
-                texture: this.getAttribute("texture"),
-                quality: this.getAttribute("quality"),
-                uiMode: this.getAttribute("uiMode"),
-                bgColor: this.getAttribute("bgColor"),
-                bgStyle: this.getAttribute("bgStyle"),
-                controls: this.getAttribute("controls"),
-                prompt: this.getAttribute("prompt"),
-                reader: this.getAttribute("reader"),
-                lang: this.getAttribute("lang")
-            };
+            const attributeProps = MainView.attributeProps;
+            const props: IExplorerApplicationProps = {};
+
+            for (const name in attributeProps) {
+                props[attributeProps[name]] = this.getAttribute(name);
+            }
 
             this.application = new ExplorerApplication(null, props);
         }
@@ -163,11 +180,16 @@ export default class MainView extends CustomElement
         this.fullscreen.fullscreenElement = this;
         this.viewer.rootElement = this;
         this.arManager.shadowRoot = this.shadowRoot;
+
+        // when the active document is swapped on (re)load, rebind this element
+        // to the new document's viewer
+        this.documentProvider.on<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
     }
 
     protected disconnected()
     {
         super.disconnected();
+        this.documentProvider.off<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
         this.fullscreen.fullscreenElement = null;
         this.viewer.rootElement = null;
         if(!window["VoyagerStory"]) {
@@ -176,27 +198,32 @@ export default class MainView extends CustomElement
         }
     }
 
+    protected onActiveDocument(event: IActiveDocumentEvent)
+    {
+        const previousViewer = event.previous?.innerComponents.get(CVViewer, true);
+        if (previousViewer) {
+            previousViewer.rootElement = null;
+        }
+        const nextViewer = event.next?.innerComponents.get(CVViewer, true);
+        if (nextViewer) {
+            nextViewer.rootElement = this;
+        }
+    }
+
     attributeChangedCallback(name: string, old: string | null, value: string | null)
     {
-        const app = this.application;
         super.attributeChangedCallback(name, old, value);
 
-        if(app && name === "root") {
-            const newRoot = this.getAttribute("root");
-            if(newRoot.length > 0) {
-                app.props.root = newRoot
-                app.reloadDocument();
-                this.connected();
-            }
+        const app = this.application;
+        const prop = MainView.attributeProps[name];
+
+        if (!app || !prop || old === value) {
+            return;
         }
-        else if(app && name === "document") {
-            app.props.document = this.getAttribute("document");
-            app.reloadDocument();
-            this.connected();
-        }
-        else if(app && name === "controls") {
-            app.enableNavigation(value);
-        }
+
+        // the application reconciles: source attributes trigger a (re)load,
+        // view attributes are re-applied to the current scene without one
+        app.setProps({ [prop]: value });
     }
 
     protected onFocus()

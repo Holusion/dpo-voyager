@@ -60,6 +60,40 @@ export default class CVDocumentProvider extends CComponentProvider<CVDocument>
         return document;
     }
 
+    /**
+     * Creates a new document component without making it active. Use this to
+     * build a scene off-stage, then swap it in atomically with [[commitDocument]].
+     * If the staged document is not committed (e.g. the load failed or was
+     * superseded), it must be disposed by the caller.
+     */
+    stageDocument(data?: IDocument, path?: string)
+    {
+        const document = this.node.createComponent(CVDocument);
+
+        if (data) {
+            document.openDocument(data, path);
+        }
+
+        return document;
+    }
+
+    /**
+     * Makes a staged document the active document and disposes the previously
+     * active one. Observers are notified once, via the regular "active-component"
+     * event, and only ever see fully built documents.
+     */
+    commitDocument(document: CVDocument)
+    {
+        const previous = this.activeComponent;
+        this.activeComponent = document;
+
+        if (previous && previous !== document) {
+            previous.dispose();
+        }
+
+        return document;
+    }
+
     amendDocument(data: IDocument, path: string, merge: boolean)
     {
         const document = this.activeComponent;

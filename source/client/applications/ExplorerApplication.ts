@@ -94,6 +94,18 @@ export interface IExplorerApplicationProps
 }
 
 /**
+ * Thrown when a pending load is preempted by a newer load request. Consumers
+ * should treat it as a cancellation, not a failure.
+ */
+export class LoadSupersededError extends Error
+{
+    constructor() {
+        super("load superseded by a newer load request");
+        this.name = "LoadSupersededError";
+    }
+}
+
+/**
  * Voyager Explorer main application.
  */
 export default class ExplorerApplication
@@ -118,8 +130,20 @@ Version: ${ENV_VERSION}
 -----------------------------------------------------
     `;
 
+    /** Props that determine which content is loaded; changing any of these requires a (re)load. */
+    protected static readonly sourceProps: (keyof IExplorerApplicationProps)[] = [
+        "root", "dracoRoot", "resourceRoot", "document", "model", "geometry",
+        "texture", "occlusion", "normals", "quality",
+    ];
+
     readonly props: IExplorerApplicationProps;
     readonly system: System;
+
+    /** True if this application is hosted by another one (e.g. story), which then owns the document lifecycle. */
+    protected readonly embedded: boolean;
+
+    /** Monotonic counter identifying the latest load request; pending loads with an older token must not commit. */
+    private _loadToken = 0;
 
     protected get assetManager() {
         return this.system.getMainComponent(CVAssetManager);
@@ -137,6 +161,7 @@ Version: ${ENV_VERSION}
     constructor(parent: HTMLElement, props?: IExplorerApplicationProps, embedded?: boolean)
     {
         this.props = props || {};
+        this.embedded = !!embedded;
         console.log(ExplorerApplication.splashMessage);
 
         // register components
@@ -229,13 +254,41 @@ Version: ${ENV_VERSION}
 
     loadDocument(documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
     {
+        return this.loadDocumentWithToken(this.nextLoadToken(), documentPath, merge, quality);
+    }
+
+    protected loadDocumentWithToken(token: number, documentPath: string, merge?: boolean, quality?: string): Promise<CVDocument>
+    {
         const dq = EDerivativeQuality[quality];
         this.assetManager.ins.initialLoad.setValue(true);
 
         return this.assetReader.getJSON(documentPath)
             .then(data => {
+                if (this.isStaleLoad(token)) {
+                    throw new LoadSupersededError();
+                }
+
                 merge = merge === undefined ? !data.lights && !data.cameras : merge;
-                return this.documentProvider.amendDocument(data, documentPath, merge);
+
+                if (this.embedded) {
+                    // the embedding application (story) owns the document lifecycle:
+                    // load into the active document in place
+                    return this.documentProvider.amendDocument(data, documentPath, merge);
+                }
+
+                // build the new scene off-stage on top of the default template (which
+                // provides lights/camera if the document has none), then commit it
+                // atomically: the visible scene is never half-built, and it remains
+                // untouched if fetching or validation fails
+                const staged = this.documentProvider.stageDocument(documentTemplate as any);
+                try {
+                    staged.openDocument(data, documentPath, merge);
+                }
+                catch (error) {
+                    staged.dispose();
+                    throw error;
+                }
+                return this.documentProvider.commitDocument(staged);
             })
             .then(document => {
                 if (isFinite(dq)) {
@@ -253,10 +306,9 @@ Version: ${ENV_VERSION}
 
     reloadDocument()
     {
-        const oldDocument = this.documentProvider.activeComponent;
-        this.documentProvider.createDocument(documentTemplate as any);
+        // re-evaluate props; any pending load is invalidated and the current scene
+        // stays visible until the new content has been fetched and committed
         this.evaluateProps();
-        oldDocument?.dispose();
     }
 
     loadModel(modelPath: string, quality: string)
@@ -271,10 +323,29 @@ Version: ${ENV_VERSION}
             geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
     }
 
-    evaluateProps()
+    /**
+     * Merges the given props into the application props and reconciles the
+     * viewer with them: if a content source prop changed, the document is
+     * (re)loaded; otherwise the view-related props are re-applied to the
+     * current scene without a reload.
+     */
+    setProps(props: Partial<IExplorerApplicationProps>)
+    {
+        const keys = Object.keys(props) as (keyof IExplorerApplicationProps)[];
+        keys.forEach(key => this.props[key] = props[key]);
+
+        if (keys.some(key => ExplorerApplication.sourceProps.includes(key))) {
+            this.evaluateProps();
+        }
+        else {
+            this.applyPropOverrides(this.resolveProps());
+        }
+    }
+
+    /** Resolves the effective props: explicit props first, query string parameters as fallback. */
+    protected resolveProps(): IExplorerApplicationProps
     {
         const props = {...this.props};
-        const manager = this.assetManager;
         const qs = new URL(window.location.href).searchParams;
         props.root = props.root || qs.get("root") || qs.get("r");
         props.dracoRoot = props.dracoRoot || qs.get("dracoRoot") || qs.get("dr");
@@ -293,29 +364,18 @@ Version: ${ENV_VERSION}
         props.prompt = props.prompt || qs.get("prompt") || qs.get("pm");
         props.reader = props.reader || qs.get("reader") || qs.get("rdr");
         props.lang = props.lang || qs.get("lang") || qs.get("l");
+        return props;
+    }
+
+    evaluateProps()
+    {
+        // invalidate pending loads: only continuations holding this token may commit
+        const token = this.nextLoadToken();
+        const props = this.resolveProps();
+        const manager = this.assetManager;
 
         const url = props.root || props.document || props.model || props.geometry;
         this.setBaseUrl(new URL(url || ".", window.location as any).href);
-
-        // Config custom UI layout
-        if (props.uiMode) {
-            let elementValues = 0;
-            let hasValidParam = false;
-            
-            const enumNames = Object.values(EUIElements).filter(value => typeof value === 'string') as string[];
-            const uiParams = props.uiMode.split('|');
-            uiParams.forEach(param => { 
-                const stdParam = param.toLowerCase();
-                if(enumNames.includes(stdParam)) {
-                    elementValues += EUIElements[stdParam];
-                    hasValidParam = true;
-                }
-            });
-
-            if(hasValidParam) {
-                this.documentProvider.activeComponent.setup.interface.ins.visibleElements.setValue(elementValues);
-            }
-        }
 
         if(props.dracoRoot) {
             // Set custom Draco path
@@ -328,15 +388,17 @@ Version: ${ENV_VERSION}
         }
 
         if(props.lang) {
+            // apply early so the UI language is correct while the scene loads;
+            // re-applied with the other overrides once the load settles
             this.setLanguage(props.lang);
         }
 
         if (props.document) {
             // first loading priority: document
             props.document = manager.getAssetName(props.document);
-            this.loadDocument(props.document, undefined, props.quality)
-            .then(() => this.postLoadHandler(props))
-            .catch(error => Notification.show(`Failed to load document: ${error.message}`, "error"));
+            this.loadDocumentWithToken(token, props.document, undefined, props.quality)
+            .then(() => this.settleLoad(token, props, true))
+            .catch(error => this.settleLoad(token, props, false, error, `Failed to load document: ${error.message}`));
         }
         else if (props.model) {
             // second loading priority: model
@@ -344,10 +406,13 @@ Version: ${ENV_VERSION}
 
             this.assetReader.getText(props.model)       // make sure we have a valid model path
             .then(() => {
-                this.loadModel(props.model, props.quality);
-                this.postLoadHandler(props);
+                if (this.isStaleLoad(token)) {
+                    return;
+                }
+                this.commitModel(props.model, props.quality);
+                this.settleLoad(token, props, true);
             })
-            .catch(error => Notification.show(`Bad Model Path: ${error.message}`, "error"));
+            .catch(error => this.settleLoad(token, props, false, error, `Bad Model Path: ${error.message}`));
         }
         else if (props.geometry) {
             // third loading priority: geometry (plus optional color texture)
@@ -356,23 +421,134 @@ Version: ${ENV_VERSION}
             props.occlusion = props.occlusion ? manager.getAssetName(props.occlusion) : null;
             props.normals = props.normals ? manager.getAssetName(props.normals) : null;
 
-            this.assetReader.getText(props.geometry)    // make sure we have a valid geometry path   
+            this.assetReader.getText(props.geometry)    // make sure we have a valid geometry path
             .then(() => {
-                this.loadGeometry(props.geometry, props.texture, props.occlusion, props.normals, props.quality);
-                this.postLoadHandler(props);
+                if (this.isStaleLoad(token)) {
+                    return;
+                }
+                this.commitGeometry(props.geometry, props.texture, props.occlusion, props.normals, props.quality);
+                this.settleLoad(token, props, true);
             })
-            .catch(error => Notification.show(`Bad Geometry Path: ${error.message}`, "error"));
+            .catch(error => this.settleLoad(token, props, false, error, `Bad Geometry Path: ${error.message}`));
         }
         else if (props.root) {
             // if nothing else specified, try to read "scene.svx.json" from the current folder
-            this.loadDocument("scene.svx.json", undefined)
-            .then(() => this.postLoadHandler(props))
-            .catch(() => {});
+            this.loadDocumentWithToken(token, "scene.svx.json", undefined)
+            .then(() => this.settleLoad(token, props, true))
+            .catch(error => this.settleLoad(token, props, false, error));
+        }
+        else {
+            // no content source: keep the current scene, apply the view props
+            this.settleLoad(token, props, false);
         }
     }
 
-    protected postLoadHandler(props: IExplorerApplicationProps) {
-        this.assetManager.ins.baseUrlValid.setValue(true);
+    protected nextLoadToken()
+    {
+        return ++this._loadToken;
+    }
+
+    protected isStaleLoad(token: number)
+    {
+        return token !== this._loadToken;
+    }
+
+    /** Hosts a model in a fresh document built from the default template, committed atomically. */
+    protected commitModel(modelPath: string, quality: string)
+    {
+        if (this.embedded) {
+            // the embedding application owns the document lifecycle: append in place
+            this.documentProvider.appendModel(modelPath, quality);
+            return;
+        }
+
+        const staged = this.documentProvider.stageDocument(documentTemplate as any);
+        try {
+            staged.appendModel(modelPath, quality);
+        }
+        catch (error) {
+            staged.dispose();
+            throw error;
+        }
+        this.documentProvider.commitDocument(staged);
+    }
+
+    /** Hosts a geometry in a fresh document built from the default template, committed atomically. */
+    protected commitGeometry(geoPath: string, colorMapPath: string,
+                             occlusionMapPath: string, normalMapPath: string, quality: string)
+    {
+        if (this.embedded) {
+            // the embedding application owns the document lifecycle: append in place
+            this.documentProvider.appendGeometry(geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
+            return;
+        }
+
+        const staged = this.documentProvider.stageDocument(documentTemplate as any);
+        try {
+            staged.appendGeometry(geoPath, colorMapPath, occlusionMapPath, normalMapPath, quality);
+        }
+        catch (error) {
+            staged.dispose();
+            throw error;
+        }
+        this.documentProvider.commitDocument(staged);
+    }
+
+    /**
+     * Finalizes a load attempt: re-applies the view prop overrides and, on a
+     * successful load, caches the state baseline. Runs whether the load
+     * succeeded or failed, so overrides always reflect the props; does nothing
+     * if a newer load has been requested in the meantime.
+     */
+    protected settleLoad(token: number, props: IExplorerApplicationProps, loaded: boolean, error?: Error, message?: string)
+    {
+        if (this.isStaleLoad(token) || error instanceof LoadSupersededError) {
+            return;
+        }
+
+        if (error && message) {
+            Notification.show(message, "error");
+        }
+
+        if (loaded) {
+            this.assetManager.ins.baseUrlValid.setValue(true);
+        }
+
+        this.applyPropOverrides(props);
+
+        if (loaded) {
+            // cache the state baseline only after the overrides are applied,
+            // so resetting the viewer restores them too
+            const setup = this.documentProvider.activeComponent.setup;
+            setup.ins.saveState.set();
+        }
+    }
+
+    /**
+     * Applies the view-related props on top of the current scene state.
+     * Idempotent; called after every load and whenever one of these props changes.
+     */
+    protected applyPropOverrides(props: IExplorerApplicationProps)
+    {
+        // Config custom UI layout
+        if (props.uiMode) {
+            let elementValues = 0;
+            let hasValidParam = false;
+
+            const enumNames = Object.values(EUIElements).filter(value => typeof value === 'string') as string[];
+            const uiParams = props.uiMode.split('|');
+            uiParams.forEach(param => {
+                const stdParam = param.toLowerCase();
+                if(enumNames.includes(stdParam)) {
+                    elementValues += EUIElements[stdParam];
+                    hasValidParam = true;
+                }
+            });
+
+            if(hasValidParam) {
+                this.documentProvider.activeComponent.setup.interface.ins.visibleElements.setValue(elementValues);
+            }
+        }
         if(props.bgColor) {
             const colors = props.bgColor.split(" ");
             this.setBackgroundColor(colors[0], colors[1] || null);
@@ -392,10 +568,6 @@ Version: ${ENV_VERSION}
         if(props.lang) {
             this.setLanguage(props.lang);
         }
-
-        // Re-cache postload setups
-        const setup = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup;
-        setup.ins.saveState.set();
     }
 
     ////////////////////////////////////////////
