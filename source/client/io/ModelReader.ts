@@ -65,6 +65,39 @@ async function downloadModel(url :string, signal :AbortSignal) :Promise<ArrayBuf
     }
 }
 
+/**
+ * Maximum number of model downloads kept in flight at once.
+ */
+const MAX_CONCURRENT_MODEL_FETCHES = 6;
+
+/**
+ * Minimal async semaphore: runs at most `max` tasks concurrently and queues the
+ * rest. A slot is held for the whole task (fetch + body read), so this bounds
+ * actual in-flight downloads, not just the number of pending fetch() calls.
+ */
+class FetchQueue
+{
+    private active = 0;
+    private waiters :(()=>void)[] = [];
+
+    constructor(private max :number){}
+
+    async run<T>(task :()=>Promise<T>) :Promise<T>
+    {
+        if(this.active >= this.max){
+            await new Promise<void>(resolve=> this.waiters.push(resolve));
+        }
+        this.active++;
+        try {
+            return await task();
+        }
+        finally {
+            this.active--;
+            this.waiters.shift()?.();
+        }
+    }
+}
+
 export default class ModelReader
 {
     static readonly extensions = [ "gltf", "glb" ];
@@ -75,6 +108,8 @@ export default class ModelReader
     protected gltfLoader :GLTFLoader;
 
     protected loading :Record<string, {listeners : {onload: (data:ArrayBuffer)=>any, onerror: (e:Error)=>any, signal:AbortSignal}[], abortController :AbortController}> = {}
+
+    protected queue = new FetchQueue(MAX_CONCURRENT_MODEL_FETCHES);
 
     protected customDracoPath = null;
 
@@ -192,7 +227,7 @@ export default class ModelReader
     
             const {listeners, abortController:{signal}} = this.loading[url] = {listeners:[], abortController: new AbortController()};
     
-            downloadModel(url, signal).finally(()=>{
+            this.queue.run(()=> downloadModel(url, signal)).finally(()=>{
                 delete this.loading[url];
             }).then(data=> {
                 if(signal.aborted) return; //Might have aborted during the r.arrayBuffer() call
