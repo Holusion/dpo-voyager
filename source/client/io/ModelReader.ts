@@ -170,9 +170,16 @@ export default class ModelReader
                 if(signal.aborted) return; //Might have aborted during the r.arrayBuffer() call
                 listeners.forEach(({onload})=>onload(data));
             }, (e)=>{
-                listeners.forEach(({onerror})=>onerror(e));
-                if(e.name != "AbortError" && e.name != "ABORT_ERR"){
-                    console.error(e);
+                // An abort that interrupts the body download (r.arrayBuffer()) is not always
+                // reported as an AbortError: depending on timing/buffering (e.g. behind some
+                // reverse proxies) Firefox surfaces the truncated transfer as a TypeError
+                // ("Content-Length header of network response exceeds response Body."). When we
+                // are the ones who aborted, normalize it so downstream treats it as a cancellation
+                // rather than a load failure. Genuine truncations (signal not aborted) still throw.
+                const error = signal.aborted ? new DOMException(signal.reason, "AbortError") : e;
+                listeners.forEach(({onerror})=>onerror(error));
+                if(error.name != "AbortError" && error.name != "ABORT_ERR"){
+                    console.error(error);
                 }
             })
         }
