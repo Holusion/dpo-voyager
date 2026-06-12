@@ -29,6 +29,42 @@ import { addCustomMaterialDefines, extendShaders } from "client/shaders/ShaderEx
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * How many times a model download is attempted before giving up.
+ */
+const MODEL_FETCH_ATTEMPTS = 3;
+
+/**
+ * Fetch a model, retrying network failures with exponential backoff.
+ * Aborts and client (4xx) errors are never retried. The body read is inside the
+ * retry because a refused HTTP/2 stream can fail mid-stream, not at the headers.
+ */
+async function downloadModel(url :string, signal :AbortSignal) :Promise<ArrayBuffer>
+{
+    for(let attempt = 0; ; attempt++){
+        let retryable = true;
+        try {
+            const r = await fetch(url, { signal });
+            if(!r.ok){
+                retryable = r.status >= 500; //client errors won't improve on retry
+                throw new Error(`fetch for "${r.url}" responded with ${r.status}: ${r.statusText}`);
+            }
+            //Skip all the progress tracking from FileLoader since we don't use it.
+            return await r.arrayBuffer();
+        }
+        catch(e){
+            const aborted = signal.aborted || e.name == "AbortError" || e.name == "ABORT_ERR";
+            if(aborted || !retryable || attempt >= MODEL_FETCH_ATTEMPTS - 1){
+                throw e;
+            }
+            //Exponential backoff with jitter so concurrent retries don't resynchronize into a new burst.
+            const delay = 200 * Math.pow(2, attempt) + Math.random()*100;
+            ENV_DEVELOPMENT && console.debug("Retrying model download (%d/%d) for %s", attempt + 1, MODEL_FETCH_ATTEMPTS, url);
+            await new Promise(resolve=> setTimeout(resolve, delay));
+        }
+    }
+}
+
 export default class ModelReader
 {
     static readonly extensions = [ "gltf", "glb" ];
@@ -156,15 +192,7 @@ export default class ModelReader
     
             const {listeners, abortController:{signal}} = this.loading[url] = {listeners:[], abortController: new AbortController()};
     
-            fetch(url, {
-                signal,
-            }).then(r=>{
-                if(!r.ok){
-                    throw new Error( `fetch for "${r.url}" responded with ${r.status}: ${r.statusText}`);
-                }
-                //Skip all the progress tracking from FileLoader since we don't use it.
-                return r.arrayBuffer();
-            }).finally(()=>{
+            downloadModel(url, signal).finally(()=>{
                 delete this.loading[url];
             }).then(data=> {
                 if(signal.aborted) return; //Might have aborted during the r.arrayBuffer() call
