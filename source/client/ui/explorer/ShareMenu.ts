@@ -23,14 +23,15 @@ import TextEdit from "@ff/ui/TextEdit";
 import CVLanguageManager from "client/components/CVLanguageManager";
 import {getFocusableElements, focusTrap} from "../../utils/focusHelpers";
 import { DEFAULT_LANGUAGE, ELanguageType } from "client/schema/common";
+import CVAssetManager from "client/components/CVAssetManager";
+import SystemView from "@ff/scene/ui/SystemView";
 
 ////////////////////////////////////////////////////////////////////////////////
 
 @customElement("sv-share-menu")
 export default class ShareMenu extends Popup
 {
-    protected name: string;
-    protected url: string;
+    protected url: URL;
     protected language: CVLanguageManager = null;
     protected needsFocus: boolean = false;
 
@@ -52,11 +53,7 @@ export default class ShareMenu extends Popup
         this.position = "center";
         this.portal = parent;
         this.modal = true;
-        let match = /\/scenes\/([^/]+).*?/.exec(window.location.href); 
-        let u = new URL((match?`/ui/scenes/${match[1]}/view`:""), window.location.href);
-        u.searchParams.set("lang", ELanguageType[language.ins.activeLanguage.value]);
-        this.url = u.toString();
-        this.name = match?.[1];
+        this.url = new URL((parent as SystemView).system.getMainComponent(CVAssetManager).baseUrl);
     }
 
     close()
@@ -74,14 +71,17 @@ export default class ShareMenu extends Popup
 
     protected render()
     {
-        const url = encodeURIComponent(this.url);
+        const viewerURL = new URL(this.url.toString());
+        viewerURL.pathname = "/ui" + viewerURL.pathname + "view/";
+        viewerURL.searchParams.set("lang", ELanguageType[this.language.ins.activeLanguage.value]);
+        const url = encodeURIComponent(viewerURL.toString());
         const title = encodeURI("Check out this interactive 3D model with eCorpus Voyager:");
         const language = this.language;
 
         const twitterShareUrl = `http://twitter.com/share?text=${title}&url=${url}`;
         const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
         const linkedInShareUrl = `https://www.linkedin.com/shareArticle?url=${url}&mini=true&title=${title}`;
-        const iFrameEmbedCode = `<iframe name="eCorpus Voyager" src="${this.url}" width="800" height="450" allow="xr; xr-spatial-tracking; fullscreen"></iframe>`;
+        const iFrameEmbedCode = `<iframe name="eCorpus Voyager" src="${viewerURL.toString()}" width="800" height="450" allow="xr; xr-spatial-tracking; fullscreen"></iframe>`;
 
         const emailUrl = `mailto:?subject=${title}&body=${url}`;
 
@@ -98,7 +98,7 @@ export default class ShareMenu extends Popup
                 <a href=${facebookShareUrl} tabindex="-1" target="_blank" rel="noopener noreferrer"><ff-button class="sv-share-button-facebook" icon="facebook" title="Facebook"></ff-button></a>
                 <a href=${linkedInShareUrl} tabindex="-1" target="_blank" rel="noopener noreferrer"><ff-button class="sv-share-button-linkedin" icon="linkedin" title="LinkedIn"></ff-button></a>
                 <a href=${emailUrl} tabindex="-1" target="_blank"><ff-button class="sv-share-button-email" icon="email" title=${language.getLocalizedString("Email")}></ff-button></a>
-                <a href="/scenes/${encodeURIComponent(this.name)}?format=zip" download><ff-button class="sv-share-button-download" icon="folder" title=${language.getLocalizedString("Download")}></ff-button></a>
+                <a href="${this.url.toString()}?format=zip" download><ff-button class="sv-share-button-download" icon="folder" title=${language.getLocalizedString("Download")}></ff-button></a>
             </div>
             <div class="ff-title" id="embedTitle">${language.getLocalizedString("Embed Link")}</div>
             <div class="ff-flex-row sv-embed-link">
