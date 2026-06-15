@@ -61,6 +61,13 @@ export interface INexusObjectOptions
     onLoad?: (object: NexusObject) => void;
     onUpdate?: (instance: INexusInstance) => void;
     material?: Material;
+    /**
+     * LOD heatmap mode: render each streamed node tinted red (coarse) -> green
+     * (fine) so you can see what resolution is actually loaded. Uses an unlit
+     * vertex-color material; the per-node tint is applied by the Nexus runtime
+     * (requires `nexus.Debug.nodes = true`, set by the NexusReader).
+     */
+    heatmap?: boolean;
 }
 
 function nocenter(): never
@@ -76,6 +83,8 @@ export default class NexusObject extends Mesh
     /** The Nexus runtime namespace, kept for per-frame cache updates. */
     protected nexus: INexus;
 
+    protected heatmap = false;
+
     georefData: any = null;
 
     constructor(nexus: INexus, url: string, renderer: WebGLRenderer, options: INexusObjectOptions = {})
@@ -88,6 +97,7 @@ export default class NexusObject extends Mesh
 
         this.nexus = nexus;
         this.autoMaterial = !options.material;
+        this.heatmap = !!options.heatmap;
         // Nexus manages visibility internally via its multiresolution structure.
         this.frustumCulled = false;
 
@@ -106,6 +116,27 @@ export default class NexusObject extends Mesh
             const hasNormals = !!nx.vertex.normal;
             const hasColors = !!nx.vertex.color;
             const hasTexCoords = !!nx.vertex.texCoord;
+
+            if (this.heatmap) {
+                // Unlit vertex-color material; the Nexus runtime sets a constant
+                // per-node colour (red coarse -> green fine) on the `color`
+                // attribute, so a `color` attribute must exist in the geometry/shader.
+                if (hasNormals) {
+                    geometry.setAttribute("normal", new BufferAttribute(new Float32Array(3), 3));
+                }
+                geometry.setAttribute("color", new BufferAttribute(new Float32Array(3), 3));
+                if (this.autoMaterial) {
+                    this.material = new MeshBasicMaterial({ vertexColors: true });
+                }
+                const heatMaterial = this.material as Material & { defines?: Record<string, any> };
+                if (heatMaterial && !heatMaterial.defines) {
+                    heatMaterial.defines = {};
+                }
+                if (onLoad) {
+                    onLoad(this);
+                }
+                return;
+            }
 
             // Lit (MeshStandardMaterial) when the mesh has normals, so it picks up
             // Voyager's image-based environment lighting just like glTF models do.

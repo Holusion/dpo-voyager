@@ -869,28 +869,37 @@ Instance.prototype = {
 			}
 
 			if(Debug.nodes) {
-				gl.disableVertexAttribArray(2);
-				gl.disableVertexAttribArray(3);
+				// dpo-voyager patch: disable the per-vertex color/uv arrays at
+				// their *actual* shader locations (the upstream code hard-coded 2/3,
+				// which does not match three.js attribute layouts) and tint each
+				// rendered node by its LOD level as a heatmap.
+				//
+				// Colour by the node's *intrinsic* (geometric) error, which is stable
+				// per level (it roughly halves each level), normalised to the model's
+				// own range: the root (node 0) is the coarsest so its error is the
+				// maximum. log2(error) therefore tracks the level index, and snapping
+				// to one band per level makes adjacent levels read as distinct steps.
+				// As you orbit/zoom the LOD cut varies across the surface, so coarse
+				// (far / not-yet-refined) regions show red and the finest detail green:
+				//   coarse / root  -> red,  through yellow,  finest -> green.
+				if(attr.color >= 0) gl.disableVertexAttribArray(attr.color);
+				if(attr.uv    >= 0) gl.disableVertexAttribArray(attr.uv);
 
-				var error = t.nodeError(n, true);
-				var palette = [
-					[1, 1, 1, 1], //white
-					[1, 1, 1, 1], //white
-					[1, 0, 1, 1], //magenta
-					[0, 1, 1, 1], //cyan
-					[1, 1, 0, 1], //yellow
-					[0, 0, 1, 1], //blue
-					[0, 1, 0, 1], //green
-					[1, 0, 0, 1]  //red
-				];
-				let w = Math.min(6.99, Math.max(0, Math.log2(error)));
-				let low = Math.floor(w);
-				w -= low;
-				let color = [];
-				for( let k = 0; k < 4; k++)
-					color[k] = palette[low][k]*(1-w) + palette[low+1][k]*w;
-				gl.vertexAttrib4fv(attr.color, color);
-//				gl.vertexAttrib4fv(2, [(n*200 %255)/255.0, (n*140 %255)/255.0,(n*90 %255)/255.0, 1]);
+				// "fine" = how many LOD levels finer than the root this node is
+				// (0 at the root, ~1 once it is several levels deep). The root is the
+				// coarsest node so its error is the per-model maximum. We bias the
+				// ramp warm (gamma < 1) so a coarse full-model overview reads red /
+				// orange and only genuinely fine, zoomed-in detail turns green, then
+				// snap to one band per level so the steps are distinct.
+				var nlevels = 8.0;
+				var fine = Math.log2(Math.max(m.nerrors[0],1e-3)/Math.max(m.nerrors[n],1e-6)) / nlevels;
+				fine = Math.min(1.0, Math.max(0.0, fine));
+				var bands = 8;
+				var q = Math.pow(1.0 - Math.round(fine*bands)/bands, 0.5);  // 1 coarse(red) .. 0 fine(green)
+				var cr = q < 0.5 ? 2.0*q : 1.0;                 // green -> yellow -> red
+				var cg = q < 0.5 ? 1.0   : 2.0 - 2.0*q;
+				if(attr.color >= 0)
+					gl.vertexAttrib4fv(attr.color, [cr, cg, 0.0, 1.0]);
 			}
 
 			if (Debug.draw) continue;

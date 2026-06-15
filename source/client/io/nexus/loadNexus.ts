@@ -30,6 +30,8 @@ export interface INexus
     endFrame(gl: WebGLRenderingContext): void;
     updateCache(gl: WebGLRenderingContext): void;
     flush(context: any, mesh: any): void;
+    /** Global debug flags. `nodes` tints each rendered node by its LOD error. */
+    Debug: { nodes: boolean; draw: boolean; verbose: boolean; extract: boolean };
 }
 
 export interface INexusInstance

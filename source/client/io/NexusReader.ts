@@ -84,6 +84,21 @@ export default class NexusReader
         return NexusReader.mimeTypes.indexOf(mimeType) >= 0;
     }
 
+    /** Whether the `lodHeatmap` URL query parameter is present (case-insensitive). */
+    protected get heatmapEnabled(): boolean
+    {
+        if (typeof window === "undefined") {
+            return false;
+        }
+        const params = new URLSearchParams(window.location.search);
+        for (const key of params.keys()) {
+            if (key.toLowerCase() === "lodheatmap") {
+                return true;
+            }
+        }
+        return false;
+    }
+
     async get(url: string, { signal }: { signal?: AbortSignal } = {}): Promise<Object3D>
     {
         this.loadingManager.itemStart(url);
@@ -96,12 +111,21 @@ export default class NexusReader
 
             const webglRenderer = this.renderer.views[0].renderer;
 
+            // LOD heatmap: opt-in via `?lodHeatmap` (or `?lodHeatmap=1`) on the URL.
+            // Tints each streamed node red (coarse) -> green (fine). Debug.nodes is a
+            // global Nexus flag, so it applies to every Nexus object once enabled.
+            const heatmap = this.heatmapEnabled;
+            if (heatmap) {
+                nexus.Debug.nodes = true;
+            }
+
             return await new Promise<Object3D>((resolve, reject) => {
                 const object = new NexusObject(nexus, url, webglRenderer, {
                     onLoad: () => resolve(object),
                     // Streaming refinement: keep the render loop alive so the next
                     // frame can request/draw finer patches against the camera.
                     onUpdate: () => this.renderer.forceRender(),
+                    heatmap,
                 });
 
                 this.register(object);
