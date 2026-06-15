@@ -1,0 +1,94 @@
+/**
+ * 3D Foundation Project
+ * Copyright 2025 Smithsonian Institution
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Minimal typing of the global `Nexus` namespace exposed by the vendored
+ * `assets/js/nexus/nexus.js`. The library is loaded as a classic (non-module)
+ * script because it locates its decompression workers (meco.js, corto.em.js)
+ * by inspecting its own `<script src>` attribute, and builds them as Web Workers.
+ */
+export interface INexus
+{
+    Instance: new (gl: WebGLRenderingContext) => INexusInstance;
+    beginFrame(gl: WebGLRenderingContext, fps?: number): void;
+    endFrame(gl: WebGLRenderingContext): void;
+    updateCache(gl: WebGLRenderingContext): void;
+    flush(context: any, mesh: any): void;
+}
+
+export interface INexusInstance
+{
+    context: any;
+    mesh: any;
+    attributes: any;
+    isReady: boolean;
+    mode: string;
+    pointsize: number;
+    pointscale: number;
+    onLoad: () => void;
+    onUpdate: () => void;
+    open(url: string): void;
+    updateView(viewport: number[], projection: ArrayLike<number>, modelView: ArrayLike<number>): void;
+    render(): void;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Path to the vendored nexus.js. Must contain the literal "nexus.js" so the
+// library can derive the sibling worker URLs (meco.js / corto.em.js).
+let scriptPath = "js/nexus/nexus.js";
+let loadingPromise: Promise<INexus> = null;
+
+export function setNexusScriptPath(path: string)
+{
+    scriptPath = path;
+}
+
+export function loadNexus(): Promise<INexus>
+{
+    const existing = (window as any).Nexus as INexus;
+    if (existing) {
+        return Promise.resolve(existing);
+    }
+    if (loadingPromise) {
+        return loadingPromise;
+    }
+
+    loadingPromise = new Promise<INexus>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = scriptPath;
+        script.async = true;
+        script.onload = () => {
+            const nexus = (window as any).Nexus as INexus;
+            if (nexus) {
+                resolve(nexus);
+            }
+            else {
+                reject(new Error("nexus.js loaded but the 'Nexus' global is missing"));
+            }
+        };
+        script.onerror = () => {
+            loadingPromise = null;
+            reject(new Error(`failed to load nexus.js from '${scriptPath}'`));
+        };
+        document.head.appendChild(script);
+    });
+
+    return loadingPromise;
+}

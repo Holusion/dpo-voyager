@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Wrapper for nxsview: runs the bundled AppImage binary with its Qt/GL libraries.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export LD_LIBRARY_PATH="$here/runtime/lib:$LD_LIBRARY_PATH"
+exec "$here/runtime/bin/nxsview" "$@"

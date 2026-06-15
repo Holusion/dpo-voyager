@@ -19,6 +19,7 @@ import Component, { Node } from "@ff/graph/Component";
 
 import FileReader from "../io/FileReader";
 import ModelReader from "../io/ModelReader";
+import NexusReader from "../io/NexusReader";
 import GeometryReader from "../io/GeometryReader";
 import TextureReader from "../io/TextureReader";
 import FontReader, { IBitmapFont } from "../io/FontReader";
@@ -43,6 +44,7 @@ export default class CVAssetReader extends Component
 
     readonly fileLoader: FileReader;
     readonly modelLoader: ModelReader;
+    readonly nexusLoader: NexusReader;
     readonly geometryLoader: GeometryReader;
     readonly textureLoader: TextureReader;
     readonly fontReader: FontReader;
@@ -58,6 +60,7 @@ export default class CVAssetReader extends Component
 
         this.fileLoader = new FileReader(loadingManager);
         this.modelLoader = new ModelReader(loadingManager, this.renderer);
+        this.nexusLoader = new NexusReader(loadingManager, this.renderer);
         this.geometryLoader = new GeometryReader(loadingManager);
         this.textureLoader = new TextureReader(loadingManager);
         this.fontReader = new FontReader(loadingManager);
@@ -67,6 +70,7 @@ export default class CVAssetReader extends Component
     dispose()
     {
         this.modelLoader.dispose();
+        this.nexusLoader.dispose();
         super.dispose();
     }
 
@@ -88,6 +92,7 @@ export default class CVAssetReader extends Component
         this.fontReader.fontPath = assetPath;
         this.systemAssetPath = assetPath;
         this.modelLoader.setAssetPath(assetPath);
+        this.nexusLoader.setNexusPath(assetPath);
     }
 
     getSystemAssetUrl(assetPath: string) // TODO: Move to CVAssetManager
@@ -110,6 +115,9 @@ export default class CVAssetReader extends Component
     async getModel(assetPath: string, {signal}:{signal?:AbortSignal}={}): Promise<Object3D>
     {
         const url = this.assetManager.getAssetUrl(assetPath);
+        if (this.nexusLoader.isValid(url)) {
+            return this.nexusLoader.get(url, {signal});
+        }
         return this.modelLoader.get(url, {signal});
     }
 

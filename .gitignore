@@ -12,6 +12,11 @@ services/secrets.env
 doc/
 docs/resources/
 
+# Nexus CLI tools: keep wrappers + README, ignore the heavy extracted runtime
+# and the upstream tarball (re-create via tools/nexus/extract.sh)
+tools/nexus/runtime/
+tools/nexus/*.tar.gz
+
 # FILES
 .env
 *.log
