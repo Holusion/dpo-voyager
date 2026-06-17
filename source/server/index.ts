@@ -77,6 +77,28 @@ app.use("/", express.static(staticDir));
 // documentation server
 app.use("/doc", express.static(docDir));
 
+// Fast read path for the WebDAV file directory.
+//
+// webdav-server serves byte-range requests by streaming the file from offset 0
+// and discarding every byte before the requested range (see its Get command's
+// RangedStream). For large multiresolution assets (e.g. multi-hundred-MB .nxz
+// Nexus meshes) the streaming loader issues many range requests deep into the
+// file, so that read-and-discard cost grows linearly with the offset (~1s near
+// the end of a 700MB file). express.static (via the `send` library) seeks with
+// fs.createReadStream({ start, end }) instead, serving any range in O(1), and
+// emits standards-compliant Content-Range / Content-Length headers.
+//
+// Mounted before the WebDAV handler: it only answers GET/HEAD for existing
+// files and calls next() otherwise, so WebDAV still handles PROPFIND/PUT/etc.
+app.use("/", express.static(fileDir, {
+    // Preserve the permissive CORS exposure WebDAV applied, so cross-origin
+    // embeds of the Explorer can still fetch assets and read range metadata.
+    setHeaders: (res) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Expose-Headers", "Accept-Ranges, Content-Length, Content-Range");
+    },
+}));
+
 // WebDAV file server
 const webDAVServer = new webdav.WebDAVServer();
 webDAVServer.setFileSystem("/", new webdav.PhysicalFileSystem(fileDir), success => {
