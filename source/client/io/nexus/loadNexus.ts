@@ -25,13 +25,38 @@
  */
 export interface INexus
 {
+    /** Constructs a mesh: the loadable `.nxz`/`.nxs` resource, independent of any GL context. */
+    Mesh: new () => INexusMesh;
+    /** Renderable instance bound to a GL context. `Renderer` and `Renderable` are aliases of `Instance`. */
     Instance: new (gl: WebGLRenderingContext) => INexusInstance;
+    Renderer: new (gl: WebGLRenderingContext) => INexusInstance;
+    Renderable: new (gl: WebGLRenderingContext) => INexusInstance;
+
+    /** Global debug flags. `nodes` tints each rendered node by its LOD error. */
+    Debug: { verbose: boolean; nodes: boolean; draw: boolean; extract: boolean };
+    /** Per-GL-context bookkeeping; one entry per context that has loaded a mesh. */
+    contexts: any[];
+
     beginFrame(gl: WebGLRenderingContext, fps?: number): void;
     endFrame(gl: WebGLRenderingContext): void;
     updateCache(gl: WebGLRenderingContext): void;
     flush(context: any, mesh: any): void;
-    /** Global debug flags. `nodes` tints each rendered node by its LOD error. */
-    Debug: { nodes: boolean; draw: boolean; verbose: boolean; extract: boolean };
+
+    setTargetError(gl: WebGLRenderingContext, error: number): void;
+    setMinFps(gl: WebGLRenderingContext, fps: number): void;
+    setMaxCacheSize(gl: WebGLRenderingContext, size: number): void;
+    getTargetError(gl: WebGLRenderingContext): number;
+    getMinFps(gl: WebGLRenderingContext): number;
+    getMaxCacheSize(gl: WebGLRenderingContext): number;
+}
+
+export interface INexusMesh
+{
+    url: string;
+    useIndexedDb: boolean;
+    isReady: boolean;
+    onLoad: () => void;
+    open(url: string): void;
 }
 
 export interface INexusInstance
