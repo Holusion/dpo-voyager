@@ -108,6 +108,9 @@ export default class NexusObject extends Mesh
         instance.open(url);
         this.nexus.setMinFps(renderer.getContext(), 30);
         this.nexus.setMaxCacheSize(renderer.getContext(), 1024*(1<<20));
+        //Bias the bounded cache toward the node(s) the viewer is inspecting so large
+        //models reach their finest LOD on the focus without an ever-growing cache.
+        this.nexus.setProminenceBias(renderer.getContext(), 1.0);
 
         instance.onLoad = () => {
             const nx = instance.mesh;

@@ -45,9 +45,13 @@ export interface INexus
     setTargetError(gl: WebGLRenderingContext, error: number): void;
     setMinFps(gl: WebGLRenderingContext, fps: number): void;
     setMaxCacheSize(gl: WebGLRenderingContext, size: number): void;
+    /** Sharpens the distance falloff of node priority so the cache favours the
+     * node(s) nearest the viewer; 0 = stock upstream behaviour, ~1 = moderate. */
+    setProminenceBias(gl: WebGLRenderingContext, bias: number): void;
     getTargetError(gl: WebGLRenderingContext): number;
     getMinFps(gl: WebGLRenderingContext): number;
     getMaxCacheSize(gl: WebGLRenderingContext): number;
+    getProminenceBias(gl: WebGLRenderingContext): number;
 }
 
 export interface INexusMesh

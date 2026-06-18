@@ -297,6 +297,12 @@ var maxBlocked    = 3;
 var maxReqAttempt = 2;
 var maxCacheSize  = 512*(1<<20); //TODO DEBUG
 var drawBudget    = 5*(1<<20);
+//Sharpens the distance falloff of the node priority so the (bounded) cache is
+//spent on the node(s) nearest the viewer -- the focus of inspection -- letting
+//the periphery stay coarse instead of splitting the budget evenly. The priority
+//is multiplied by (viewCenterDist/nodeDist)^prominenceBias, normalised to 1 at
+//the camera-to-dataset-center distance. 0 reproduces stock upstream behaviour.
+var prominenceBias = 1.0;
 
 
 /* MESH DEFINITION */
@@ -654,6 +660,9 @@ Instance.prototype = {
 		var resolution = (2*side/dist)/ t.viewport[2];
 		t.currentResolution == resolution ? t.sameResolution = true : t.sameResolution = false;
 		t.currentResolution = resolution;
+
+		//reference distance for the prominence bias in nodeError (see prominenceBias)
+		t.viewCenterDist = dist;
 	},
 
 	traversal : function () {
@@ -786,6 +795,14 @@ Instance.prototype = {
 
 		//resolution is how long is a pixel at distance 1.
 		var error = t.mesh.nerrors[n]/(t.currentResolution*dist); //in pixels
+
+		//Prominence bias: sharpen the distance falloff so nodes near the viewer
+		//(the focus of inspection) outrank distant ones at equal pixel error, both
+		//for load order and for cache eviction. Normalised to 1 at viewCenterDist
+		//so the effective target error at the focus is unchanged. See prominenceBias.
+		var bias = t.context.prominenceBias;
+		if (bias > 0 && t.viewCenterDist > 0)
+			error *= Math.pow(t.viewCenterDist/dist, bias);
 
 		if (!t.isVisible(cx, cy, cz, spheres[off+4]))
 			error /= 1000.0;
@@ -996,7 +1013,8 @@ function getContext(gl) {
 	});
 	if(c) return c;
 	c = { gl:gl, meshes:[], frame:0, cacheSize:0, candidates:[], pending:0, maxCacheSize: maxCacheSize,
-		minFps: minFps, targetError: targetError, currentError: targetError, maxError: maxError, realError: 0 };
+		minFps: minFps, targetError: targetError, currentError: targetError, maxError: maxError, realError: 0,
+		prominenceBias: prominenceBias };
 	contexts.push(c);
 	return c;
 }
@@ -1463,13 +1481,16 @@ function updateCache(gl) {
 function getTargetError(gl)  { return getContext(gl).targetError; }
 function getMinFps(gl)       { return getContext(gl).minFps; }
 function getMaxCacheSize(gl) { return getContext(gl).maxCacheSize; }
+function getProminenceBias(gl) { return getContext(gl).prominenceBias; }
 
 function setTargetError(gl, error) { getContext(gl).targetError = error; }
 function setMinFps(gl, fps)        { getContext(gl).minFps = fps; }
 function setMaxCacheSize(gl, size) { getContext(gl).maxCacheSize = size; }
+function setProminenceBias(gl, bias) { getContext(gl).prominenceBias = bias; }
 
 return { Mesh: Mesh, Renderer: Instance, Renderable: Instance, Instance:Instance,
 	Debug: Debug, contexts: contexts, beginFrame:beginFrame, endFrame:endFrame, updateCache: updateCache, flush: flush,
-	setTargetError:setTargetError, setMinFps: setMinFps, setMaxCacheSize:setMaxCacheSize, getTargetError:getTargetError, getMinFps: getMinFps, getMaxCacheSize:getMaxCacheSize };
+	setTargetError:setTargetError, setMinFps: setMinFps, setMaxCacheSize:setMaxCacheSize, getTargetError:getTargetError, getMinFps: getMinFps, getMaxCacheSize:getMaxCacheSize,
+	setProminenceBias:setProminenceBias, getProminenceBias:getProminenceBias };
 
 }();
