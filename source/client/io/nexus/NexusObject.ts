@@ -106,6 +106,8 @@ export default class NexusObject extends Mesh
 
         const instance: INexusInstance = (geometry as any).instance = new nexus.Instance(gl as WebGLRenderingContext);
         instance.open(url);
+        this.nexus.setMinFps(renderer.getContext(), 30);
+        this.nexus.setMaxCacheSize(renderer.getContext(), 1024*(1<<20));
 
         instance.onLoad = () => {
             const nx = instance.mesh;
