@@ -24,18 +24,14 @@ import {
     Vector3,
     Sphere,
     Box3,
-    Matrix4,
-    Ray,
-    Triangle,
     DataTexture,
     RGBAFormat,
+    SRGBColorSpace,
     MeshBasicMaterial,
     MeshStandardMaterial,
     WebGLRenderer,
     Scene,
     Camera,
-    Raycaster,
-    Intersection,
 } from "three";
 
 import { INexus, INexusInstance } from "./loadNexus";
@@ -107,10 +103,8 @@ export default class NexusObject extends Mesh
         const instance: INexusInstance = (geometry as any).instance = new nexus.Instance(gl as WebGLRenderingContext);
         instance.open(url);
         this.nexus.setMinFps(renderer.getContext(), 30);
-        this.nexus.setMaxCacheSize(renderer.getContext(), 1024*(1<<20));
-        //Bias the bounded cache toward the node(s) the viewer is inspecting so large
-        //models reach their finest LOD on the focus without an ever-growing cache.
-        this.nexus.setProminenceBias(renderer.getContext(), 1.0);
+        this.nexus.setMaxCacheSize(renderer.getContext(), 8192*(1<<20));
+        this.nexus.setProminenceBias(renderer.getContext(), 2);
 
         instance.onLoad = () => {
             const nx = instance.mesh;
@@ -210,8 +204,8 @@ export default class NexusObject extends Mesh
      */
     protected installRenderHooks()
     {
-        let pickBefore: Function = null;
-        let pickAfter: Function = null;
+        let pickBefore: Function|null = null;
+        let pickAfter: Function|null = null;
 
         Object.defineProperty(this, "onBeforeRender", {
             configurable: true,
@@ -224,13 +218,21 @@ export default class NexusObject extends Mesh
         Object.defineProperty(this, "onAfterRender", {
             configurable: true,
             get: () => (r: WebGLRenderer, s: Scene, c: Camera, g: BufferGeometry, m: Material, grp: any) => {
-                // During a GPUPicker pass the scene override material is the index
-                // shader: let the picker run and skip Nexus drawing for that pass.
-                if (m && (m as any).isIndexShader) {
-                    if (pickAfter) pickAfter.call(this, r, s, c, g, m, grp);
-                    return;
+                // During a GPUPicker pass the scene override material is one of the
+                // pick shaders (index / position / normal). Voyager picks entirely on
+                // the GPU: it renders the scene into a 1x1 target at the cursor and
+                // reads back the pixel. A NexusObject only owns a 1-vertex dummy
+                // geometry, so unless we draw the streamed patches with the pick
+                // shader bound the patches are invisible to the picker and the model
+                // is unpickable. renderNexus reuses whatever program three.js bound
+                // (here the pick shader), and the pick shaders need only the
+                // position/normal attributes the Nexus runtime already provides.
+                const pick = m as any;
+                const isPick = pick && (pick.isIndexShader || pick.isPositionShader || pick.isNormalShader);
+                this.renderNexus(r, s, c, g, m, isPick);
+                if (isPick && pickAfter) {
+                    pickAfter.call(this, r, s, c, g, m, grp);
                 }
-                this.renderNexus(r, s, c, g, m);
             },
             set: (fn: Function) => { pickAfter = fn; },
         });
@@ -246,7 +248,7 @@ export default class NexusObject extends Mesh
      * `onAfterRender` accessor after three.js has issued the (dummy) draw call for
      * this mesh, so the correct shader program, uniforms and transforms are bound.
      */
-    protected renderNexus(renderer: WebGLRenderer, scene: Scene, camera: Camera, geometry: BufferGeometry, material: Material)
+    protected renderNexus(renderer: WebGLRenderer, scene: Scene, camera: Camera, geometry: BufferGeometry, material: Material, isPick = false)
     {
         const gl = renderer.getContext() as WebGLRenderingContext;
         const instance: INexusInstance = (geometry as any).instance;
@@ -318,77 +320,6 @@ export default class NexusObject extends Mesh
         }
 
         return new Box3(min, max);
-    }
-
-    raycast(raycaster: Raycaster, intersects: Intersection[])
-    {
-        const instance = this.instance;
-        if (!instance) {
-            return;
-        }
-        const nexus = instance.mesh;
-        if (!nexus.sphere) {
-            return;
-        }
-
-        const c = nexus.sphere.center;
-        const sphere = new Sphere(new Vector3(c[0], c[1], c[2]), nexus.sphere.radius);
-        sphere.applyMatrix4(this.matrixWorld);
-
-        const inverse = new Matrix4().copy(this.matrixWorld).invert();
-        const ray = new Ray().copy(raycaster.ray).applyMatrix4(inverse);
-
-        const probe = new Vector3();
-        if (!raycaster.ray.intersectSphere(sphere, probe)) {
-            return;
-        }
-
-        // only the coarse (base) mesh is used for picking
-        if (!nexus.sink || !nexus.basei) {
-            return;
-        }
-
-        const vert = nexus.basev;
-        const tri = nexus.basei;
-
-        const A = new Vector3();
-        const B = new Vector3();
-        const C = new Vector3();
-        const point = new Vector3();
-        let distance = -1.0;
-        let intersect: Vector3 = null;
-        let face: any = {};
-
-        for (let j = 0; j < tri.length; j += 3) {
-            const a = tri[j];
-            const b = tri[j + 1];
-            const c2 = tri[j + 2];
-            A.set(vert[a * 3], vert[a * 3 + 1], vert[a * 3 + 2]);
-            B.set(vert[b * 3], vert[b * 3 + 1], vert[b * 3 + 2]);
-            C.set(vert[c2 * 3], vert[c2 * 3 + 1], vert[c2 * 3 + 2]);
-
-            const hit = ray.intersectTriangle(C, B, A, false, point);
-            if (!hit) {
-                continue;
-            }
-
-            hit.applyMatrix4(this.matrixWorld);
-            const d = hit.distanceTo(raycaster.ray.origin);
-            if (d < raycaster.near || d > raycaster.far) {
-                continue;
-            }
-            if (distance == -1.0 || d < distance) {
-                distance = d;
-                intersect = hit.clone();
-                face = { a, b, c: c2, normal: new Vector3() };
-                Triangle.getNormal(A, B, C, face.normal);
-            }
-        }
-
-        if (distance == -1.0) {
-            return;
-        }
-        intersects.push({ distance, point: intersect, face, object: this } as Intersection);
     }
 
     flush()
