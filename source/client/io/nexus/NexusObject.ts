@@ -141,9 +141,7 @@ export default class NexusObject extends Mesh
             // Voyager's image-based environment lighting just like glTF models do.
             // Without normals fall back to an unlit MeshBasicMaterial so the mesh is
             // still visible (its vertex colours / texture carry the appearance).
-            const makeMaterial = (params: any) =>
-                hasNormals ? new MeshStandardMaterial({ roughness: 1, metalness: 0, ...params })
-                           : new MeshBasicMaterial(params);
+            const makeMaterial = (params: any) =>new MeshStandardMaterial({ roughness: 1, metalness: 0, ...params });
 
             if (hasNormals) {
                 geometry.setAttribute("normal", new BufferAttribute(new Float32Array(3), 3));
@@ -359,6 +357,12 @@ export default class NexusObject extends Mesh
 function makeWhiteTexture(): DataTexture
 {
     const texture = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
+    // The Nexus runtime swaps in its own (sRGB-encoded JPEG/PNG) GL texture on the
+    // `map` sampler, but three.js compiles the shader's texture decode from *this*
+    // placeholder's colorSpace. Mark it sRGB so the real texture is decoded to
+    // linear before lighting (matching the glTF/GLB pipeline, see ModelReader);
+    // otherwise the sRGB texels are read as linear and the result looks washed out.
+    texture.colorSpace = SRGBColorSpace;
     texture.needsUpdate = true;
     return texture;
 }
