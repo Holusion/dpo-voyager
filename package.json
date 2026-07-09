@@ -5,7 +5,7 @@
     "scripts": {
         "start": "npm run server",
         "server": "nodemon services/server/bin/index.js",
-        "watch": "concurrently \"cd source/client && webpack --watch --env=app=story\" \"tsc -p source/server -w\" \"nodemon services/server/bin/index.js\"",
+        "watch": "concurrently \"cd source/client && webpack --watch --env=app=all\" \"tsc -p source/server -w\" \"nodemon services/server/bin/index.js\"",
         "build-dev": "cd source/client; webpack --mode=development --env=app=all; cd ../..",
         "build-dev-local": "cd source/client; webpack --mode=development --env=app=all --local=true; cd ../..",
         "build-prod": "cd source/client; webpack --mode=production --env=app=all; cd ../..",

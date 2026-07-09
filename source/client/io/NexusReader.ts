@@ -16,6 +16,7 @@
  */
 
 import { LoadingManager, Object3D } from "three";
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 
 import CRenderer from "@ff/scene/components/CRenderer";
 import CScene, { ISceneAfterRenderEvent, ISceneBeforeRenderEvent } from "@ff/scene/components/CScene";
@@ -48,6 +49,10 @@ export default class NexusReader
     /** Scene we are currently subscribed to for per-frame begin/end frame hooks. */
     protected subscribedScene: CScene = null;
     protected nexus: INexus = null;
+    /** Optional KTX2 loader, used to transcode KTX2-compressed Nexus node textures. */
+    protected ktx2Loader: KTX2Loader = null;
+    /** Whether `detectSupport` has been run on {@link ktx2Loader} (required before `parse`). */
+    protected ktx2Ready = false;
 
     constructor(loadingManager: LoadingManager, renderer: CRenderer)
     {
@@ -71,6 +76,18 @@ export default class NexusReader
     {
         path = path.endsWith("/") ? path.slice(0, -1) : path;
         setNexusScriptPath(`${path}/js/nexus/nexus.js`);
+    }
+
+    /**
+     * Supply a configured KTX2 (Basis) loader so Nexus meshes carrying
+     * KTX2-compressed node textures can be transcoded. Typically the same
+     * loader the glTF model reader uses (see CVAssetReader), avoiding a second
+     * transcoder worker pool. The loader must already have its transcoder path
+     * set and `detectSupport(renderer)` called.
+     */
+    setKTX2Loader(loader: KTX2Loader)
+    {
+        this.ktx2Loader = loader;
     }
 
     isValid(url: string): boolean
@@ -111,6 +128,17 @@ export default class NexusReader
 
             const webglRenderer = this.renderer.views[0].renderer;
 
+            // KTX2Loader.parse() throws unless detectSupport() has run, and the
+            // loader is shared with ModelReader, which only calls it from a
+            // deferred setTimeout in its constructor. For a Nexus-only scene that
+            // timer may not have fired yet, so ensure readiness here (idempotent;
+            // the renderer is guaranteed live by the time a model loads). Without
+            // this, KTX2 node textures fail to transcode.
+            if (this.ktx2Loader && !this.ktx2Ready) {
+                this.ktx2Loader.detectSupport(webglRenderer);
+                this.ktx2Ready = true;
+            }
+
             // LOD heatmap: opt-in via `?lodHeatmap` (or `?lodHeatmap=1`) on the URL.
             // Tints each streamed node red (coarse) -> green (fine). Debug.nodes is a
             // global Nexus flag, so it applies to every Nexus object once enabled.
@@ -126,6 +154,7 @@ export default class NexusReader
                     // frame can request/draw finer patches against the camera.
                     onUpdate: () => this.renderer.forceRender(),
                     heatmap,
+                    ktx2Loader: this.ktx2Loader,
                 });
 
                 this.register(object);
@@ -231,5 +260,15 @@ export default class NexusReader
         }
         const gl = event.context.renderer.getContext() as WebGLRenderingContext;
         this.nexus.endFrame(gl);
+
+        // The Nexus runtime draws its patches with raw WebGL (bindBuffer,
+        // vertexAttribPointer, and activeTexture/bindTexture for each node's
+        // texture). Those calls mutate GL state three.js doesn't track, so its
+        // cached active-texture-unit drifts and on a later frame three binds the
+        // environment map to the wrong unit — corrupting image-based lighting
+        // (renders washed-out/white-ish, most visibly in Chrome). Resync three's
+        // state cache once per frame, AFTER the whole scene has rendered (doing it
+        // mid-render, in the mesh's onAfterRender, corrupts the current frame).
+        event.context.renderer.resetState();
     }
 }

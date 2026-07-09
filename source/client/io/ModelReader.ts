@@ -38,6 +38,13 @@ export default class ModelReader
     protected renderer: CRenderer;
     protected gltfLoader :GLTFLoader;
 
+    /**
+     * The KTX2 (Basis) texture loader used to transcode supercompressed glTF
+     * textures. Exposed so other readers (e.g. NexusReader) can reuse the same
+     * configured loader rather than spinning up a second transcoder worker pool.
+     */
+    readonly ktx2Loader :KTX2Loader;
+
     protected loading :Record<string, {listeners : {onload: (data:ArrayBuffer)=>any, onerror: (e:Error)=>any, signal:AbortSignal}[], abortController :AbortController}> = {}
 
     protected customDracoPath = null;
@@ -58,7 +65,7 @@ export default class ModelReader
          * GLTFLoader.ktx2Loader has been here for a long time but only added to types definitions in r165
          * We wait until now to require it because renderer.views is not defined until after update
          */
-        ((this.gltfLoader as any).ktx2Loader as KTX2Loader).setTranscoderPath(`${path}/js/basis/`);
+        this.ktx2Loader.setTranscoderPath(`${path}/js/basis/`);
     }
 
     constructor(loadingManager: LoadingManager, renderer: CRenderer)
@@ -71,19 +78,19 @@ export default class ModelReader
         this.gltfLoader = new GLTFLoader(loadingManager);
         this.gltfLoader.setDRACOLoader(dracoLoader);
         this.gltfLoader.setMeshoptDecoder(MeshoptDecoder);
-        const ktx2Loader = new KTX2Loader(loadingManager);
-        ktx2Loader.setTranscoderPath(DEFAULT_SYSTEM_ASSET_PATH + "js/basis/");
-        this.gltfLoader.setKTX2Loader(ktx2Loader);
+        this.ktx2Loader = new KTX2Loader(loadingManager);
+        this.ktx2Loader.setTranscoderPath(DEFAULT_SYSTEM_ASSET_PATH + "js/basis/");
+        this.gltfLoader.setKTX2Loader(this.ktx2Loader);
         setTimeout(()=>{
             //Allow an update to happen. @todo check how robust it is
-            ktx2Loader.detectSupport(this.renderer.views[0].renderer);
+            this.ktx2Loader.detectSupport(this.renderer.views[0].renderer);
         }, 0);
     }
 
     dispose()
     {
         this.gltfLoader.dracoLoader.dispose();
-        ((this.gltfLoader as any).ktx2Loader as KTX2Loader).dispose();   // TODO: Update type definitions for loader access
+        this.ktx2Loader.dispose();
         this.gltfLoader.setDRACOLoader(null);
         this.gltfLoader.setKTX2Loader(null);
         this.gltfLoader = null;

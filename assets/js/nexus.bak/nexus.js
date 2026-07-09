@@ -318,21 +318,9 @@ Mesh = function() {
 
 Mesh.prototype = {
 	open: function(url) {
-		if(this.useIndexedDb) {
-			let indexedDB = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.OIndexedDB || window.msIndexedDB;
-			this.IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction || window.OIDBTransaction || window.msIDBTransaction;
-			this.db = null;
-			let request = indexedDB.open(url);
-			request.onsuccess = () => { this.db = request.result; };
-			request.onupgradeneeded = (event) => {
-				let db = event.target.result;
-				this.meshStore = db.createObjectStore('mesh');
-				this.texStore = db.createObjectStore('tex');
-			};
-		}
-
 		var mesh = this;
 		mesh.url = url;
+		mesh.db = null;
 		mesh.httpRequest({
 			url: this.url,
 			start:0,
@@ -360,12 +348,63 @@ Mesh.prototype = {
 				mesh.corto = (mesh.signature.flags & 4);
 				if(mesh.deepzoom)
 					mesh.baseurl = url.substr(0, url.length -4) + '_files/';
-				mesh.requestIndex();
+				// Validate (and if needed reset) the IndexedDB chunk cache against
+				// this file's content before requesting any geometry/textures, then
+				// load the index. openCache always calls back, with or without a db.
+				mesh.openCache(function() { mesh.requestIndex(); });
 			},
 			error:function() { console.log("Open request error!");},
 			abort:function() { console.log("Open request abort!");},
 			type:'arraybuffer'
 		});
+	},
+
+	// The geometry/texture chunk cache (stores 'mesh' and 'tex') is keyed by
+	// node/texture id under a database named after the file URL. Those ids are
+	// only meaningful for one specific build of the file: re-exporting the model
+	// at the same URL reshuffles which vertices land in each node, so a cached
+	// chunk would decode to a different vertex count than the new index expects
+	// ("RangeError: source array is too long" in readyNode). Guard the cache
+	// with a content signature (header counts) stored in a 'meta' store; on any
+	// mismatch - including the first run after this DB version - drop the stale
+	// chunks before they are read. Always invokes `done`, cache or not.
+	openCache: function(done) {
+		var mesh = this;
+		var idb = typeof window !== "undefined" &&
+			(window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.OIndexedDB || window.msIndexedDB);
+		if(!mesh.useIndexedDb || !idb) { done(); return; }
+
+		var signature = [mesh.version, mesh.verticesCount, mesh.facesCount, mesh.nodesCount, mesh.patchesCount].join(":");
+
+		var request;
+		try { request = idb.open(mesh.url, 2); }
+		catch(e) { done(); return; }
+
+		request.onupgradeneeded = function(event) {
+			var db = event.target.result;
+			if(!db.objectStoreNames.contains('mesh')) db.createObjectStore('mesh');
+			if(!db.objectStoreNames.contains('tex'))  db.createObjectStore('tex');
+			if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+		};
+		request.onerror = function() { if(Debug.verbose) console.log("Cache open error for " + mesh.url); done(); };
+		request.onsuccess = function() {
+			var db = request.result;
+			var tx;
+			try { tx = db.transaction(['meta', 'mesh', 'tex'], "readwrite"); }
+			catch(e) { done(); return; }
+			var meta = tx.objectStore('meta');
+			var getReq = meta.get('signature');
+			getReq.onsuccess = function() {
+				if(getReq.result !== signature) {
+					if(Debug.verbose) console.log("Cache signature mismatch for " + mesh.url + ", clearing");
+					tx.objectStore('mesh').clear();
+					tx.objectStore('tex').clear();
+					meta.put(signature, 'signature');
+				}
+			};
+			tx.oncomplete = function() { mesh.db = db; done(); };
+			tx.onerror = function() { done(); };
+		};
 	},
 
 	httpRequest: function({url, start, end, load, error, abort, type}) {
@@ -1166,8 +1205,14 @@ function requestNodeTexture(context, node) {
 
 	if(m.db) {
 		let transaction = node.mesh.db.transaction('tex', "readwrite");
-		let request = transaction.objectStore('tex').get(node.id);
-		request.onsuccess = (e) => { 
+		// Textures are cached/stored in IndexedDB keyed by texture id (`tex`, see
+		// httpRequestNodeTexture's put(... tex)), and several nodes may share one
+		// texture. Retrieving by node.id instead of `tex` returned a different
+		// node's texture from the cache on reload -> scrambled/wrong UVs at the
+		// finer LODs (browser-independent; only with a populated cache). Key the
+		// lookup by `tex` to match the store.
+		let request = transaction.objectStore('tex').get(tex);
+		request.onsuccess = (e) => {
 			if(request.result) {
 				loadNodeTexture({ response: request.result}, context, node, tex);
 			} else {

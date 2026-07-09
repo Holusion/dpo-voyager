@@ -34,6 +34,8 @@ import {
     Camera,
 } from "three";
 
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
+
 import { INexus, INexusInstance } from "./loadNexus";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -57,6 +59,14 @@ export interface INexusObjectOptions
     onLoad?: (object: NexusObject) => void;
     onUpdate?: (instance: INexusInstance) => void;
     material?: Material;
+    /**
+     * three.js KTX2 (Basis) texture loader. When supplied, the Nexus runtime
+     * transcodes KTX2-compressed node textures through it and adopts the GPU
+     * texture three creates (see `loadNodeTextureKTX2` in nexus.js); JPEG/PNG
+     * node textures still take the `createImageBitmap` path. Must already be
+     * configured (transcoder path + `detectSupport(renderer)`).
+     */
+    ktx2Loader?: KTX2Loader;
     /**
      * LOD heatmap mode: render each streamed node tinted red (coarse) -> green
      * (fine) so you can see what resolution is actually loaded. Uses an unlit
@@ -83,6 +93,10 @@ export default class NexusObject extends Mesh
 
     georefData: any = null;
 
+    /** Smoothed frames-per-second, sampled once per render in renderNexus. Debug only. */
+    fps = 0;
+    protected lastFrameTime = 0;
+
     constructor(nexus: INexus, url: string, renderer: WebGLRenderer, options: INexusObjectOptions = {})
     {
         const geometry = new BufferGeometry();
@@ -102,15 +116,33 @@ export default class NexusObject extends Mesh
 
         const instance: INexusInstance = (geometry as any).instance = new nexus.Instance(gl as WebGLRenderingContext);
         instance.open(url);
+
+        // Inject the three.js KTX2Loader so the Nexus runtime can transcode and
+        // upload KTX2-compressed node textures. `instance.context` is created
+        // synchronously by `open()`. The renderer is needed both to transcode
+        // (its capabilities drive `detectSupport`) and to upload the resulting
+        // GPU texture (`renderer.initTexture`); the runtime keeps the three
+        // Texture so three retains ownership of the GPU handle. Non-KTX2 (JPEG/
+        // PNG) node textures are unaffected and keep their image-decode path.
+        if (options.ktx2Loader) {
+            (instance.context as any).ktx2 = { renderer, loader: options.ktx2Loader };
+        }
+
         this.nexus.setMinFps(renderer.getContext(), 30);
-        this.nexus.setMaxCacheSize(renderer.getContext(), 8192*(1<<20));
-        this.nexus.setProminenceBias(renderer.getContext(), 2);
+        this.nexus.setMaxCacheSize(renderer.getContext(), 1024*(1<<20));
+        // Concentrate the bounded cache on the front-and-center node(s) so close
+        // inspection reaches the finest LOD before the budget fills, rather than
+        // spreading it evenly across the model. Tune up for tighter focus, or 0
+        // for stock behaviour. See INexus.setProminenceBias / nexus.js.
+        this.nexus.setProminenceBias(renderer.getContext(), 2.5);
 
         instance.onLoad = () => {
             const nx = instance.mesh;
             const c = nx.sphere.center;
             geometry.boundingSphere = new Sphere(new Vector3(c[0], c[1], c[2]), nx.sphere.radius);
             geometry.boundingBox = this.computeBoundingBox();
+            this.installDebugStats();
+            this.installBoundsProxy();
 
             const hasNormals = !!nx.vertex.normal;
             const hasColors = !!nx.vertex.color;
@@ -141,7 +173,7 @@ export default class NexusObject extends Mesh
             // Voyager's image-based environment lighting just like glTF models do.
             // Without normals fall back to an unlit MeshBasicMaterial so the mesh is
             // still visible (its vertex colours / texture carry the appearance).
-            const makeMaterial = (params: any) =>new MeshStandardMaterial({ roughness: 1, metalness: 0, ...params });
+            const makeMaterial = (params: any) =>new MeshStandardMaterial({ roughness: 1, metalness: 0, flatShading: false, fog: false, ...params });
 
             if (hasNormals) {
                 geometry.setAttribute("normal", new BufferAttribute(new Float32Array(3), 3));
@@ -157,18 +189,13 @@ export default class NexusObject extends Mesh
             if (hasTexCoords) {
                 geometry.setAttribute("uv", new BufferAttribute(new Float32Array(2), 2));
                 if (this.autoMaterial) {
-                    this.material = makeMaterial({ color: 0xffffff, map: makeWhiteTexture() });
-                }
-            }
-            else if (hasColors) {
-                geometry.setAttribute("color", new BufferAttribute(new Float32Array(3), 3));
-                if (this.autoMaterial) {
-                    this.material = makeMaterial({ vertexColors: true });
+                    this.material = makeMaterial({ color:0xffffff, map: makeWhiteTexture() });
                 }
             }
             else if (this.autoMaterial) {
-                this.material = makeMaterial({ color: 0xffffff });
+                this.material = makeMaterial({ });
             }
+            console.log("Material:", this.material);
 
             // Voyager traverses every scene material to toggle shader defines
             // (e.g. CVSlicer's CUT_PLANE). three's built-in materials have no
@@ -254,6 +281,22 @@ export default class NexusObject extends Mesh
             return;
         }
 
+        // Sample FPS for the debug stats object. Voyager renders on demand, so this
+        // tracks the rate during interaction and goes stale (last value) when idle.
+        // Skip pick passes: they render several extra 1x1 frames per pointer event
+        // and would otherwise pollute the rate.
+        if (!isPick) {
+            const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
+            if (this.lastFrameTime) {
+                const dt = now - this.lastFrameTime;
+                if (dt > 0) {
+                    const inst = 1000 / dt;
+                    this.fps = this.fps ? this.fps * 0.9 + inst * 0.1 : inst;
+                }
+            }
+            this.lastFrameTime = now;
+        }
+
         const size = renderer.getSize(new Vector2());
 
         instance.updateView(
@@ -286,14 +329,149 @@ export default class NexusObject extends Mesh
         }
 
         instance.render();
-        this.nexus.updateCache(gl);
+        if (!isPick) {
+            this.nexus.updateCache(gl);
+        }
+    }
+
+    /**
+     * Debug only: breakdown of the resident GPU cache for this object, split into
+     * geometry vs. texture bytes (matching the Nexus runtime's own cache
+     * accounting, so `totalMB` ~ the budget that drives eviction). The texture
+     * figure is the runtime's estimate (decoded JPEG/PNG size x10); shared
+     * textures are counted per referencing node, exactly as the cache does.
+     */
+    cacheStats()
+    {
+        const instance = this.instance;
+        const m = instance && instance.mesh;
+        const ctx = instance && instance.context;
+        if (!m || !ctx) {
+            return null;
+        }
+
+        let geo = 0;
+        let tex = 0;
+        let ready = 0;
+        let pending = 0;
+        for (let i = 0; i < m.nodesCount; i++) {
+            const status = m.status[i];
+            if (status === 0) {
+                continue;          // not in cache
+            }
+            status === 1 ? ready++ : pending++;
+            const g = m.vsize * m.nvertices[i] + m.fsize * m.nfaces[i];
+            geo += g;
+            tex += Math.max(0, m.nsize[i] - g);
+        }
+
+        const MB = (b: number) => +(b / (1 << 20)).toFixed(2);
+        return {
+            residentNodes: ready,
+            pendingNodes: pending,
+            totalNodes: m.nodesCount,
+            geometryMB: MB(geo),
+            texturesMB: MB(tex),
+            totalMB: MB(geo + tex),
+            maxMB: MB(ctx.maxCacheSize),
+            usage: +(100 * (geo + tex) / ctx.maxCacheSize).toFixed(1) + "%",
+        };
+    }
+
+
+    /**
+     * Debug only: publishes `window.nexusStats`, a live-getter object so reading any
+     * property reflects the current frame. Assumes a single loaded object (the last
+     * one to load wins). Cleared on dispose.
+     */
+    protected installDebugStats()
+    {
+        if (typeof window === "undefined") {
+            return;
+        }
+        const self = this;
+        const stats = {
+            get fps() { return Math.round(self.fps); },
+            get error() {
+                const ctx = self.instance && self.instance.context;
+                if (!ctx) {
+                    return null;
+                }
+                // rendered = actual on-screen error achieved last frame (px);
+                // target/current = the refinement threshold the traversal aims for.
+                return {
+                    rendered: +(ctx.realError || 0).toFixed(2),
+                    target: ctx.targetError,
+                    current: +(ctx.currentError || 0).toFixed(2),
+                };
+            },
+            get cache() { return self.cacheStats(); },
+            // Per-frame traversal limits. drawBudget caps the geometry drawn each
+            // frame (independent of the cache budget): once drawSize exceeds it the
+            // traversal stops expanding, so a `drawUsage` near 100% means on-screen
+            // detail is capped by the draw budget, not the cache. selected = nodes
+            // the last traversal chose to draw.
+            get traversal() {
+                const inst = self.instance as any;
+                if (!inst || typeof inst.drawSize !== "number") {
+                    return null;
+                }
+                let selected = 0;
+                if (inst.selected) {
+                    for (let i = 0; i < inst.selected.length; i++) {
+                        selected += inst.selected[i];
+                    }
+                }
+                const MB = (b: number) => +(b / (1 << 20)).toFixed(2);
+                return {
+                    selected,
+                    drawMB: MB(inst.drawSize),
+                    drawBudgetMB: MB(inst.drawBudget),
+                    drawUsage: inst.drawBudget ? +(100 * inst.drawSize / inst.drawBudget).toFixed(0) + "%" : "n/a",
+                    currentResolution: inst.currentResolution,
+                };
+            },
+        };
+        Object.defineProperty(stats, "__owner", { value: this, enumerable: false });
+        (window as any).nexusStats = stats;
+    }
+
+
+
+    /**
+     * Voyager derives a model's local bounding box (CVModel2, used as the range for
+     * GPUPicker.pickPosition) by iterating each mesh's `position` *attribute* — it
+     * ignores `geometry.boundingBox`. A NexusObject only carries a 1-vertex dummy
+     * position, so without this the model's box collapses to a zero-size box at the
+     * origin and every picked position decodes to that origin. Replace the dummy
+     * with the 8 corners of the real bounding box (so the derived box is correct
+     * even under a rotated parent transform), and set the draw range to 0 so the
+     * no-op placeholder draw three.js issues (which still fires our render hooks)
+     * renders none of them; the actual surface is drawn by renderNexus.
+     */
+    protected installBoundsProxy()
+    {
+        const box = this.geometry.boundingBox;
+        if (!box) {
+            return;
+        }
+
+        const { min, max } = box;
+        const corners = new Float32Array([
+            min.x, min.y, min.z,  max.x, min.y, min.z,
+            min.x, max.y, min.z,  max.x, max.y, min.z,
+            min.x, min.y, max.z,  max.x, min.y, max.z,
+            min.x, max.y, max.z,  max.x, max.y, max.z,
+        ]);
+        this.geometry.setAttribute("position", new BufferAttribute(corners, 3));
+        this.geometry.setDrawRange(0, 0);
     }
 
     computeBoundingBox(): Box3
     {
         const nexus = this.instance.mesh;
         if (!nexus.sphere) {
-            return null;
+            return null!;
         }
 
         const min = new Vector3(Infinity, Infinity, Infinity);
@@ -337,6 +515,11 @@ export default class NexusObject extends Mesh
         if (!instance) {
             return;
         }
+        if (typeof window !== "undefined" && (window as any).nexusStats
+            && (window as any).nexusStats.__owner === this) {
+            delete (window as any).nexusStats;
+        }
+
         const context = instance.context;
         const mesh = instance.mesh;
         this.nexus.flush(context, mesh);
@@ -357,11 +540,13 @@ export default class NexusObject extends Mesh
 function makeWhiteTexture(): DataTexture
 {
     const texture = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
-    // The Nexus runtime swaps in its own (sRGB-encoded JPEG/PNG) GL texture on the
-    // `map` sampler, but three.js compiles the shader's texture decode from *this*
-    // placeholder's colorSpace. Mark it sRGB so the real texture is decoded to
-    // linear before lighting (matching the glTF/GLB pipeline, see ModelReader);
-    // otherwise the sRGB texels are read as linear and the result looks washed out.
+    // The Nexus runtime swaps in its own GL texture on the `map` sampler, so this
+    // placeholder is never actually sampled. In WebGL2 the sRGB->linear decode of a
+    // colour texture is done in hardware via its internal format (SRGB8_ALPHA8), not
+    // by a shader define keyed on colorSpace -- so this placeholder's colorSpace has
+    // no effect on the rendered result. The real decode is set where Nexus uploads
+    // the texture (see `gl.SRGB8_ALPHA8` in nexus.js requestNodeTexture). We still
+    // tag it sRGB for consistency with the glTF/GLB pipeline (see ModelReader).
     texture.colorSpace = SRGBColorSpace;
     texture.needsUpdate = true;
     return texture;

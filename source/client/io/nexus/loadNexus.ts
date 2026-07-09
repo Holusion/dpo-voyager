@@ -45,8 +45,13 @@ export interface INexus
     setTargetError(gl: WebGLRenderingContext, error: number): void;
     setMinFps(gl: WebGLRenderingContext, fps: number): void;
     setMaxCacheSize(gl: WebGLRenderingContext, size: number): void;
-    /** Sharpens the distance falloff of node priority so the cache favours the
-     * node(s) nearest the viewer; 0 = stock upstream behaviour, ~1 = moderate. */
+    /**
+     * Sharpens the camera-distance falloff of node priority so the bounded cache
+     * is concentrated on the front-and-center node(s) (loaded first, evicted last)
+     * instead of split evenly across the model. 0 = stock upstream behaviour;
+     * higher = more aggressive focus. Normalised to 1 at the dataset centre, so
+     * the focus's effective target error is unchanged. See nexus.js prominenceBias.
+     */
     setProminenceBias(gl: WebGLRenderingContext, bias: number): void;
     getTargetError(gl: WebGLRenderingContext): number;
     getMinFps(gl: WebGLRenderingContext): number;

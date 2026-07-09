@@ -61,6 +61,9 @@ export default class CVAssetReader extends Component
         this.fileLoader = new FileReader(loadingManager);
         this.modelLoader = new ModelReader(loadingManager, this.renderer);
         this.nexusLoader = new NexusReader(loadingManager, this.renderer);
+        // Reuse the glTF model reader's configured KTX2 loader so Nexus meshes
+        // with KTX2-compressed node textures share its transcoder worker pool.
+        this.nexusLoader.setKTX2Loader(this.modelLoader.ktx2Loader);
         this.geometryLoader = new GeometryReader(loadingManager);
         this.textureLoader = new TextureReader(loadingManager);
         this.fontReader = new FontReader(loadingManager);
