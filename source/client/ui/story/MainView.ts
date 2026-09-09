@@ -29,6 +29,7 @@ import HierarchyTreeView from "@ff/scene/ui/HierarchyTreeView";
 
 import NavigatorPanel from "./NavigatorPanel";
 import CVTaskProvider, { ETaskMode } from "../../components/CVTaskProvider";
+import CVSaveState from "../../components/CVSaveState";
 
 import TaskBar from "./TaskBar";
 
@@ -104,6 +105,8 @@ export default class MainView extends CustomElement
     {
         super();
         this.onUnload = this.onUnload.bind(this);
+        this.onKeyDown = this.onKeyDown.bind(this);
+        this.onUserInput = this.onUserInput.bind(this);
 
         if (application) {
             this.application = application;
@@ -176,12 +179,76 @@ export default class MainView extends CustomElement
         this.restoreLayout();
 
         window.addEventListener("beforeunload", this.onUnload);
+        window.addEventListener("keydown", this.onKeyDown);
+        window.addEventListener("pointerdown", this.onUserInput, true);
+        window.addEventListener("keydown", this.onUserInput, true);
     }
 
     protected disconnected()
     {
+        window.removeEventListener("keydown", this.onKeyDown);
+        window.removeEventListener("pointerdown", this.onUserInput, true);
+        window.removeEventListener("keydown", this.onUserInput, true);
+
         this.storeLayout();
         localStorage.set("voyager-story", MainView.stateKey, this.state);
+    }
+
+    /**
+     * Closes the open journal entry when the user starts doing something else.
+     * Coalescing on its own cannot tell one gesture from the next, and it has to
+     * stay loose enough that the writes a single edit cascades into - changing
+     * the shader rewrites it on every model - end up in the same undo step. A
+     * gesture is the boundary the user actually means.
+     */
+    protected onUserInput()
+    {
+        const saveState = this.application.system.getMainComponent(CVSaveState, true);
+
+        if (saveState) {
+            saveState.commitEdit();
+        }
+    }
+
+    /**
+     * Undo and redo are bound here rather than on a panel because an edit made
+     * in one panel is very often taken back while the focus sits in another.
+     * Text fields keep their own undo: the editor iframe never forwards these
+     * events, and a focused input is left alone deliberately.
+     */
+    protected onKeyDown(event: KeyboardEvent)
+    {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+            return;
+        }
+
+        const key = event.key ? event.key.toLowerCase() : "";
+        const undo = key === "z" && !event.shiftKey;
+        const redo = (key === "z" && event.shiftKey) || key === "y";
+
+        if ((!undo && !redo) || MainView.isTextEntry(event.target)) {
+            return;
+        }
+
+        const saveState = this.application.system.getMainComponent(CVSaveState, true);
+
+        if (saveState && (undo ? saveState.undo() : saveState.redo())) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }
+
+    protected static isTextEntry(target: EventTarget): boolean
+    {
+        const element = target as HTMLElement;
+
+        if (!element || !element.tagName) {
+            return false;
+        }
+
+        const tag = element.tagName.toLowerCase();
+        return tag === "input" || tag === "textarea" || tag === "select"
+            || element.isContentEditable;
     }
 
     protected onUnload()

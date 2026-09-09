@@ -71,6 +71,8 @@ export default class TaskBar extends SystemView
         this.taskProvider.on<IActiveTaskEvent>("active-component", this.onUpdate, this);
         this.language.outs.uiLanguage.on("value", this.onUpdate, this);
         this.saveState.outs.dirty.on("value", this.onUpdate, this);
+        this.saveState.outs.canUndo.on("value", this.onUpdate, this);
+        this.saveState.outs.canRedo.on("value", this.onUpdate, this);
     }
 
     protected disconnected()
@@ -79,6 +81,8 @@ export default class TaskBar extends SystemView
         this.taskProvider.off<IActiveTaskEvent>("active-component", this.onUpdate, this);
         this.language.outs.uiLanguage.on("value", this.onUpdate, this);
         this.saveState.outs.dirty.off("value", this.onUpdate, this);
+        this.saveState.outs.canUndo.off("value", this.onUpdate, this);
+        this.saveState.outs.canRedo.off("value", this.onUpdate, this);
     }
 
     protected render()
@@ -92,6 +96,8 @@ export default class TaskBar extends SystemView
         const languageManager = this.language;
         const saveName = languageManager.getUILocalizedString(taskMode !== ETaskMode.Standalone ? "Save" : "Download");
         const unsaved = this.saveState.outs.dirty.value;
+        const canUndo = this.saveState.outs.canUndo.value;
+        const canRedo = this.saveState.outs.canRedo.value;
         return html`
             <img class="sv-story-logo" src=${this.assetReader.getSystemAssetUrl("images/voyager-75grey.svg")} alt="Logo"/>
             <div class="sv-mode ff-text">${taskModeText}</div>
@@ -102,6 +108,11 @@ export default class TaskBar extends SystemView
             </div>
             <div class="sv-divider"></div>
             <div class="sv-spacer"></div>
+            <div class="sv-divider"></div>
+            <div class="ff-flex-row ff-group">
+                <ff-button text=${languageManager.getUILocalizedString("Undo")} title="${languageManager.getUILocalizedString("Undo")} (Ctrl+Z)" icon="undo" ?disabled=${!canUndo} @click=${this.onClickUndo}></ff-button>
+                <ff-button text=${languageManager.getUILocalizedString("Redo")} title="${languageManager.getUILocalizedString("Redo")} (Ctrl+Shift+Z)" icon="redo" ?disabled=${!canRedo} @click=${this.onClickRedo}></ff-button>
+            </div>
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group">
                 <ff-button ?data-unsaved=${unsaved} text=${saveName} title=${unsaved ? "Unsaved changes" : saveName} icon="save" @click=${this.onClickSave}></ff-button>
@@ -117,6 +128,16 @@ export default class TaskBar extends SystemView
             const tasks = this.taskProvider.scopedComponents;
             this.taskProvider.activeComponent = tasks[event.target.index];
         }
+    }
+
+    protected onClickUndo()
+    {
+        this.saveState.undo();
+    }
+
+    protected onClickRedo()
+    {
+        this.saveState.redo();
     }
 
     protected onClickSave()
