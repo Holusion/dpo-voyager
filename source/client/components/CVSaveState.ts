@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-import { types } from "@ff/graph/Component";
+import Component, { types } from "@ff/graph/Component";
+import Property from "@ff/graph/Property";
 import { IPulseContext } from "@ff/graph/components/CPulse";
 
 import CVDocument from "./CVDocument";
 import CVDocumentObserver from "./CVDocumentObserver";
+import CVAssetManager from "./CVAssetManager";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -31,26 +33,45 @@ import CVDocumentObserver from "./CVDocumentObserver";
 export type DirtyProvider = () => boolean;
 
 /**
- * Tracks whether the active document differs from the last state written to disk.
+ * Tracks whether the document has been edited since it was last saved.
  *
- * The signature of a document is the exact JSON the save path would produce, so
- * "dirty" means precisely "saving now would change the file". That makes the
- * signal honest about serialization: an edit the serializer drops does not show
- * up here, which is a true statement about what a save would preserve.
+ * Edits are observed where they happen: every property change already sets a
+ * changed flag that Graph.tick() clears at a known point each frame, so a hook
+ * placed just before that reset sees every edit, whatever made it - the
+ * inspector, a task, or a script. Nothing is serialized and nothing is polled;
+ * the cost is proportional to what actually changed in the frame.
  *
- * This is phase 0 of the edit journal. Once property changes are journaled, the
- * journal pointer becomes the primary signal (it is O(1), and it catches edits
- * that never reach serialization) and the signature stays on as a cross-check.
+ * Comparing serialized documents instead was tried twice - Smithsonian PR #382
+ * and the first draft of this component - and fails in both directions. It
+ * misses edits the serializer drops (setup features are written from a cache
+ * refreshed only on load and on screenshot capture, so a background colour
+ * change never reaches the bytes), it reports load-time settling as an edit,
+ * and it costs a full document walk on a timer.
+ *
+ * This is phase 1a of the edit journal: the hook records only that something
+ * changed. Phase 1b records the values too, at which point dirty becomes
+ * "journal pointer differs from the pointer at save time" and undoing back to
+ * the save point correctly reads clean again.
  */
 export default class CVSaveState extends CVDocumentObserver
 {
     static readonly typeName: string = "CVSaveState";
     static readonly isSystemSingleton = true;
 
-    /** Seconds between signature comparisons. */
-    protected static readonly pollInterval = 0.5;
-    /** Consecutive unchanged polls required before a baseline is accepted. */
-    protected static readonly stablePolls = 3;
+    /** Seconds of asset-manager quiet required before edits start counting. */
+    protected static readonly armDelay = 0.5;
+    /** Hard cap on arming, in case the loading manager never reports idle. */
+    protected static readonly armTimeout = 15;
+
+    /**
+     * Properties that carry runtime state on an otherwise serialized component.
+     * They are written by ordinary viewer interaction and are not part of what
+     * a save records, so a change to one is not an edit.
+     */
+    protected static readonly runtimeOnly = [
+        "Camera.IsInUse",
+        "Navigation.PromptActive",
+    ];
 
     protected static readonly ins = {
         markSaved: types.Event("State.MarkSaved"),
@@ -63,15 +84,22 @@ export default class CVSaveState extends CVDocumentObserver
     ins = this.addInputs(CVSaveState.ins);
     outs = this.addOutputs(CVSaveState.outs);
 
-    private _baseline: string = null;
-    private _candidate: string = null;
-    private _stableCount = 0;
-    private _nextPoll = 0;
+    private _document: CVDocument = null;
+    private _armed = false;
+    private _armTime = -1;
+    private _armDeadline = 0;
+    private _suspendCount = 0;
+    private _suspendUntilFrame = -1;
+    private _frame = 0;
     private _providers: DirtyProvider[] = [];
 
-    /** True once a baseline has been taken and comparisons are meaningful. */
+    protected get assetManager() {
+        return this.getMainComponent(CVAssetManager);
+    }
+
+    /** True once load has settled and edits are being counted. */
     get isTracking() {
-        return this._baseline !== null;
+        return this._armed;
     }
 
     create()
@@ -82,13 +110,14 @@ export default class CVSaveState extends CVDocumentObserver
 
     dispose()
     {
+        this.detach(this._document);
         this.stopObserving();
         this._providers.length = 0;
         super.dispose();
     }
 
     /**
-     * Registers a source of unsaved state the document signature cannot see.
+     * Registers a source of unsaved state that is not part of the document.
      * The provider must be removed again when its owner goes away.
      */
     addDirtyProvider(provider: DirtyProvider)
@@ -107,27 +136,27 @@ export default class CVSaveState extends CVDocumentObserver
     }
 
     /**
-     * The JSON a save would write for the active document, or null if there is
-     * nothing to save. Rounding matches CVStoryApplication's save path, so float
-     * noise from navigation cannot register as an edit.
+     * Stops counting changes as edits until the matching resume(). Use it around
+     * changes the tool makes to its own chrome - activating a task hides the grid
+     * and restores it afterwards, which is not something the user did. Nests.
      */
-    signature(): string
+    suspend()
     {
-        const document = this.activeDocument;
-        if (!document || document.isEmpty()) {
-            return null;
-        }
+        ++this._suspendCount;
+    }
 
-        try {
-            return JSON.stringify(document.deflateDocument(), (key, value) =>
-                typeof value === "number" ? parseFloat(value.toFixed(7)) : value);
+    resume()
+    {
+        if (this._suspendCount > 0 && --this._suspendCount === 0) {
+            // The writes happened synchronously, but the changed flags they set
+            // are not read until the next tick - after this call. Hold the
+            // suspension over that frame too, or the chrome lands as an edit.
+            this._suspendUntilFrame = this._frame + 1;
         }
-        catch (error) {
-            // A document mid-load can fail to serialize; treat it as "nothing known yet"
-            // rather than reporting a change we cannot substantiate.
-            console.warn("CVSaveState.signature - %s", error.message);
-            return null;
-        }
+    }
+
+    protected get isSuspended() {
+        return this._suspendCount > 0 || this._frame <= this._suspendUntilFrame;
     }
 
     /**
@@ -136,31 +165,23 @@ export default class CVSaveState extends CVDocumentObserver
      */
     markSaved()
     {
-        this._baseline = this.signature();
-        this._candidate = null;
-        this._stableCount = 0;
         this.outs.dirty.setValue(false);
     }
 
-    /**
-     * True when leaving now would lose work. False while the baseline is still
-     * settling: a document that has not finished loading has no edits to lose,
-     * and warning about one would be the unconditional prompt all over again.
-     */
+    /** True when leaving now would lose work. */
     isDirty(): boolean
     {
-        return this.dirtyFor(this._baseline === null ? null : this.signature());
-    }
+        if (this.outs.dirty.value) {
+            return true;
+        }
 
-    protected dirtyFor(signature: string): boolean
-    {
         for (let i = 0, n = this._providers.length; i < n; ++i) {
             if (this._providers[i]()) {
                 return true;
             }
         }
 
-        return this._baseline !== null && signature !== null && signature !== this._baseline;
+        return false;
     }
 
     update()
@@ -174,49 +195,29 @@ export default class CVSaveState extends CVDocumentObserver
 
     tick(context: IPulseContext)
     {
+        this._frame = context.frameNumber;
+
+        if (this._armed || !this._document) {
+            return false;
+        }
+
         const elapsed = context.secondsElapsed;
-        if (elapsed < this._nextPoll) {
-            return false;
+
+        if (this._armTime < 0) {
+            this._armTime = elapsed + CVSaveState.armDelay;
+            this._armDeadline = elapsed + CVSaveState.armTimeout;
         }
 
-        this._nextPoll = elapsed + CVSaveState.pollInterval;
-
-        const signature = this.signature();
-        if (signature === null) {
-            return false;
+        // Opening a document writes every property it restores, so edits only
+        // start counting once loading has settled. The deadline keeps a loading
+        // manager that never reports idle - a failed asset request is enough -
+        // from disabling tracking altogether.
+        if (this.assetManager.outs.busy.value && elapsed < this._armDeadline) {
+            this._armTime = elapsed + CVSaveState.armDelay;
         }
 
-        // A freshly opened document keeps moving for a while on its own: geometry
-        // sets the bounding box toDocument() writes, and linked properties such as
-        // the lights rotation driven by the camera orbit settle a few frames later.
-        // Waiting for the signature itself to hold still covers both, and cannot
-        // stall the way a loading flag can.
-        if (this._baseline === null) {
-            if (signature === this._candidate) {
-                if (++this._stableCount >= CVSaveState.stablePolls) {
-                    this._baseline = signature;
-                    this._candidate = null;
-                    this._stableCount = 0;
-                    this.outs.dirty.setValue(false);
-                }
-            }
-            else {
-                this._candidate = signature;
-                this._stableCount = 0;
-            }
-
-            return false;
-        }
-
-        const wasDirty = this.outs.dirty.value;
-        const isDirty = this.dirtyFor(signature);
-
-        if (isDirty !== wasDirty) {
-            this.outs.dirty.setValue(isDirty);
-
-            if (ENV_DEVELOPMENT && isDirty) {
-                this.reportDivergence();
-            }
+        if (elapsed >= this._armTime) {
+            this._armed = true;
         }
 
         return false;
@@ -224,36 +225,84 @@ export default class CVSaveState extends CVDocumentObserver
 
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
-        this._baseline = null;
-        this._candidate = null;
-        this._stableCount = 0;
+        this.detach(previous);
+
+        this._document = next;
+        this._armed = false;
+        this._suspendUntilFrame = -1;
+        this._armTime = -1;
+        this._armDeadline = 0;
         this.outs.dirty.setValue(false);
+
+        this.attach(next);
     }
 
     /**
-     * Logs where the document first diverges from the baseline. The signature can
-     * only say that something changed; this says what, which is what you want when
-     * the answer is surprising - an edit that should have registered and did not,
-     * or churn from a component nobody touched.
+     * Document state is spread over two graphs: the scene and its setup live in
+     * the document's inner graph, while title, intro and copyright are inputs of
+     * the document component itself, which sits in the graph above.
      */
-    protected reportDivergence()
+    protected attach(document: CVDocument)
     {
-        const signature = this.signature();
-        const baseline = this._baseline;
+        if (document) {
+            document.innerGraph.changeObserver = this.onComponentChanged;
+            document.graph.changeObserver = this.onComponentChanged;
+        }
+    }
 
-        if (signature === null || baseline === null) {
+    protected detach(document: CVDocument)
+    {
+        if (document) {
+            if (document.innerGraph.changeObserver === this.onComponentChanged) {
+                document.innerGraph.changeObserver = null;
+            }
+            if (document.graph.changeObserver === this.onComponentChanged) {
+                document.graph.changeObserver = null;
+            }
+        }
+    }
+
+    protected onComponentChanged = (component: Component) =>
+    {
+        if (this.outs.dirty.value || !this._armed || this.isSuspended) {
             return;
         }
 
-        let at = 0;
-        const limit = Math.min(signature.length, baseline.length);
-        while (at < limit && signature[at] === baseline[at]) {
-            ++at;
+        const document = this._document;
+        if (!document || (component !== document && component.graph !== document.innerGraph)) {
+            return;
         }
 
-        const from = Math.max(0, at - 60);
-        console.log("CVSaveState - document diverged from saved state at offset %s", at);
-        console.log("  saved: …%s", baseline.substring(from, at + 60));
-        console.log("  now:   …%s", signature.substring(from, at + 60));
+        const properties = component.ins.properties;
+        for (let i = 0, n = properties.length; i < n; ++i) {
+            if (this.isEdit(properties[i])) {
+                if (ENV_DEVELOPMENT) {
+                    console.log("CVSaveState - edited: %s.%s",
+                        (component.constructor as typeof Component).typeName, properties[i].path);
+                }
+
+                this.outs.dirty.setValue(true);
+                return;
+            }
+        }
+    };
+
+    /**
+     * Whether a changed property represents an edit to the document.
+     *
+     * Events are triggers rather than state, and object-valued properties are
+     * not serialized - the same test CVSnapshots applies when choosing what a
+     * snapshot may capture. A property fed by a link carries a derived value:
+     * orbiting the camera drives the lights rotation through such a link, which
+     * is what made navigation look like editing in earlier attempts. The link
+     * test covers element-wise links too, so hasMainInLinks() is not enough.
+     */
+    protected isEdit(property: Property): boolean
+    {
+        return property.changed
+            && !property.schema.event
+            && property.type !== "object"
+            && property.inLinks.length === 0
+            && CVSaveState.runtimeOnly.indexOf(property.path) < 0;
     }
 }

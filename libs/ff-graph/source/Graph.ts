@@ -42,6 +42,14 @@ export default class Graph extends Publisher
     /** List of root hierarchy components in this graph. */
     readonly roots: CHierarchy[] = [];
 
+    /**
+     * Optional observer, called during tick() for each component whose changed
+     * flag is set, immediately before the flags are cleared. Lets an owner see
+     * which properties changed in a frame without polling any state.
+     * Single owner: whoever assigns it is responsible for clearing it again.
+     */
+    changeObserver: ((component: Component) => void) = null;
+
     private _sorter = new LinkableSorter();
     private _sortRequested = true;
     private _sortedList: Readonly<Component[]> = null;
@@ -249,6 +257,10 @@ export default class Graph extends Publisher
 
                 if (component.tick && component.tick(context)) {
                     component.updated = true;
+                }
+
+                if (this.changeObserver) {
+                    this.changeObserver(component);
                 }
 
                 component.resetChanged();

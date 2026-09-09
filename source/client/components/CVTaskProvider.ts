@@ -24,6 +24,7 @@ import CComponentProvider, {
 } from "@ff/graph/components/CComponentProvider";
 
 import CVTask from "./CVTask";
+import CVSaveState from "./CVSaveState";
 import taskSets, { ETaskMode } from "../applications/taskSets";
 import { DEFAULT_LANGUAGE, ELanguageStringType, ELanguageType } from "client/schema/common";
 import CVLanguageManager from "./CVLanguageManager";
@@ -82,12 +83,28 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
 
     protected activateComponent(task: CVTask)
     {
-        task.activateTask();
+        // Tasks hide the grid, the reader, the interface and so on while they are
+        // active, and put them back afterwards. That is tool chrome, not an edit.
+        const saveState = this.getMainComponent(CVSaveState, true);
+        saveState && saveState.suspend();
+        try {
+            task.activateTask();
+        }
+        finally {
+            saveState && saveState.resume();
+        }
     }
 
     protected deactivateComponent(task: CVTask)
     {
-        task.deactivateTask();
+        const saveState = this.getMainComponent(CVSaveState, true);
+        saveState && saveState.suspend();
+        try {
+            task.deactivateTask();
+        }
+        finally {
+            saveState && saveState.resume();
+        }
     }
 
     protected onActiveComponent(previous: CVTask, next: CVTask)

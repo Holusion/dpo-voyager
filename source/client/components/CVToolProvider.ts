@@ -23,6 +23,7 @@ import CComponentProvider, {
 } from "@ff/graph/components/CComponentProvider";
 
 import CVTool from "./CVTool";
+import CVSaveState from "./CVSaveState";
 import CVAnalytics from "./CVAnalytics";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -67,14 +68,29 @@ export default class CVToolProvider extends CComponentProvider<CVTool>
 
     protected activateComponent(tool: CVTool)
     {
-        tool.activateTool();
+        // Same as tasks: a tool showing or hiding its own overlays is chrome.
+        const saveState = this.getMainComponent(CVSaveState, true);
+        saveState && saveState.suspend();
+        try {
+            tool.activateTool();
+        }
+        finally {
+            saveState && saveState.resume();
+        }
 
         this.analytics.sendProperty("Tools_ActiveTool", tool.text);
     }
 
     protected deactivateComponent(tool: CVTool)
     {
-        tool.deactivateTool();
+        const saveState = this.getMainComponent(CVSaveState, true);
+        saveState && saveState.suspend();
+        try {
+            tool.deactivateTool();
+        }
+        finally {
+            saveState && saveState.resume();
+        }
     }
 
     protected onActiveComponent(previous: CVTool, next: CVTool)
