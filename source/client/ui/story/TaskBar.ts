@@ -93,7 +93,7 @@ export default class TaskBar extends SystemView
         if(taskMode !== ETaskMode.Standalone){
             saveOptions.unshift(
                 {name: "save", icon: "save", text: saveName},
-                {name: "capture", icon: "save", text: languageManager.getUILocalizedString("Save Setup")},
+                {name: "capture", icon: "save", text: languageManager.getUILocalizedString("Save Scene State")},
             );
         }
 
@@ -113,7 +113,7 @@ export default class TaskBar extends SystemView
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group" style="min-width:100px">
                 ${1 < saveOptions.length? 
-                    html`<ff-dropdown caret text="${saveName}" icon="save" @select=${this.onSelectSave} .items=${saveOptions}></ff-dropdown>`
+                    html`<ff-dropdown caret align="right" text="${saveName}" icon="save" @select=${this.onSelectSave} .items=${saveOptions}></ff-dropdown>`
                   : html`<ff-button text="${saveOptions[0].text}" icon="${saveOptions[0].icon}" @click=${()=>this.onSelectSave(new CustomEvent("select", {detail: {item: saveOptions[0]}}))}></ff-button>`
                 }
                 ${exitButtonVisible ? html`<ff-button text="${languageManager.getUILocalizedString("Exit")}" icon="exit" @click=${this.onClickExit}></ff-button>` : null}
