@@ -11,6 +11,7 @@ import CTransform from "@ff/scene/components/CTransform";
 import CVNode from "./CVNode";
 import * as helpers from "@ff/three/helpers";
 import { IS_MOBILE } from "client/constants";
+import { withoutEdits } from "client/utils/editSuspension";
 
 interface ILOD{
   enabled?:boolean;
@@ -410,7 +411,7 @@ export default class CVDerivativesController extends Component{
         // We only want to authorize to cancel upsizing here, otherwise it cancels priority downsizing
         // Additionally, set the quality to the current derivative's value
         if (item.qualityRequest < current_quality){
-          item.model.ins.quality.setValue(item.model.activeDerivative.data.quality);
+          this.setQuality(item.model, item.model.activeDerivative.data.quality);
           current_quality = item.model.activeDerivative.data.quality;
           currently_loading --;
         }
@@ -431,7 +432,7 @@ export default class CVDerivativesController extends Component{
     // We cancel downsizing only if target textures are not over the allowed budget
     if (textureSize < this._budget){
       collection.filter((item)=> (item.model.isLoading() && item.model.ins.quality.value != item.qualityRequest && item.model.activeDerivative)).forEach((item)=> {
-          item.model.ins.quality.setValue(item.model.activeDerivative.data.quality);
+          this.setQuality(item.model, item.model.activeDerivative.data.quality);
           currently_loading --;
           textureSize += getSize(item.model, item.qualityRequest) - getSize(item.model, item.model.ins.quality.value);
           textureSizeBeforeUpgrades += getSize(item.model, item.qualityRequest) - getSize(item.model, item.model.ins.quality.value);
@@ -542,7 +543,7 @@ export default class CVDerivativesController extends Component{
       if(quality === current) continue;
       const bestMatchDerivative = model.derivatives.select(EDerivativeUsage.Web3D, quality);
       if(bestMatchDerivative && bestMatchDerivative.data.quality != current ){
-        model.ins.quality.setValue(bestMatchDerivative.data.quality);
+        this.setQuality(model, bestMatchDerivative.data.quality);
         currently_loading++;
       }
     }
@@ -571,6 +572,16 @@ export default class CVDerivativesController extends Component{
         this.ins.copyValues({
             enabled: !!data.enabled,
         });
+    }
+
+    /**
+     * Switches a model to another derivative. Dynamic LOD reacts to the camera,
+     * so this is not something the user did, even though the quality a model is
+     * displayed at is otherwise an editable, saved property.
+     */
+    protected setQuality(model :CVModel2, quality :EDerivativeQuality)
+    {
+        withoutEdits(this.system, () => model.ins.quality.setValue(quality));
     }
 
     toData(): ILOD

@@ -41,6 +41,7 @@ import CVEnvironment from "./CVEnvironment";
 import CVSetup from "./CVSetup";
 import { Dictionary } from "client/../../libs/ff-core/source/types";
 import Asset from "client/models/Asset";
+import { withoutEdits } from "client/utils/editSuspension";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -340,7 +341,10 @@ export default class CVModel2 extends CObject3D
                     // a model with no Web3D derivative at all (an AR-only model) has nothing to select
                     const derivative = this.derivatives.select(EDerivativeUsage.Web3D, EDerivativeQuality.High);
                     if (derivative) {
-                        this.ins.quality.setValue(derivative.data.quality);
+                        // Settling on a derivative is part of loading, not an
+                        // edit, and it lands well after the document is open.
+                        withoutEdits(this.system, () =>
+                            this.ins.quality.setValue(derivative.data.quality));
                     }
                  }
             });

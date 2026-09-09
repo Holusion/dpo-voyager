@@ -27,6 +27,7 @@ import { IDocument, IScene } from "client/schema/document";
 import CVNode from "./CVNode";
 import CVModel2 from "./CVModel2";
 import unitScaleFactor from "client/utils/unitScaleFactor";
+import { withoutEdits } from "client/utils/editSuspension";
 import CTransform from "client/../../libs/ff-scene/source/components/CTransform";
 import CVCamera from "./CVCamera";
 import CVSetup from "./CVSetup";
@@ -124,23 +125,39 @@ export default class CVScene extends CVNode
         const outs = this.outs;
 
         if (ins.units.changed) {
+            // Not bracketed: changing the scene units is an edit, and the
+            // rescaling it causes is part of what taking that edit back has to
+            // put right.
             this.updateTransformHierarchy();
             this.updateModelBoundingBox();
             this.updateLights();
             this.updateCameras();
             outs.units.setValue(ins.units.value);
         }
-        if (ins.modelUpdated.changed) {
-            this.updateModelBoundingBox();
-            this.updateLights();
-            this.updateCameras();
+
+        if (!ins.modelUpdated.changed && !ins.sceneTransformed.changed
+            && !ins.lightUpdated.changed) {
+            return true;
         }
-        if (ins.sceneTransformed.changed) {
-            this.updateModelBoundingBox();
-        }
-        if (ins.lightUpdated.changed) {
-            this.updateLights();
-        }
+
+        // What follows is all derived from the model bounding box: the floor
+        // radius, the camera frustum, the shadow size and the placement of the
+        // light rig. They are properties a save records, but the user did not
+        // author them - a model finishing its load rewrites them all - so they
+        // are kept out of the edit journal.
+        withoutEdits(this.system, () => {
+            if (ins.modelUpdated.changed) {
+                this.updateModelBoundingBox();
+                this.updateLights();
+                this.updateCameras();
+            }
+            if (ins.sceneTransformed.changed) {
+                this.updateModelBoundingBox();
+            }
+            if (ins.lightUpdated.changed) {
+                this.updateLights();
+            }
+        });
 
         return true;
     }

@@ -28,6 +28,7 @@ import { EUnitType } from "client/schema/common";
 import unitScaleFactor from "client/utils/unitScaleFactor";
 import Annotation from "../models/Annotation";
 import CVStaticAnnotationView from "./CVStaticAnnotationView";
+import { withoutEdits } from "client/utils/editSuspension";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -183,8 +184,12 @@ export default class CVTape extends CObject3D
             endMarker.updateMatrix();
 
             const defaultScale = radius * 0.05;
-            this.annotationView.ins.unitScale.setValue(defaultScale);
-            ins.endPosition.set(); // always trigger recalculation
+            // Derived from the scene bounds, like everything else that follows
+            // a model finishing its load, so it is not an edit.
+            withoutEdits(this.system, () => {
+                this.annotationView.ins.unitScale.setValue(defaultScale);
+                ins.endPosition.set(); // always trigger recalculation
+            });
         }
 
         // if tape is enabled, listen for pointer events to set tape start/end
