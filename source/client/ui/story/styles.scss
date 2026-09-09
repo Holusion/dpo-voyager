@@ -102,6 +102,22 @@ ff-tab-header, ff-dock-panel-header {
     align-self: center;
   }
 
+  // Unsaved changes: the save button carries the state, so the cue sits on it
+  // rather than adding another thing to the bar.
+  ff-button[data-unsaved] {
+    color: common.$color-secondary-light;
+
+    &::after {
+      content: "";
+      align-self: flex-start;
+      width: 6px;
+      height: 6px;
+      margin: 6px 6px 0 -4px;
+      border-radius: 50%;
+      background-color: common.$color-secondary-light;
+    }
+  }
+
   .sv-mode {
     font-size: 16px;
     font-weight: bold;

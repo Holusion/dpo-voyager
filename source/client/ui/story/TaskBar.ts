@@ -23,6 +23,7 @@ import Button, { IButtonClickEvent } from "@ff/ui/Button";
 import SystemView, { customElement, html } from "@ff/scene/ui/SystemView";
 
 import CVStoryApplication from "../../components/CVStoryApplication";
+import CVSaveState from "../../components/CVSaveState";
 import CVTaskProvider, { ETaskMode, IActiveTaskEvent, ITaskSetEvent } from "../../components/CVTaskProvider";
 import CVAssetReader from "../../components/CVAssetReader";
 import CVLanguageManager from "client/components/CVLanguageManager";
@@ -53,6 +54,10 @@ export default class TaskBar extends SystemView
         return this.system.getComponent(CVLanguageManager);
     }
 
+    protected get saveState() {
+        return this.system.getMainComponent(CVSaveState);
+    }
+
     protected firstConnected()
     {
         this.classList.add("sv-task-bar");
@@ -65,6 +70,7 @@ export default class TaskBar extends SystemView
         this.taskProvider.on<ITaskSetEvent>("scoped-components", this.onUpdate, this);
         this.taskProvider.on<IActiveTaskEvent>("active-component", this.onUpdate, this);
         this.language.outs.uiLanguage.on("value", this.onUpdate, this);
+        this.saveState.outs.dirty.on("value", this.onUpdate, this);
     }
 
     protected disconnected()
@@ -72,6 +78,7 @@ export default class TaskBar extends SystemView
         this.taskProvider.off<ITaskSetEvent>("scoped-components", this.onUpdate, this);
         this.taskProvider.off<IActiveTaskEvent>("active-component", this.onUpdate, this);
         this.language.outs.uiLanguage.on("value", this.onUpdate, this);
+        this.saveState.outs.dirty.off("value", this.onUpdate, this);
     }
 
     protected render()
@@ -84,6 +91,7 @@ export default class TaskBar extends SystemView
         const exitButtonVisible = taskMode !== ETaskMode.Standalone;
         const languageManager = this.language;
         const saveName = languageManager.getUILocalizedString(taskMode !== ETaskMode.Standalone ? "Save" : "Download");
+        const unsaved = this.saveState.outs.dirty.value;
         return html`
             <img class="sv-story-logo" src=${this.assetReader.getSystemAssetUrl("images/voyager-75grey.svg")} alt="Logo"/>
             <div class="sv-mode ff-text">${taskModeText}</div>
@@ -96,7 +104,7 @@ export default class TaskBar extends SystemView
             <div class="sv-spacer"></div>
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group">
-                <ff-button text=${saveName} icon="save" @click=${this.onClickSave}></ff-button>
+                <ff-button ?data-unsaved=${unsaved} text=${saveName} title=${unsaved ? "Unsaved changes" : saveName} icon="save" @click=${this.onClickSave}></ff-button>
                 ${downloadButtonVisible ? html`<ff-button text="${languageManager.getUILocalizedString("Download")}" icon="download" @click=${this.onClickDownload}></ff-button>` : null}
                 ${exitButtonVisible ? html`<ff-button text="${languageManager.getUILocalizedString("Exit")}" icon="exit" @click=${this.onClickExit}></ff-button>` : null}
             </div>

@@ -33,6 +33,7 @@ import { ETaskMode } from "../applications/taskSets";
 import CVMediaManager from "./CVMediaManager";
 import CVMeta from "./CVMeta";
 import CVStandaloneFileManager from "./CVStandaloneFileManager";
+import CVSaveState from "./CVSaveState";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -73,6 +74,12 @@ export default class CVStoryApplication extends Component
     }
     protected get standaloneFileManager() {
         return this.system.getComponent(CVStandaloneFileManager, true);
+    }
+    protected get saveState() {
+        return this.getMainComponent(CVSaveState);
+    }
+    protected get isStandalone() {
+        return this.taskProvider.ins.mode.getValidatedValue() === ETaskMode.Standalone;
     }
 
     constructor(node: Node, id: string)
@@ -118,7 +125,12 @@ export default class CVStoryApplication extends Component
 
                 if(storyMode !== ETaskMode.Standalone) {
                     this.assetWriter.putJSON(json, cvDocument.assetPath)
-                    .then(() => new Notification(`Successfully uploaded file to '${cvDocument.assetPath}'`, "info", 4000))
+                    .then(() => {
+                        // Only after the write lands: a failed upload leaves the
+                        // document unsaved, and the prompt should still say so.
+                        this.saveState.markSaved();
+                        new Notification(`Successfully uploaded file to '${cvDocument.assetPath}'`, "info", 4000);
+                    })
                     .catch(e => new Notification(`Failed to upload file to '${cvDocument.assetPath}'`, "error", 8000));
                 }
                 else {
@@ -160,7 +172,17 @@ export default class CVStoryApplication extends Component
      */
     protected beforeUnload(event)
     {
+        // Standalone holds the entire scene, uploaded media included, in memory
+        // only - leaving loses it whether or not the document itself was saved.
+        const atRisk = this.isStandalone
+            ? !!this.documentProvider.activeComponent
+            : this.saveState.isDirty();
+
+        if (!atRisk) {
+            return;
+        }
+
+        event.preventDefault();
         event.returnValue = "x";
-        //return "x";
     }
 }

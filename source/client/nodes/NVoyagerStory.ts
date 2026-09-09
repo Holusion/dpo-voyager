@@ -20,6 +20,7 @@ import Node from "@ff/graph/Node";
 import CVMediaManager from "../components/CVMediaManager";
 import CVAssetWriter from "../components/CVAssetWriter";
 import CVStoryApplication from "../components/CVStoryApplication";
+import CVSaveState from "../components/CVSaveState";
 import CVTimeManager from "client/components/CVTimeManager";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +34,7 @@ export default class NVoyagerStory extends Node
         this.createComponent(CVMediaManager);
         this.createComponent(CVTimeManager);
         this.createComponent(CVAssetWriter);
+        this.createComponent(CVSaveState);
         this.createComponent(CVStoryApplication);
     }
 }

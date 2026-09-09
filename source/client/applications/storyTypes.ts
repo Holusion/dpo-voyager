@@ -16,6 +16,7 @@
  */
 
 import CVStoryApplication from "../components/CVStoryApplication";
+import CVSaveState from "../components/CVSaveState";
 import CVAssetWriter from "../components/CVAssetWriter";
 import CVMediaManager from "../components/CVMediaManager";
 
@@ -42,6 +43,7 @@ import CVTimeManager from "client/components/CVTimeManager";
 
 const types = [
     CVStoryApplication,
+    CVSaveState,
     CVAssetWriter,
     CVMediaManager,
     CVStandaloneFileManager,

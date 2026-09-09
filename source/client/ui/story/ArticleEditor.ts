@@ -50,6 +50,7 @@ import CVAssetReader from "../../components/CVAssetReader";
 import CVAssetWriter from "../../components/CVAssetWriter";
 
 import CVMediaManager, { IAssetOpenEvent, IAssetRenameEvent } from "../../components/CVMediaManager";
+import CVSaveState from "../../components/CVSaveState";
 import CVStandaloneFileManager from "../../components/CVStandaloneFileManager";
 import CVReader from "../../components/CVReader";
 
@@ -80,6 +81,9 @@ export default class ArticleEditor extends SystemView
     }
     protected get articleReader() {
         return this.system.getComponent(CVReader);
+    }
+    protected get saveState() {
+        return this.system.getMainComponent(CVSaveState);
     }
 
     openArticle(assetPath: string)
@@ -210,11 +214,25 @@ export default class ArticleEditor extends SystemView
         this._overlay.classList.add("sv-overlay");
     }
 
+    /**
+     * Unsaved article body text. It lives in the editor, not in the document, so
+     * the document signature cannot see it - it has to be reported separately.
+     */
+    protected hasUnsavedArticle = () => {
+        try {
+            return !!tinymce.activeEditor && tinymce.activeEditor.isDirty();
+        }
+        catch (error) {
+            return false;
+        }
+    };
+
     protected connected()
     {
         super.connected();
         this.mediaManager.on<IAssetOpenEvent>("asset-open", this.onOpenAsset, this);
         this.mediaManager.on<IAssetRenameEvent>("asset-rename", this.onRenameAsset, this);
+        this.saveState.addDirtyProvider(this.hasUnsavedArticle);
 
         this._container.id = "editor_wrapper"
 
@@ -296,6 +314,7 @@ export default class ArticleEditor extends SystemView
 
     protected disconnected()
     {
+        this.saveState.removeDirtyProvider(this.hasUnsavedArticle);
         this.mediaManager.off<IAssetRenameEvent>("asset-rename", this.onRenameAsset, this);
         this.mediaManager.off<IAssetOpenEvent>("asset-open", this.onOpenAsset, this);
 
