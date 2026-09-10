@@ -42,8 +42,30 @@ export interface IJournalEntry
     time: number;
     /** False once the entry may no longer absorb further records. */
     open: boolean;
+    /** Compact identity of the entry, in property paths. For logs and tests. */
     name: string;
+    /** What the entry changed, in words, for the person about to undo it. */
+    title: string;
 }
+
+/**
+ * Turns a target and its values into words. The journal knows nothing about
+ * properties, so this is how the graph-side vocabulary - component names, enum
+ * options, colours - gets into an entry title. See utils/describeEdit.
+ */
+export interface IJournalNaming
+{
+    /** What changed, e.g. "Floor opacity". */
+    label(target: IJournalTarget): string;
+    /** One value of that target, e.g. "0.25", "on", "Left". */
+    value(target: IJournalTarget, value: any): string;
+}
+
+/** Naming of last resort: paths and raw values. Used when none is supplied. */
+export const defaultNaming: IJournalNaming = {
+    label: target => target.path,
+    value: (target, value) => JSON.stringify(value),
+};
 
 /** Value equality for property values: scalars, or arrays of them. */
 export function valuesEqual(a: any, b: any): boolean
@@ -90,6 +112,7 @@ export default class EditJournal
     static readonly defaultCapacity = 200;
 
     protected entries: IJournalEntry[] = [];
+    protected naming: IJournalNaming;
     protected pointer = -1;
     protected savedPointer = -1;
     /** True once the save point has been dropped or overwritten. */
@@ -97,9 +120,10 @@ export default class EditJournal
 
     readonly capacity: number;
 
-    constructor(capacity?: number)
+    constructor(capacity?: number, naming?: IJournalNaming)
     {
         this.capacity = capacity !== undefined ? capacity : EditJournal.defaultCapacity;
+        this.naming = naming || defaultNaming;
     }
 
     get length() {
@@ -137,6 +161,20 @@ export default class EditJournal
     }
 
     /**
+     * What an undo would take back, in words: "Floor opacity from 0.25 to 0.9".
+     * The values read in the direction the press moves them, so this is the
+     * entry title with its ends swapped.
+     */
+    get undoTitle() {
+        return this.canUndo ? this.describe(this.entries[this.pointer], true) : null;
+    }
+
+    /** What a redo would reapply, in words. Null when there is nothing ahead. */
+    get redoTitle() {
+        return this.canRedo ? this.describe(this.entries[this.pointer + 1], false) : null;
+    }
+
+    /**
      * Adds a change. Joins the open entry if one is still within the coalescing
      * window, otherwise starts a new one and discards anything ahead of the
      * pointer, the way any undo stack does on a fresh edit.
@@ -152,6 +190,7 @@ export default class EditJournal
                 // the entry began, and let the newest value be the result.
                 records[i].after = after;
                 entry.time = time;
+                entry.title = this.describe(entry, false);
                 return;
             }
         }
@@ -163,6 +202,31 @@ export default class EditJournal
         // "Renderer.Shader +3" says more than "4 changes".
         entry.name = records.length > 1
             ? `${records[0].target.path} +${records.length - 1}` : target.path;
+        entry.title = this.describe(entry, false);
+    }
+
+    /**
+     * The entry in words, reading from what it left behind to what it applied,
+     * or the other way round for [[reverse]]. Multi-record entries name the
+     * change they started from and count the rest: those followers are that
+     * edit's own consequences, and spelling out five of them helps nobody.
+     */
+    protected describe(entry: IJournalEntry, reverse: boolean): string
+    {
+        const records = entry.records;
+        if (records.length === 0) {
+            return "";
+        }
+
+        const { target, before, after } = records[0];
+        const label = this.naming.label(target);
+        const from = this.naming.value(target, reverse ? after : before);
+        const to = this.naming.value(target, reverse ? before : after);
+
+        const rest = records.length - 1;
+        const more = rest > 0 ? ` and ${rest} more change${rest > 1 ? "s" : ""}` : "";
+
+        return `${label} from ${from} to ${to}${more}`;
     }
 
     /** Closes the open entry, so the next change starts a new one. */
@@ -245,7 +309,7 @@ export default class EditJournal
             this.entries.length = this.pointer + 1;
         }
 
-        const entry: IJournalEntry = { records: [], time, open: true, name: "" };
+        const entry: IJournalEntry = { records: [], time, open: true, name: "", title: "" };
         this.entries.push(entry);
         this.pointer = this.entries.length - 1;
 

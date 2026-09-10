@@ -73,6 +73,8 @@ export default class TaskBar extends SystemView
         this.saveState.outs.dirty.on("value", this.onUpdate, this);
         this.saveState.outs.canUndo.on("value", this.onUpdate, this);
         this.saveState.outs.canRedo.on("value", this.onUpdate, this);
+        this.saveState.outs.undoTitle.on("value", this.onUpdate, this);
+        this.saveState.outs.redoTitle.on("value", this.onUpdate, this);
     }
 
     protected disconnected()
@@ -83,6 +85,8 @@ export default class TaskBar extends SystemView
         this.saveState.outs.dirty.off("value", this.onUpdate, this);
         this.saveState.outs.canUndo.off("value", this.onUpdate, this);
         this.saveState.outs.canRedo.off("value", this.onUpdate, this);
+        this.saveState.outs.undoTitle.off("value", this.onUpdate, this);
+        this.saveState.outs.redoTitle.off("value", this.onUpdate, this);
     }
 
     protected render()
@@ -98,6 +102,17 @@ export default class TaskBar extends SystemView
         const unsaved = this.saveState.outs.dirty.value;
         const canUndo = this.saveState.outs.canUndo.value;
         const canRedo = this.saveState.outs.canRedo.value;
+
+        // The tooltip says what the press would actually do - "Undo Floor
+        // opacity from 0.25 to 0.9" - so the button is not a leap of faith.
+        const undoText = languageManager.getUILocalizedString("Undo");
+        const redoText = languageManager.getUILocalizedString("Redo");
+        const undoTitle = canUndo
+            ? `${undoText} ${this.saveState.outs.undoTitle.value} (Ctrl+Z)`
+            : `${undoText} (Ctrl+Z)`;
+        const redoTitle = canRedo
+            ? `${redoText} ${this.saveState.outs.redoTitle.value} (Ctrl+Shift+Z)`
+            : `${redoText} (Ctrl+Shift+Z)`;
         return html`
             <img class="sv-story-logo" src=${this.assetReader.getSystemAssetUrl("images/voyager-75grey.svg")} alt="Logo"/>
             <div class="sv-mode ff-text">${taskModeText}</div>
@@ -110,8 +125,8 @@ export default class TaskBar extends SystemView
             <div class="sv-spacer"></div>
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group">
-                <ff-button text=${languageManager.getUILocalizedString("Undo")} title="${languageManager.getUILocalizedString("Undo")} (Ctrl+Z)" icon="undo" ?disabled=${!canUndo} @click=${this.onClickUndo}></ff-button>
-                <ff-button text=${languageManager.getUILocalizedString("Redo")} title="${languageManager.getUILocalizedString("Redo")} (Ctrl+Shift+Z)" icon="redo" ?disabled=${!canRedo} @click=${this.onClickRedo}></ff-button>
+                <ff-button text=${undoText} title="${undoTitle}" icon="undo" ?disabled=${!canUndo} @click=${this.onClickUndo}></ff-button>
+                <ff-button text=${redoText} title="${redoTitle}" icon="redo" ?disabled=${!canRedo} @click=${this.onClickRedo}></ff-button>
             </div>
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group">

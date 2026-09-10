@@ -1,6 +1,6 @@
 import { expect } from "chai";
 
-import EditJournal, { IJournalTarget, valuesEqual } from "client/utils/EditJournal";
+import EditJournal, { IJournalNaming, IJournalTarget, valuesEqual } from "client/utils/EditJournal";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -32,6 +32,12 @@ function edit(journal: EditJournal, target: Target, value: any, time: number)
 }
 
 const window = EditJournal.coalesceWindow;
+
+/** Naming that spells out a target the way the story tool's would. */
+const naming: IJournalNaming = {
+    label: target => target.path.split(".").pop(),
+    value: (target, value) => JSON.stringify(value),
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -219,5 +225,64 @@ describe("EditJournal", function() {
         expect(journal.length).to.equal(0);
         expect(journal.canUndo).to.be.false;
         expect(journal.isDirty).to.be.false;
+    });
+});
+
+describe("EditJournal titles", function() {
+
+    it("says what the change moved, and where from", function() {
+        const journal = new EditJournal(undefined, naming);
+        const opacity = new Target("Floor.Opacity", 0.9);
+
+        edit(journal, opacity, 0.25, 0);
+
+        expect(journal.log[0].title).to.equal("Opacity from 0.9 to 0.25");
+    });
+
+    it("reads an undo in the direction the press moves it", function() {
+        const journal = new EditJournal(undefined, naming);
+        const opacity = new Target("Floor.Opacity", 0.9);
+
+        edit(journal, opacity, 0.25, 0);
+
+        expect(journal.undoTitle).to.equal("Opacity from 0.25 to 0.9");
+        expect(journal.redoTitle).to.be.null;
+
+        journal.undo();
+
+        expect(journal.undoTitle).to.be.null;
+        expect(journal.redoTitle).to.equal("Opacity from 0.9 to 0.25");
+    });
+
+    it("keeps up as an entry absorbs more of the same drag", function() {
+        const journal = new EditJournal(undefined, naming);
+        const opacity = new Target("Floor.Opacity", 0.9);
+
+        edit(journal, opacity, 0.5, 0);
+        edit(journal, opacity, 0.25, 10);
+
+        // One entry, and it reads from where the drag started to where it is.
+        expect(journal.length).to.equal(1);
+        expect(journal.log[0].title).to.equal("Opacity from 0.9 to 0.25");
+    });
+
+    it("names the change it started from and counts the rest", function() {
+        const journal = new EditJournal(undefined, naming);
+        const enabled = new Target("Tape.Enabled", false);
+        const visible = new Target("Tape.Visible", false);
+
+        edit(journal, enabled, true, 0);
+        edit(journal, visible, true, 10);
+
+        expect(journal.log[0].title).to.equal("Enabled from false to true and 1 more change");
+    });
+
+    it("falls back to paths and raw values with no naming", function() {
+        const journal = new EditJournal();
+        const opacity = new Target("Floor.Opacity", 0.9);
+
+        edit(journal, opacity, 0.25, 0);
+
+        expect(journal.log[0].title).to.equal("Floor.Opacity from 0.9 to 0.25");
     });
 });

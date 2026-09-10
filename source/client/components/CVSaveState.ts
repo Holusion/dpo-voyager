@@ -20,6 +20,7 @@ import Property from "@ff/graph/Property";
 import { IPulseContext } from "@ff/graph/components/CPulse";
 
 import EditJournal, { valuesEqual } from "../utils/EditJournal";
+import { propertyNaming } from "../utils/describeEdit";
 
 import CVDocument from "./CVDocument";
 import CVDocumentObserver from "./CVDocumentObserver";
@@ -106,12 +107,16 @@ export default class CVSaveState extends CVDocumentObserver
         dirty: types.Boolean("State.Dirty"),
         canUndo: types.Boolean("State.CanUndo"),
         canRedo: types.Boolean("State.CanRedo"),
+        // What the next press would take back or reapply, in words, for a
+        // button label or tooltip. Empty when there is nothing to press.
+        undoTitle: types.String("State.UndoTitle"),
+        redoTitle: types.String("State.RedoTitle"),
     };
 
     ins = this.addInputs(CVSaveState.ins);
     outs = this.addOutputs(CVSaveState.outs);
 
-    readonly journal = new EditJournal();
+    readonly journal = new EditJournal(undefined, propertyNaming);
 
     private _document: CVDocument = null;
     private _armed = false;
@@ -151,6 +156,16 @@ export default class CVSaveState extends CVDocumentObserver
 
     get canRedo() {
         return this._armed && this.journal.canRedo;
+    }
+
+    /** What an undo would take back, in words. Empty when there is nothing. */
+    get undoTitle() {
+        return this.canUndo ? this.journal.undoTitle : "";
+    }
+
+    /** What a redo would reapply, in words. Empty when there is nothing. */
+    get redoTitle() {
+        return this.canRedo ? this.journal.redoTitle : "";
     }
 
     create()
@@ -297,7 +312,7 @@ export default class CVSaveState extends CVDocumentObserver
         const entry = this.applyJournal(() => this.journal.undo());
 
         if (ENV_DEVELOPMENT && entry) {
-            console.log(`CVSaveState - undo: ${entry.name}`);
+            console.log(`CVSaveState - undo: ${entry.title} [${entry.name}]`);
         }
 
         return !!entry;
@@ -312,7 +327,7 @@ export default class CVSaveState extends CVDocumentObserver
         const entry = this.applyJournal(() => this.journal.redo());
 
         if (ENV_DEVELOPMENT && entry) {
-            console.log(`CVSaveState - redo: ${entry.name}`);
+            console.log(`CVSaveState - redo: ${entry.title} [${entry.name}]`);
         }
 
         return !!entry;
@@ -563,9 +578,23 @@ export default class CVSaveState extends CVDocumentObserver
     protected updateOutputs()
     {
         const outs = this.outs;
-        outs.dirty.setValue(this.journal.isDirty || this._unjournaled);
-        outs.canUndo.setValue(this.canUndo);
-        outs.canRedo.setValue(this.canRedo);
+
+        // Property.setValue notifies whether or not the value moved, and this
+        // runs once per changed component per frame - on every frame of a drag.
+        // Writing only what changed keeps the task bar from re-rendering for
+        // nothing.
+        this.setOut(outs.dirty, this.journal.isDirty || this._unjournaled);
+        this.setOut(outs.canUndo, this.canUndo);
+        this.setOut(outs.canRedo, this.canRedo);
+        this.setOut(outs.undoTitle, this.undoTitle);
+        this.setOut(outs.redoTitle, this.redoTitle);
+    }
+
+    protected setOut<T>(property: Property, value: T)
+    {
+        if (property.value !== value as any) {
+            property.setValue(value as any);
+        }
     }
 
     protected now(): number
