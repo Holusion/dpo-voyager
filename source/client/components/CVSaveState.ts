@@ -69,8 +69,6 @@ export default class CVSaveState extends CVDocumentObserver
 
     /** Seconds of quiet from loading required before edits start counting. */
     protected static readonly armDelay = 0.5;
-    /** Hard cap on arming, in case the loading manager never reports idle. */
-    protected static readonly armTimeout = 15;
 
     /**
      * Frames an undo or redo is given to settle before changes count as edits
@@ -118,7 +116,6 @@ export default class CVSaveState extends CVDocumentObserver
     private _document: CVDocument = null;
     private _armed = false;
     private _armTime = -1;
-    private _armDeadline = 0;
     private _suspendCount = 0;
     private _suspendUntilFrame = -1;
     private _deferred = new Set<Component>();
@@ -366,16 +363,16 @@ export default class CVSaveState extends CVDocumentObserver
 
         if (this._armTime < 0) {
             this._armTime = elapsed + CVSaveState.armDelay;
-            this._armDeadline = elapsed + CVSaveState.armTimeout;
         }
 
         // Opening a document writes every property it restores, so edits only
-        // start counting once loading has settled. The deadline keeps a loading
-        // manager that never reports idle - a failed asset request is enough -
-        // from disabling tracking altogether.
+        // start counting once loading has settled. There is deliberately no
+        // deadline here: a loading manager that never reports idle is a leaked
+        // item somewhere in io/, and tracking staying off is the symptom that
+        // says so rather than something to wait out.
         const loading = this.assetManager.outs.busy.value || this.isLoadingModels();
 
-        if (loading && elapsed < this._armDeadline) {
+        if (loading) {
             this._armTime = elapsed + CVSaveState.armDelay;
         }
 
@@ -417,7 +414,6 @@ export default class CVSaveState extends CVDocumentObserver
         this._deferred.clear();
         this._deferBlanket = false;
         this._armTime = -1;
-        this._armDeadline = 0;
         this._unjournaled = false;
         this._shadow.clear();
         this.journal.clear();
