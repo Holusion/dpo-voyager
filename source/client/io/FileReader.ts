@@ -35,20 +35,31 @@ export default class FileReader
     {
         this._loadingManager.itemStart(url);
 
-        return fetch(url, {
-            headers: {
-                "Accept": "application/json"
-            }
-        }).then(result => {
+        try {
+            const result = await fetch(url, {
+                headers: {
+                    "Accept": "application/json"
+                }
+            });
+
             if (!result.ok) {
-                this._loadingManager.itemError(url);
-                this._loadingManager.itemEnd(url);
                 throw new Error(`failed to fetch from '${url}', status: ${result.status} ${result.statusText}`);
             }
 
+            return await result.json();
+        }
+        catch (error) {
+            this._loadingManager.itemError(url);
+            throw error;
+        }
+        finally {
+            // Every itemStart must be balanced, whatever happened, or the
+            // loading manager never reports idle again: itemEnd is what counts
+            // items off, and itemError does not. A rejected fetch - offline,
+            // blocked, aborted - used to leave the item open forever, and with
+            // it everything waiting on the manager to go quiet.
             this._loadingManager.itemEnd(url);
-            return result.json();
-        });
+        }
     }
 
     /**

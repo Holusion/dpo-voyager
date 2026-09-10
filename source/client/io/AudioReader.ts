@@ -40,11 +40,15 @@ export default class AudioReader
                     resolve(request.response); 
                 } else {
                     this.loadingManager.itemError(url);
+                    // itemError reports the failure, itemEnd is what counts the
+                    // item off; without both the manager stays busy for good.
+                    this.loadingManager.itemEnd(url);
                     reject(Error(request.statusText));
                 }
             };
             request.onerror = () => {
                 this.loadingManager.itemError(url);
+                this.loadingManager.itemEnd(url);
                 reject(Error("Possible network error"));
             };
             request.send();
