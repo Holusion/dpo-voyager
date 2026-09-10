@@ -821,17 +821,20 @@ export default class CVModel2 extends CObject3D
             _vec3a.sub(this._prevPosition);
             _vec3a.applyQuaternion(_quat1);
             _vec3a.applyMatrix4(_mat4);
-            
+
             anno.data.position = _vec3a.toArray();
 
             _vec3a.fromArray(anno.data.direction);
             _vec3a.applyQuaternion(_quat1);
             _vec3a.applyQuaternion(_quat);
-            
+
             anno.data.direction = _vec3a.toArray();
 
             anno.update();
-            annotations.updateAnnotation(anno, true);
+            // The annotations follow the model rather than being edited: the
+            // move itself is the edit, journalled as Model.Position, and undoing
+            // it re-runs this and carries them back.
+            annotations.updateAnnotationFollowing(anno);
         });
         this._prevPosition.copy(_vec3a.fromArray(ins.position.value));
         this._prevRotation.copy(_vec3a.fromArray(ins.rotation.value));

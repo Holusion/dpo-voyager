@@ -29,6 +29,7 @@ import CVModel2 from "./CVModel2";
 import CVMeta from "./CVMeta";
 import CVReader from "./CVReader";
 import unitScaleFactor from "../utils/unitScaleFactor";
+import { markUnjournaledEdit, resyncEditBaseline } from "../utils/editSuspension";
 
 import { IAnnotation } from "client/schema/model";
 import Annotation from "../models/Annotation";
@@ -186,6 +187,12 @@ export default class CVAnnotationView extends CObject3D
             ins.image.setValue(annotation ? annotation.data.imageUri : "", true);
             ins.imageCredit.setValue(annotation ? annotation.imageCredit : "", true);
             ins.imageAltText.setValue(annotation ? annotation.imageAltText : "", true);
+
+            // Selecting an annotation loads this panel silently, so every field
+            // above moved without the journal seeing it. Without this, the first
+            // edit to any of them would be recorded against the annotation that
+            // was selected before, and undo would write that one's text here.
+            resyncEditBaseline(this.system, this);
 
             this.emit<IAnnotationsUpdateEvent>({ type: "annotation-update", annotation });
         }
@@ -431,6 +438,7 @@ export default class CVAnnotationView extends CObject3D
         });
 
         this.changed = true;
+        markUnjournaledEdit(this.system);
     }
 
     removeAnnotation(annotation: Annotation)
@@ -450,6 +458,7 @@ export default class CVAnnotationView extends CObject3D
         }
 
         this.changed = true;
+        markUnjournaledEdit(this.system);
     }
 
     updateAnnotation(annotation: Annotation, forceSprite?: boolean)
@@ -457,7 +466,23 @@ export default class CVAnnotationView extends CObject3D
         if(forceSprite) {
             this.updateSprite(annotation);
         }
-        
+
+        this.changed = true;
+        markUnjournaledEdit(this.system);
+    }
+
+    /**
+     * Re-syncs an annotation that moved because something else moved it - a
+     * model carrying its annotations along as it is dragged. Not an edit: what
+     * caused it is journalled in its own right, and undoing that re-runs this.
+     *
+     * Separate from [[updateAnnotation]] rather than a flag on it because this
+     * runs on every frame of a drag, so it has to stay free of the graph walk a
+     * withoutEdits() bracket would cost here.
+     */
+    updateAnnotationFollowing(annotation: Annotation)
+    {
+        this.updateSprite(annotation);
         this.changed = true;
     }
 
@@ -641,6 +666,9 @@ export default class CVAnnotationView extends CObject3D
         ins.tags.setValue(annotation ? annotation.tags.join(", ") : "");
         ins.imageCredit.setValue(annotation ? annotation.imageCredit : "", true);
         ins.imageAltText.setValue(annotation ? annotation.imageAltText : "", true);
+
+        // Those writes are silent, so the journal did not see the values move.
+        resyncEditBaseline(this.system, this);
 
         // update article list
         const names = this.reader.articles.map(entry => entry.article.title);

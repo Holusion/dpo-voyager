@@ -336,6 +336,55 @@ export default class CVSaveState extends CVDocumentObserver
     }
 
     /**
+     * Re-takes the baseline for one component's properties.
+     *
+     * A panel that loads its fields for a newly selected item writes them
+     * silently, so the value moves without ever setting a changed flag - the
+     * observer never runs, and the shadow copy is left holding the value from
+     * whatever was selected before. The next real edit to that field would then
+     * be recorded against that stale value, and undo would write the previous
+     * item's text into the current one.
+     *
+     * So a panel that loads fields silently has to say when it has done it.
+     * Call this straight after: it is the same seed taken at arming, for one
+     * component. Prefer [[resyncEditBaseline]] in utils/editSuspension.
+     */
+    resyncBaseline(component: Component)
+    {
+        if (!this._armed || !component) {
+            return;
+        }
+
+        this.seedComponent(component);
+    }
+
+    /**
+     * Records an edit to state the observer cannot see, because it is not held
+     * in a graph property - an annotation's title, body or position. The
+     * document reads unsaved; undo cannot take it back, and only saving clears
+     * it. Prefer [[markUnjournaledEdit]] in utils/editSuspension, which is what
+     * components outside the story tool can call.
+     *
+     * Ignored inside a withoutEdits() bracket, so a recompute that drags
+     * annotations along - a model moving under them - is not an edit, the same
+     * rule property writes follow. Ignored before arming, so loading a document
+     * does not count.
+     */
+    markUnjournaledEdit()
+    {
+        if (!this._armed || this._captureDepth > 0) {
+            return;
+        }
+
+        if (ENV_DEVELOPMENT && !this._unjournaled) {
+            console.log("CVSaveState - edited: something the journal cannot undo");
+        }
+
+        this._unjournaled = true;
+        this.updateOutputs();
+    }
+
+    /**
      * Accepts the current state as saved. Call after a save completes, not when
      * it is issued, so a failed upload leaves the document marked unsaved.
      */
