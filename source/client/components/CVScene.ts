@@ -125,13 +125,16 @@ export default class CVScene extends CVNode
         const outs = this.outs;
 
         if (ins.units.changed) {
-            // Not bracketed: changing the scene units is an edit, and the
-            // rescaling it causes is part of what taking that edit back has to
-            // put right.
-            this.updateTransformHierarchy();
-            this.updateModelBoundingBox();
-            this.updateLights();
-            this.updateCameras();
+            // The unit change itself is the edit. Everything it rescales - the
+            // hierarchy, the bounds, the lights, the cameras - is a derived
+            // consequence, kept out of the journal: undoing the unit change
+            // re-runs this same branch and puts it all back.
+            withoutEdits(this.system, () => {
+                this.updateTransformHierarchy();
+                this.updateModelBoundingBox();
+                this.updateLights();
+                this.updateCameras();
+            });
             outs.units.setValue(ins.units.value);
         }
 

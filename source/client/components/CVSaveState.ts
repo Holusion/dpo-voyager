@@ -63,6 +63,15 @@ export type DirtyProvider = () => boolean;
  * What the hook cannot see is structural change: adding or removing an
  * annotation, creating or disposing a node, reordering a list. Those still mark
  * the document unsaved (see [[_unjournaled]]) but cannot yet be taken back.
+ *
+ * Not every property write is an edit. A model finishing its load rewrites the
+ * floor, the lights and the camera frustum from the new bounds; a task hides
+ * the grid while it is active. Those writes are bracketed at the site that
+ * makes them ([[withoutEdits]], [[suspend]]), which marks the properties they
+ * touch so the observer skips them (see [[_derived]]). The marks are scoped to
+ * the individual properties and last only until the observer has seen them, so
+ * a real edit to a different property of the same component in the same frame
+ * still lands in the journal.
  */
 export default class CVSaveState extends CVDocumentObserver
 {
@@ -73,12 +82,15 @@ export default class CVSaveState extends CVDocumentObserver
     protected static readonly armDelay = 0.5;
 
     /**
-     * Frames an undo or redo is given to settle before changes count as edits
-     * again. Restoring a value can start a chain that takes several frames to
-     * run out - putting the scene units back rescales the model hierarchy, and
-     * that rescale lands two ticks later - and none of it is a new edit.
+     * Frames after an undo or a redo during which nothing counts as an edit.
+     * Restoring a value sets off a chain that runs for several ticks and reaches
+     * internal machinery - the tape's label view, the grid's measurement tape -
+     * whose derived writes are not all bracketed. None of it is a new edit, and
+     * a stray record here would truncate the rest of the redo stack. Ends early
+     * on the next pointer or key press. Unlike [[_derived]], this is a blanket,
+     * but it is scoped to the undo/redo path - normal editing never sets it.
      */
-    protected static readonly undoSettleFrames = 4;
+    protected static readonly undoSettleFrames = 6;
 
     protected static readonly ins = {
         markSaved: types.Event("State.MarkSaved"),
@@ -107,12 +119,28 @@ export default class CVSaveState extends CVDocumentObserver
     private _document: CVDocument = null;
     private _armed = false;
     private _armTime = -1;
-    private _suspendCount = 0;
-    private _suspendUntilFrame = -1;
-    private _deferred = new Set<Component>();
-    private _deferBlanket = false;
     private _frame = 0;
     private _providers: DirtyProvider[] = [];
+
+    /** Depth of open withoutEdits()/suspend() brackets. */
+    private _captureDepth = 0;
+    /**
+     * The tracked properties already marked changed when the outermost bracket
+     * opened. Anything changed by the time it closes that is not in here was
+     * written by the bracket, so it is a derived recompute rather than an edit
+     * the user had in flight.
+     */
+    private _capturePending: Set<Property> = null;
+    /**
+     * Properties whose next observed change is a derived recompute, each stamped
+     * with the frame the mark was made. The observer consumes a mark when it
+     * sees the change - which is the same tick for a component it has not
+     * reached yet, the next tick for one it has - and tick() sweeps a mark that
+     * is older than that, so a mark never outlives the reaction it stands for.
+     */
+    private _derived = new Map<Property, number>();
+    /** While _frame is at or below this, an undo/redo is still settling; see undoSettleFrames. */
+    private _settleUntilFrame = -1;
 
     /** Last known value of every tracked property, keyed by the property. */
     private _shadow = new Map<Property, any>();
@@ -174,7 +202,7 @@ export default class CVSaveState extends CVDocumentObserver
         this.stopObserving();
         this._providers.length = 0;
         this._shadow.clear();
-        this._deferred.clear();
+        this._derived.clear();
         super.dispose();
     }
 
@@ -198,88 +226,126 @@ export default class CVSaveState extends CVDocumentObserver
     }
 
     /**
-     * Stops counting changes as edits until the matching resume(). Use it around
-     * changes the tool makes to its own chrome - activating a task hides the grid
-     * and restores it afterwards, which is not something the user did. Nests.
+     * Brackets a block whose property writes are derived, not authored: a task
+     * hiding the grid while it is active, or a model finishing its load and the
+     * floor, lights and cameras recomputing from the new bounds. Nests. Prefer
+     * [[withoutEdits]], which is what the scene components call.
      *
-     * The shadow copy is still maintained while suspended, so the next real edit
-     * still knows the value it started from.
+     * On the way in it notes what is already dirty; on the way out it marks
+     * every property the block newly touched (see [[markDerivedSince]]) so the
+     * observer skips it. An edit the user had in flight when the block opened is
+     * not in that set, so it still lands in the journal.
+     *
+     * The shadow copy is still maintained throughout, so the next real edit
+     * knows the value it started from.
      */
     suspend()
     {
         const started = this.metrics.enabled ? this.metrics.now() : 0;
-        let flushed = 0;
 
-        if (!this.isSuspended) {
-            // Anything already marked changed was written before this bracket
-            // opened, so it belongs in the journal. Record it now, or a task
-            // that suspends in the same frame as a real edit swallows it.
-            flushed = this.flushPending();
+        if (this._captureDepth++ === 0) {
+            this._capturePending = this._armed && this._document
+                ? this.collectChanged() : new Set();
         }
 
-        ++this._suspendCount;
-
         if (this.metrics.enabled) {
-            this.metrics.addSuspend(started, flushed);
+            this.metrics.addSuspend(started, this._capturePending.size);
         }
     }
 
     resume()
     {
-        if (this._suspendCount > 0 && --this._suspendCount === 0) {
-            const started = this.metrics.enabled ? this.metrics.now() : 0;
-            const deferred = this.deferSuspension();
+        if (this._captureDepth === 0 || --this._captureDepth > 0) {
+            return;
+        }
 
-            if (this.metrics.enabled) {
-                this.metrics.addDefer(started, deferred);
-            }
+        const started = this.metrics.enabled ? this.metrics.now() : 0;
+        const pending = this._capturePending;
+        this._capturePending = null;
+
+        const marked = pending ? this.markDerivedSince(pending) : 0;
+
+        if (this.metrics.enabled) {
+            this.metrics.addDefer(started, marked);
         }
     }
 
-    protected get isSuspended() {
-        return this._suspendCount > 0 || this._frame <= this._suspendUntilFrame;
-    }
-
-    /**
-     * Carries the suspension into the following frame, but only for the
-     * components that will react in it.
-     *
-     * The writes inside the bracket happened synchronously; the changed flags
-     * they set are not read until the next tick, and the components those
-     * writes reach have still to run their own update() - which is where the
-     * second wave lands. A component already marked changed here is one of
-     * those, and nothing else is. Suspending the whole next frame instead - the
-     * first version of this - loses any edit the user makes in it, which is how
-     * a colour change made while a model was still settling went missing.
-     */
-    protected deferSuspension(): number
+    /** Every tracked property currently marked changed. */
+    protected collectChanged(): Set<Property>
     {
+        const changed = new Set<Property>();
         const document = this._document;
-
-        this._deferred.clear();
-        this._deferBlanket = false;
-        this._suspendUntilFrame = this._frame + 1;
-
-        if (!this._armed || !document) {
-            return 0;
+        if (!document) {
+            return changed;
         }
 
         const components = document.innerGraph.components.getArray();
         for (let i = 0, n = components.length; i < n; ++i) {
-            if (components[i].changed) {
-                // Absorb what is already written, so only the reaction is left
-                // for the deferred suspension to hide.
-                this.processComponent(components[i], true);
-                this._deferred.add(components[i]);
+            this.collectComponentChanged(components[i], changed);
+        }
+        this.collectComponentChanged(document, changed);
+
+        return changed;
+    }
+
+    private collectComponentChanged(component: Component, out: Set<Property>)
+    {
+        if (!component.changed) {
+            return;
+        }
+        const properties = component.ins.properties;
+        for (let i = 0, n = properties.length; i < n; ++i) {
+            const property = properties[i];
+            // A property already marked derived is a recompute still in flight
+            // from an earlier frame's bracket, not an edit the user has in
+            // hand - so it is not "pending", and markDerivedSince() is free to
+            // re-mark it when this bracket closes. Without this, a cascade that
+            // outlives one bracket and overlaps the next leaks into the journal.
+            if (property.changed && this.isTracked(property) && !this._derived.has(property)) {
+                out.add(property);
             }
         }
+    }
 
-        if (document.changed) {
-            this.processComponent(document, true);
-            this._deferred.add(document);
+    /**
+     * Marks every property a just-closed bracket wrote - anything changed now
+     * that was not changed when the bracket opened - as a derived write for the
+     * observer to skip.
+     *
+     * The write happened synchronously; its changed flag is not read until the
+     * observer reaches that component, this tick or next. The mark bridges that
+     * gap and no more: it is stamped with the current frame, and tick() drops
+     * it once the observer has had its chance.
+     */
+    protected markDerivedSince(pending: Set<Property>): number
+    {
+        const document = this._document;
+        if (!this._armed || !document) {
+            return 0;
         }
 
-        return this._deferred.size;
+        let marked = 0;
+        const consider = (component: Component) => {
+            if (!component.changed) {
+                return;
+            }
+            const properties = component.ins.properties;
+            for (let i = 0, n = properties.length; i < n; ++i) {
+                const property = properties[i];
+                if (property.changed && this.isTracked(property) && !pending.has(property)) {
+                    this._derived.set(property, this._frame);
+                    ++marked;
+                }
+            }
+        };
+
+        const components = document.innerGraph.components.getArray();
+        for (let i = 0, n = components.length; i < n; ++i) {
+            consider(components[i]);
+        }
+        consider(document);
+
+        return marked;
     }
 
     /**
@@ -297,18 +363,15 @@ export default class CVSaveState extends CVDocumentObserver
      * Marks the start of a new user action: a pointer going down, a key going
      * down, a field committed. Two things follow from that. The entry changes
      * were joining is closed, so the next one becomes its own undo step. And
-     * the settle window an undo leaves behind is ended - it is there to absorb
-     * the machine's reaction to a restored value, and the user acting is proof
-     * that reaction is over.
+     * any derived-write marks still standing are dropped - they are there to
+     * absorb the machine's reaction to a load or an undo, and the user acting is
+     * proof that reaction is over.
      */
     commitEdit()
     {
         this.journal.commit();
-
-        if (this._deferBlanket) {
-            this._deferBlanket = false;
-            this._suspendUntilFrame = -1;
-        }
+        this._derived.clear();
+        this._settleUntilFrame = -1;
     }
 
     undo(): boolean
@@ -378,6 +441,19 @@ export default class CVSaveState extends CVDocumentObserver
     {
         this._frame = context.frameNumber;
 
+        // Drop derived-write marks the observer has already had a chance to
+        // consume. A mark is stamped with the frame it was made and is good for
+        // that frame and the next; past that it would only risk swallowing a
+        // real edit to the same property.
+        if (this._derived.size > 0) {
+            const frame = this._frame;
+            for (const [property, marked] of this._derived) {
+                if (frame - marked > 1) {
+                    this._derived.delete(property);
+                }
+            }
+        }
+
         if (this._armed || !this._document) {
             if (this.metrics.enabled && this._armed) {
                 ++this.metrics.frames;
@@ -436,9 +512,10 @@ export default class CVSaveState extends CVDocumentObserver
 
         this._document = next;
         this._armed = false;
-        this._suspendUntilFrame = -1;
-        this._deferred.clear();
-        this._deferBlanket = false;
+        this._captureDepth = 0;
+        this._capturePending = null;
+        this._derived.clear();
+        this._settleUntilFrame = -1;
         this._armTime = -1;
         this._unjournaled = false;
         this._shadow.clear();
@@ -484,46 +561,14 @@ export default class CVSaveState extends CVDocumentObserver
             return;
         }
 
-        const suspended = this._suspendCount > 0
-            || (this._frame <= this._suspendUntilFrame
-                && (this._deferBlanket || this._deferred.has(component)));
-
-        this.processComponent(component, suspended);
+        this.processComponent(component);
     };
 
-    /**
-     * Records everything that has changed but has not been observed yet. Called
-     * when a suspension opens, so the writes that preceded it are not lost with
-     * the ones it is there to hide.
-     */
-    protected flushPending(): number
-    {
-        const document = this._document;
-
-        if (!this._armed || !document) {
-            return 0;
-        }
-
-        let flushed = 0;
-        const components = document.innerGraph.components.getArray();
-        for (let i = 0, n = components.length; i < n; ++i) {
-            if (components[i].changed) {
-                this.processComponent(components[i], false);
-                ++flushed;
-            }
-        }
-
-        if (document.changed) {
-            this.processComponent(document, false);
-            ++flushed;
-        }
-
-        return flushed;
-    }
-
-    protected processComponent(component: Component, suspended: boolean)
+    protected processComponent(component: Component)
     {
         const shadow = this._shadow;
+        const derived = this._derived;
+        const frame = this._frame;
         const properties = component.ins.properties;
 
         const metrics = this.metrics;
@@ -531,6 +576,7 @@ export default class CVSaveState extends CVDocumentObserver
         let scanned = 0;
         let clones = 0;
         let records = 0;
+        let absorbed = 0;
 
         for (let i = 0, n = properties.length; i < n; ++i) {
             const property = properties[i];
@@ -556,7 +602,18 @@ export default class CVSaveState extends CVDocumentObserver
             shadow.set(property, after);
             ++clones;
 
-            if (suspended || !this.isEdit(property) || valuesEqual(before, after)) {
+            const mark = derived.get(property);
+            if (mark !== undefined) {
+                derived.delete(property);
+                if (frame - mark <= 1) {
+                    // A derived recompute: the shadow now holds its result, so
+                    // nothing downstream reads it as an edit either.
+                    ++absorbed;
+                    continue;
+                }
+            }
+
+            if (frame <= this._settleUntilFrame || !this.isEdit(property) || valuesEqual(before, after)) {
                 continue;
             }
 
@@ -578,7 +635,7 @@ export default class CVSaveState extends CVDocumentObserver
         this.updateOutputs();
 
         if (metrics.enabled) {
-            metrics.addScan(started, this._frame, scanned, clones, records, suspended);
+            metrics.addScan(started, this._frame, scanned, clones, records, absorbed > 0);
         }
     }
 
@@ -587,6 +644,12 @@ export default class CVSaveState extends CVDocumentObserver
     {
         const started = this.metrics.enabled ? this.metrics.now() : 0;
 
+        // Restoring a value is a derived write, and so is every recompute it
+        // sets off - the floor following the bounds, the hierarchy rescaling
+        // after a unit change. The bracket marks the restore itself; each
+        // recompute site (see withoutEdits) marks its own writes as the chain
+        // reaches it over the next few ticks, so nothing here has to guess how
+        // long that takes.
         this.suspend();
         let entry: ReturnType<EditJournal["undo"]>;
         try {
@@ -594,14 +657,9 @@ export default class CVSaveState extends CVDocumentObserver
         }
         finally {
             this.resume();
-
-            // resume() covers the components that are about to react, for one
-            // frame. An undo needs more than that: the chain it sets off runs
-            // for several ticks and reaches components that are not marked
-            // changed yet, so hold everything until it has run out.
-            this._deferred.clear();
-            this._deferBlanket = true;
-            this._suspendUntilFrame = this._frame + CVSaveState.undoSettleFrames;
+            // Hold everything for a few frames while the restore's chain runs
+            // out; see undoSettleFrames.
+            this._settleUntilFrame = this._frame + CVSaveState.undoSettleFrames;
         }
 
         this.updateOutputs();

@@ -17,8 +17,11 @@
 
 import { Dictionary } from "@ff/core/types";
 import Component from "@ff/graph/Component";
+import { IPulseContext } from "@ff/graph/components/CPulse";
 import CTweenMachine, { EEasingCurve } from "@ff/graph/components/CTweenMachine";
 import CLight from "@ff/scene/components/CLight";
+
+import { withoutEdits } from "client/utils/editSuspension";
 
 import { IObjectEvent } from "@ff/core/ObjectRegistry";
 
@@ -39,6 +42,24 @@ export default class CVSnapshots extends CTweenMachine
     static readonly typeName: string = "CVSnapshots";
 
     targetFeatures: Dictionary<boolean> = {};
+
+    /**
+     * A running tween writes camera pose and other saved properties every frame
+     * as it eases toward a snapshot - starting a tour, focusing an annotation,
+     * recalling a view. That is playback, not authoring, so its writes are kept
+     * out of the edit journal, the same treatment CVScene's recomputes get. The
+     * bracket is only paid while a tween is actually running.
+     */
+    tick(context: IPulseContext): boolean
+    {
+        if (!this.outs.tweening.value) {
+            return super.tick(context);
+        }
+
+        let updated = false;
+        withoutEdits(this.system, () => { updated = super.tick(context); });
+        return updated;
+    }
 
     create()
     {

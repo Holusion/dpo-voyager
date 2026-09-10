@@ -69,12 +69,14 @@ const URL = `http://localhost:8099/voyager-story-dev.html?root=${encodeURICompon
             if (gap > 0) await c.frames(gap);
 
             // What edit detection is holding at the moment of the write.
+            const opacity = c.find("CVFloor", "Floor.Opacity");
+            const derived = [ ...c.ss._derived.keys() ].map(p => p.path);
             const held = {
                 frame: c.ss._frame,
-                until: c.ss._suspendUntilFrame,
-                blanket: c.ss._deferBlanket,
-                deferred: [ ...c.ss._deferred ].map(x => x.constructor.typeName),
-                floorChanged: c.find("CVFloor", "Floor.Opacity").group.linkable.changed,
+                captureDepth: c.ss._captureDepth,
+                derivedCount: derived.length,
+                opacityMarkedDerived: c.ss._derived.has(opacity),
+                floorChanged: opacity.group.linkable.changed,
             };
 
             c.write("CVFloor", "Floor.Opacity", Number((0.2 + Math.random() * 0.5).toFixed(3)));
@@ -96,9 +98,9 @@ const URL = `http://localhost:8099/voyager-story-dev.html?root=${encodeURICompon
         console.log(`gap ${out.gap} frame(s): floor opacity ${out.opacityBefore} -> ${out.opacityNow}, `
             + `journalled=${journalled ? "yes" : "NO - SWALLOWED"}, floor radius moved by the cascade=${out.radiusMoved}`);
         console.log(`   floor position moved by the cascade=${out.positionMoved}`);
-        console.log(`   at the moment of the write: frame ${out.held.frame}, suspended until ${out.held.until}, `
-            + `blanket=${out.held.blanket}, floor already marked changed=${out.held.floorChanged}`);
-        console.log(`   deferred: ${out.held.deferred.join(", ") || "(nothing)"}`);
+        console.log(`   at the moment of the write: frame ${out.held.frame}, capture depth ${out.held.captureDepth}, `
+            + `opacity marked derived=${out.held.opacityMarkedDerived}, floor already marked changed=${out.held.floorChanged}`);
+        console.log(`   derived marks held: ${out.held.derivedCount}`);
         console.log(`   entries: ${out.names.join(" | ") || "(none)"}`);
     }
 

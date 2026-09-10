@@ -402,11 +402,16 @@ export default class CVTape extends CObject3D
         const toUnits = ins.globalUnits.getValidatedValue();
         this.outs.unitScale.setValue(unitScaleFactor(fromUnits, toUnits));
 
-        _vec3a.fromArray(ins.startPosition.value);
-        ins.startPosition.setValue(_vec3a.multiplyScalar(this.outs.unitScale.value).toArray());
-        _vec3a.fromArray(ins.endPosition.value);
-        ins.endPosition.setValue(_vec3a.multiplyScalar(this.outs.unitScale.value).toArray());
+        // Rescaling the endpoints to new scene units is a derived consequence of
+        // the unit change, not a fresh edit - undo re-runs it. A user placing
+        // the tape goes through onPointerUp, which is not this path.
+        withoutEdits(this.system, () => {
+            _vec3a.fromArray(ins.startPosition.value);
+            ins.startPosition.setValue(_vec3a.multiplyScalar(this.outs.unitScale.value).toArray());
+            _vec3a.fromArray(ins.endPosition.value);
+            ins.endPosition.setValue(_vec3a.multiplyScalar(this.outs.unitScale.value).toArray());
 
-        ins.localUnits.setValue(toUnits);
+            ins.localUnits.setValue(toUnits);
+        });
     }
 }

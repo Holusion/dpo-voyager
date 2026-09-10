@@ -25,6 +25,7 @@ import CObject3D, { IRenderContext } from "@ff/scene/components/CObject3D";
 
 import { IGrid } from "client/schema/setup";
 import { EUnitType } from "client/schema/common";
+import { withoutEdits } from "client/utils/editSuspension";
 
 import CVScene from "./CVScene";
 import CVTape from "./CVTape";
@@ -162,9 +163,13 @@ export default class CVGrid extends CObject3D
 
                 _vec3b.set(0, box.min.y, 0);
 
-                // update tape measurement to first major gridlines
-                this.tape.ins.startPosition.setValue([-size/2, box.min.y+(size/100), -size/2-(size/100)]);
-                this.tape.ins.endPosition.setValue([(-size/2)+(size/props.mainDivisions), box.min.y+(size/100), -size/2-(size/100)]);
+                // Park the measurement tape on the first major gridline. Derived
+                // from the scene bounds, so it is not an edit - undoing a model
+                // move re-runs this.
+                withoutEdits(this.system, () => {
+                    this.tape.ins.startPosition.setValue([-size/2, box.min.y+(size/100), -size/2-(size/100)]);
+                    this.tape.ins.endPosition.setValue([(-size/2)+(size/props.mainDivisions), box.min.y+(size/100), -size/2-(size/100)]);
+                });
             }
 
             props.axesEnabled = ins.axesEnabled.value;
@@ -184,15 +189,16 @@ export default class CVGrid extends CObject3D
 
         if (ins.visible.changed) {
             this.grid.visible = ins.visible.value;
-
-            // update tape label
-            this.tape.ins.visible.setValue(this.grid.visible && ins.labelEnabled.value);
         }
         if (ins.opacity.changed) {
             this.grid.opacity = ins.opacity.value;
         }
-        if(ins.labelEnabled.changed) {
-            this.tape.ins.visible.setValue(this.grid.visible && ins.labelEnabled.value);
+        if (ins.visible.changed || ins.labelEnabled.changed) {
+            // The measurement tape's visibility is slaved to the grid's, never
+            // set by the user directly - keep it out of the journal.
+            withoutEdits(this.system, () => {
+                this.tape.ins.visible.setValue(this.grid.visible && ins.labelEnabled.value);
+            });
         }
 
         return true;
