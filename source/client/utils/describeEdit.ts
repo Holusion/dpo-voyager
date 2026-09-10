@@ -26,31 +26,66 @@ const maxStringLength = 32;
 
 /**
  * Names an edit the way the person who made it would: "Floor opacity",
- * "Sunlight intensity", "Mausoleum base color". The component supplies the
- * subject - for anything living on a node, that is the node's own name, so two
- * models in one scene do not read alike - and the property supplies the rest.
+ * "Sunlight intensity", "Viewer annotations visible". Three parts, each
+ * dropped when it says nothing: the component it belongs to, the group the
+ * property sits in, and the property itself.
  */
 export function labelOf(target: IJournalTarget): string
 {
     const property = target as Property;
     const component = property.group && property.group.linkable as any;
 
-    const subject = component && component.displayName || "";
-    const rest = words(property.name || property.path);
+    const subject = component ? subjectOf(component) : "";
+    const parts = (property.path || "").split(".");
+    const name = words(parts.pop() || property.path);
+
+    // The group prefix carries real information when it names a facet of a
+    // bigger component - Annotations.Visible on the viewer, Shadow.Blur on a
+    // light - and none when it just repeats the component or is one of the
+    // library's generic bases.
+    let group = parts.length ? words(parts.join(" ")) : "";
+    if (group && (isNoise(group) || related(subject, group))) {
+        group = "";
+    }
+
+    const rest = [ group, name ].filter(part => !!part).join(" ").toLowerCase();
 
     if (!subject) {
-        return rest;
+        return sentence(rest);
     }
 
-    // "Grid" + "Visible" reads as "Grid visible"; a subject that already says
-    // it - "Floor" + "Floor opacity" from a one-component group - does not need
-    // saying twice.
-    const lowered = rest.toLowerCase();
-    if (lowered.startsWith(subject.toLowerCase())) {
-        return rest;
+    if (related(subject, rest)) {
+        return sentence(rest);
     }
 
-    return `${subject} ${lowered}`;
+    return `${subject} ${rest}`;
+}
+
+/**
+ * What to call the thing the property belongs to. displayName is right for
+ * anything the author has named - two models in a scene read differently - but
+ * it falls back to the type name, and the library's own fallback drops a single
+ * character, which leaves the V on Voyager's two-letter prefix. A document is
+ * named after its file, which is not what changed either.
+ */
+function subjectOf(component: any): string
+{
+    const name = component.displayName;
+
+    if (name && name !== component.displayTypeName && !isFileName(name)) {
+        return name;
+    }
+
+    if (component.text) {
+        return component.text;
+    }
+
+    const typeName = String(component.typeName || "");
+    const bare = /^CV[A-Z]/.test(typeName) ? typeName.substr(2)
+        : (/^C[A-Z]/.test(typeName) ? typeName.substr(1) : typeName);
+
+    // "Model2" is a class generation, not something to show anyone.
+    return words(bare.replace(/\d+$/, ""));
 }
 
 /**
@@ -128,6 +163,33 @@ function hex(rgb: number[]): string
         out += byte.toString(16).padStart(2, "0");
     }
     return out;
+}
+
+/** Group prefixes that come from a library base class and name nothing. */
+function isNoise(group: string): boolean
+{
+    return group === "Object" || group === "Transform";
+}
+
+/** Whether one of these already says the other, so saying both is noise. */
+function related(a: string, b: string): boolean
+{
+    if (!a || !b) {
+        return false;
+    }
+    const x = a.toLowerCase();
+    const y = b.toLowerCase();
+    return x.indexOf(y) >= 0 || y.indexOf(x) >= 0;
+}
+
+function isFileName(name: string): boolean
+{
+    return /\.[a-z0-9]{2,6}$/i.test(name);
+}
+
+function sentence(text: string): string
+{
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 /** "BaseColor" -> "Base Color", "ViewPreset" -> "View Preset". */

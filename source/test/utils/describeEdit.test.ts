@@ -9,13 +9,24 @@ import { labelOf, valueOf } from "client/utils/describeEdit";
  * component behind the group, and nothing else - which is what lets it be
  * tested without building a graph.
  */
-function property(path: string, schema?: any, componentName?: string): any
+function property(path: string, schema?: any, component?: any): any
 {
     return {
         path,
         name: path.split(".").pop(),
         schema: schema || {},
-        group: componentName === undefined ? null : { linkable: { displayName: componentName } },
+        group: component === undefined ? null : { linkable: component },
+    };
+}
+
+/** Stands in for a Component: a display name, a static text, a type name. */
+function comp(displayName: string, text?: string, typeName?: string): any
+{
+    return {
+        displayName,
+        text: text || "",
+        typeName: typeName || "",
+        displayTypeName: typeName ? typeName.substr(1) : "",
     };
 }
 
@@ -24,21 +35,40 @@ function property(path: string, schema?: any, componentName?: string): any
 describe("describeEdit labels", function() {
 
     it("puts the component in front of the property", function() {
-        expect(labelOf(property("Floor.Opacity", {}, "Floor"))).to.equal("Floor opacity");
-        expect(labelOf(property("Light.Intensity", {}, "Sunlight"))).to.equal("Sunlight intensity");
+        expect(labelOf(property("Floor.Opacity", {}, comp("Floor")))).to.equal("Floor opacity");
+        expect(labelOf(property("Light.Intensity", {}, comp("Sunlight")))).to.equal("Sunlight intensity");
     });
 
     it("splits the words a property name runs together", function() {
-        expect(labelOf(property("Material.BaseColor", {}, "Mausoleum"))).to.equal("Mausoleum base color");
-        expect(labelOf(property("Camera.ViewPreset", {}, "Camera"))).to.equal("Camera view preset");
+        expect(labelOf(property("Material.BaseColor", {}, comp("Mausoleum")))).to.equal("Mausoleum material base color");
+        expect(labelOf(property("Camera.ViewPreset", {}, comp("Camera")))).to.equal("Camera view preset");
     });
 
-    it("does not say the same word twice", function() {
-        expect(labelOf(property("Scene.Units", {}, "Units"))).to.equal("Units");
+    it("keeps a group that names a facet of a bigger component", function() {
+        expect(labelOf(property("Annotations.Visible", {}, comp("Viewer")))).to.equal("Viewer annotations visible");
+        expect(labelOf(property("Shadow.Blur", {}, comp("Directional Light")))).to.equal("Directional Light shadow blur");
+    });
+
+    it("drops a group that repeats the component or names a base class", function() {
+        expect(labelOf(property("Floor.Opacity", {}, comp("Floor")))).to.equal("Floor opacity");
+        expect(labelOf(property("Slice.Enabled", {}, comp("Slicer")))).to.equal("Slicer enabled");
+        expect(labelOf(property("Object.Visible", {}, comp("Grid")))).to.equal("Grid visible");
+    });
+
+    it("does not name a document after the file it came from", function() {
+        const document = comp("scene.svx.json", "", "CVDocument");
+        expect(labelOf(property("Document.Title", {}, document))).to.equal("Document title");
+    });
+
+    it("recovers a type name the library's fallback mangles", function() {
+        // displayTypeName drops one character, which leaves the V on CV*.
+        const background = comp("VBackground", "", "CVBackground");
+        expect(labelOf(property("Background.Color0", {}, background))).to.equal("Background color0");
     });
 
     it("falls back to the property alone with no component", function() {
-        expect(labelOf(property("Floor.Opacity"))).to.equal("Opacity");
+        expect(labelOf(property("Floor.Opacity"))).to.equal("Floor opacity");
+        expect(labelOf(property("Renderer.Exposure"))).to.equal("Renderer exposure");
     });
 });
 
