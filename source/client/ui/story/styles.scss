@@ -97,16 +97,26 @@ ff-tab-header, ff-dock-panel-header {
   }
 
   .sv-logo{
+    display: block;
     height: 28px;
     min-width: 28px;
-    flex: 0 50 126px;
     margin: 8px;
     align-self: center;
     .sv-short{
-      max-width: 28px;
+      display: none;
+      width: 28px;
     }
     .sv-full{
-      flex: 1 0 126px;
+      width: 126px;
+    }
+    @media screen and (max-width:1250px){
+      .sv-short{
+        display: block;
+      }
+      .sv-full{
+        display: none;
+      }
+      
     }
   }
 

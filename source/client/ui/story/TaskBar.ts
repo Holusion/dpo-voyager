@@ -98,10 +98,12 @@ export default class TaskBar extends SystemView
         }
 
         return html`
-            <sv-logo .assetPath=${this.assetReader.getSystemAssetUrl("")}></sv-logo>
-            <div class="sv-mode ff-text">
-                <span class="sv-mode-sm">${taskModeText.slice(0, 2)}</span>
-                <span class="sv-mode-lg">${taskModeText}</span>
+            <div class="ff-flex-row ff-group sv-logo-block">
+                <sv-logo .assetPath=${this.assetReader.getSystemAssetUrl("")}></sv-logo>
+                <div class="sv-mode ff-text">
+                    <span class="sv-mode-sm">${taskModeText.slice(0, 2)}</span>
+                    <span class="sv-mode-lg">${taskModeText}</span>
+                </div>
             </div>
             <div class="sv-spacer"></div>
             <div class="sv-divider"></div>
