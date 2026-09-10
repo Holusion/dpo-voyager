@@ -93,7 +93,7 @@ export default class TaskBar extends SystemView
         if(taskMode !== ETaskMode.Standalone){
             saveOptions.unshift(
                 {name: "save", icon: "save", text: saveName},
-                {name: "capture", icon: "save", text: languageManager.getUILocalizedString("Save Scene State")},
+                {name: "capture", icon: "save-state", text: languageManager.getUILocalizedString("Save Scene State")},
             );
         }
 
