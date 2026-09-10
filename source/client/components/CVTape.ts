@@ -196,11 +196,11 @@ export default class CVTape extends CObject3D
         if (ins.enabled.changed) {
             if (ins.enabled.value) {
                 this.system.on<IPointerEvent>("pointer-up", this.onPointerUp, this);
-                this.annotationView.ins.visible.setValue(this.outs.distance.value > 0);
+                this.setLabelVisible(this.outs.distance.value > 0);
             }
             else {
                 this.system.off<IPointerEvent>("pointer-up", this.onPointerUp, this);
-                this.annotationView.ins.visible.setValue(false);
+                this.setLabelVisible(false);
             }
         }
 
@@ -212,11 +212,11 @@ export default class CVTape extends CObject3D
                     startMarker.visible = true;
                     endMarker.visible = true;
                     line.visible = true;
-                    this.annotationView.ins.visible.setValue(true);
+                    this.setLabelVisible(true);
                 }
             }
             else {
-                this.annotationView.ins.visible.setValue(false);
+                this.setLabelVisible(false);
             }
         }
 
@@ -236,7 +236,7 @@ export default class CVTape extends CObject3D
             positions[1] = startMarker.position.y;
             positions[2] = startMarker.position.z;
             lineGeometry.attributes.position.needsUpdate = true;
-            this.annotationView.ins.visible.setValue(false);
+            this.setLabelVisible(false);
         }
 
         // update tape end point
@@ -266,11 +266,27 @@ export default class CVTape extends CObject3D
             this.label.title = tapeLength.toFixed(2) + " " + units;
             this.annotationView.updateAnnotation(this.label, true);
             if(tapeLength > 0 && this.ins.visible.value) {
-                this.annotationView.ins.visible.setValue(true);
+                this.setLabelVisible(true);
             }
         }
 
         return true;
+    }
+
+    /**
+     * Shows or hides the distance label.
+     *
+     * The label view is the tape's own chrome: its visibility is always derived
+     * from the tape - whether the tape is shown, whether two points have been
+     * placed, whether a measurement is half-made - and there is no panel in
+     * which a user sets it. Every branch of update() that decides it goes
+     * through here, so the derived write is bracketed once rather than at six
+     * call sites, and the edit journal never mistakes the label following the
+     * tape for something the user did.
+     */
+    protected setLabelVisible(visible: boolean)
+    {
+        withoutEdits(this.system, () => this.annotationView.ins.visible.setValue(visible));
     }
 
     fromData(data: ITape)

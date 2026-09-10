@@ -81,17 +81,6 @@ export default class CVSaveState extends CVDocumentObserver
     /** Seconds of quiet from loading required before edits start counting. */
     protected static readonly armDelay = 0.5;
 
-    /**
-     * Frames after an undo or a redo during which nothing counts as an edit.
-     * Restoring a value sets off a chain that runs for several ticks and reaches
-     * internal machinery - the tape's label view, the grid's measurement tape -
-     * whose derived writes are not all bracketed. None of it is a new edit, and
-     * a stray record here would truncate the rest of the redo stack. Ends early
-     * on the next pointer or key press. Unlike [[_derived]], this is a blanket,
-     * but it is scoped to the undo/redo path - normal editing never sets it.
-     */
-    protected static readonly undoSettleFrames = 6;
-
     protected static readonly ins = {
         markSaved: types.Event("State.MarkSaved"),
         undo: types.Event("State.Undo"),
@@ -139,8 +128,6 @@ export default class CVSaveState extends CVDocumentObserver
      * is older than that, so a mark never outlives the reaction it stands for.
      */
     private _derived = new Map<Property, number>();
-    /** While _frame is at or below this, an undo/redo is still settling; see undoSettleFrames. */
-    private _settleUntilFrame = -1;
 
     /** Last known value of every tracked property, keyed by the property. */
     private _shadow = new Map<Property, any>();
@@ -371,7 +358,6 @@ export default class CVSaveState extends CVDocumentObserver
     {
         this.journal.commit();
         this._derived.clear();
-        this._settleUntilFrame = -1;
     }
 
     undo(): boolean
@@ -515,7 +501,6 @@ export default class CVSaveState extends CVDocumentObserver
         this._captureDepth = 0;
         this._capturePending = null;
         this._derived.clear();
-        this._settleUntilFrame = -1;
         this._armTime = -1;
         this._unjournaled = false;
         this._shadow.clear();
@@ -613,7 +598,7 @@ export default class CVSaveState extends CVDocumentObserver
                 }
             }
 
-            if (frame <= this._settleUntilFrame || !this.isEdit(property) || valuesEqual(before, after)) {
+            if (!this.isEdit(property) || valuesEqual(before, after)) {
                 continue;
             }
 
@@ -657,9 +642,6 @@ export default class CVSaveState extends CVDocumentObserver
         }
         finally {
             this.resume();
-            // Hold everything for a few frames while the restore's chain runs
-            // out; see undoSettleFrames.
-            this._settleUntilFrame = this._frame + CVSaveState.undoSettleFrames;
         }
 
         this.updateOutputs();
