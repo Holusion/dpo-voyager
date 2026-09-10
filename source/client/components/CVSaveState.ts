@@ -21,6 +21,7 @@ import { IPulseContext } from "@ff/graph/components/CPulse";
 
 import EditJournal, { valuesEqual } from "../utils/EditJournal";
 import { propertyNaming } from "../utils/describeEdit";
+import EditMetrics from "../utils/editMetrics";
 
 import CVDocument from "./CVDocument";
 import CVDocumentObserver from "./CVDocumentObserver";
@@ -118,6 +119,9 @@ export default class CVSaveState extends CVDocumentObserver
 
     readonly journal = new EditJournal(undefined, propertyNaming);
 
+    /** INSTRUMENTATION. What edit detection costs; see utils/editMetrics. */
+    readonly metrics = new EditMetrics();
+
     private _document: CVDocument = null;
     private _armed = false;
     private _armTime = -1;
@@ -171,6 +175,14 @@ export default class CVSaveState extends CVDocumentObserver
     create()
     {
         super.create();
+
+        // INSTRUMENTATION. Read only when a report is asked for.
+        this.metrics.holdings = () => ({
+            shadow: this._shadow.size,
+            entries: this.journal.length,
+            records: this.journal.log.reduce((n, e) => n + e.records.length, 0),
+        });
+
         this.startObserving();
     }
 
@@ -213,20 +225,32 @@ export default class CVSaveState extends CVDocumentObserver
      */
     suspend()
     {
+        const started = this.metrics.enabled ? this.metrics.now() : 0;
+        let flushed = 0;
+
         if (!this.isSuspended) {
             // Anything already marked changed was written before this bracket
             // opened, so it belongs in the journal. Record it now, or a task
             // that suspends in the same frame as a real edit swallows it.
-            this.flushPending();
+            flushed = this.flushPending();
         }
 
         ++this._suspendCount;
+
+        if (this.metrics.enabled) {
+            this.metrics.addSuspend(started, flushed);
+        }
     }
 
     resume()
     {
         if (this._suspendCount > 0 && --this._suspendCount === 0) {
-            this.deferSuspension();
+            const started = this.metrics.enabled ? this.metrics.now() : 0;
+            const deferred = this.deferSuspension();
+
+            if (this.metrics.enabled) {
+                this.metrics.addDefer(started, deferred);
+            }
         }
     }
 
@@ -246,7 +270,7 @@ export default class CVSaveState extends CVDocumentObserver
      * first version of this - loses any edit the user makes in it, which is how
      * a colour change made while a model was still settling went missing.
      */
-    protected deferSuspension()
+    protected deferSuspension(): number
     {
         const document = this._document;
 
@@ -255,7 +279,7 @@ export default class CVSaveState extends CVDocumentObserver
         this._suspendUntilFrame = this._frame + 1;
 
         if (!this._armed || !document) {
-            return;
+            return 0;
         }
 
         const components = document.innerGraph.components.getArray();
@@ -272,6 +296,8 @@ export default class CVSaveState extends CVDocumentObserver
             this.processComponent(document, true);
             this._deferred.add(document);
         }
+
+        return this._deferred.size;
     }
 
     /**
@@ -371,6 +397,9 @@ export default class CVSaveState extends CVDocumentObserver
         this._frame = context.frameNumber;
 
         if (this._armed || !this._document) {
+            if (this.metrics.enabled && this._armed) {
+                ++this.metrics.frames;
+            }
             return false;
         }
 
@@ -485,30 +514,41 @@ export default class CVSaveState extends CVDocumentObserver
      * when a suspension opens, so the writes that preceded it are not lost with
      * the ones it is there to hide.
      */
-    protected flushPending()
+    protected flushPending(): number
     {
         const document = this._document;
 
         if (!this._armed || !document) {
-            return;
+            return 0;
         }
 
+        let flushed = 0;
         const components = document.innerGraph.components.getArray();
         for (let i = 0, n = components.length; i < n; ++i) {
             if (components[i].changed) {
                 this.processComponent(components[i], false);
+                ++flushed;
             }
         }
 
         if (document.changed) {
             this.processComponent(document, false);
+            ++flushed;
         }
+
+        return flushed;
     }
 
     protected processComponent(component: Component, suspended: boolean)
     {
         const shadow = this._shadow;
         const properties = component.ins.properties;
+
+        const metrics = this.metrics;
+        const started = metrics.enabled ? metrics.now() : 0;
+        let scanned = 0;
+        let clones = 0;
+        let records = 0;
 
         for (let i = 0, n = properties.length; i < n; ++i) {
             const property = properties[i];
@@ -517,10 +557,13 @@ export default class CVSaveState extends CVDocumentObserver
                 continue;
             }
 
+            ++scanned;
+
             if (!property.changed) {
                 // Seen for the first time on a component created after arming.
                 if (!shadow.has(property)) {
                     shadow.set(property, property.cloneValue());
+                    ++clones;
                 }
                 continue;
             }
@@ -529,6 +572,7 @@ export default class CVSaveState extends CVDocumentObserver
             const before = shadow.get(property);
             const after = property.cloneValue();
             shadow.set(property, after);
+            ++clones;
 
             if (suspended || !this.isEdit(property) || valuesEqual(before, after)) {
                 continue;
@@ -540,6 +584,7 @@ export default class CVSaveState extends CVDocumentObserver
 
             if (known) {
                 this.journal.record(property, before, after, this.now());
+                ++records;
             }
             else {
                 // No baseline to undo to - this property belongs to something
@@ -549,11 +594,17 @@ export default class CVSaveState extends CVDocumentObserver
         }
 
         this.updateOutputs();
+
+        if (metrics.enabled) {
+            metrics.addScan(started, this._frame, scanned, clones, records, suspended);
+        }
     }
 
     /** Runs an undo or a redo without the resulting writes counting as edits. */
     protected applyJournal(apply: () => ReturnType<EditJournal["undo"]>)
     {
+        const started = this.metrics.enabled ? this.metrics.now() : 0;
+
         this.suspend();
         let entry: ReturnType<EditJournal["undo"]>;
         try {
@@ -572,6 +623,11 @@ export default class CVSaveState extends CVDocumentObserver
         }
 
         this.updateOutputs();
+
+        if (this.metrics.enabled) {
+            this.metrics.addApply(started);
+        }
+
         return entry;
     }
 
@@ -613,6 +669,8 @@ export default class CVSaveState extends CVDocumentObserver
             return;
         }
 
+        const started = this.metrics.enabled ? this.metrics.now() : 0;
+
         this._shadow.clear();
 
         const components = document.innerGraph.components.getArray();
@@ -621,6 +679,10 @@ export default class CVSaveState extends CVDocumentObserver
         }
 
         this.seedComponent(document);
+
+        if (this.metrics.enabled) {
+            this.metrics.addSeed(started, this._shadow.size);
+        }
     }
 
     protected seedComponent(component: Component)
