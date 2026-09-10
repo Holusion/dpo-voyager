@@ -38,6 +38,13 @@ export interface IPropertySchema<T = any>
     event?: boolean;
     static?: boolean; // not linkable if true
     semantic?: string;
+    /**
+     * Runtime state rather than part of what a save writes: which article the
+     * reader has open, whether the navigation prompt is showing, a viewer
+     * preference set from the URL. Such a property changing is not an edit to
+     * the document, so anything tracking unsaved work ignores it.
+     */
+    transient?: boolean;
 }
 
 export type SchemaProps<T> = Partial<IPropertySchema<T>> | T;

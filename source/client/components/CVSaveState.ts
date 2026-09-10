@@ -80,24 +80,6 @@ export default class CVSaveState extends CVDocumentObserver
      */
     protected static readonly undoSettleFrames = 4;
 
-    /**
-     * Properties that carry runtime state on an otherwise serialized component.
-     * They are written by ordinary viewer interaction and are not part of what
-     * a save records, so a change to one is not an edit.
-     */
-    protected static readonly runtimeOnly = [
-        "Camera.IsInUse",
-        "Navigation.PromptActive",
-        // Which article the reader has focus on; CVReader.toData() saves the
-        // reader's enabled state and position, never this.
-        "Reader.Focus",
-        // A trigger rather than state: navigation applies the preset to the
-        // orbit and immediately writes the property back to None, so there is
-        // nothing here for undo to hold on to. What it moves is the camera,
-        // which the journal leaves alone in any case.
-        "Camera.ViewPreset",
-    ];
-
     protected static readonly ins = {
         markSaved: types.Event("State.MarkSaved"),
         undo: types.Event("State.Undo"),
@@ -713,12 +695,19 @@ export default class CVSaveState extends CVDocumentObserver
      * drives the lights rotation through such a link, which is what made
      * navigation look like editing in earlier attempts. The link test covers
      * element-wise links too, so hasMainInLinks() is not enough.
+     *
+     * A transient property is runtime state that no save writes - which
+     * article is open, whether the navigation prompt is showing - and says so
+     * in its own schema. That has to be a declaration rather than something
+     * derived: "absent from this component's toData" is not the same as "not
+     * persisted", since a broadcast control like the viewer's quality is saved
+     * through the models it writes to.
      */
     protected isEdit(property: Property): boolean
     {
         return property.changed
             && this.isTracked(property)
             && property.inLinks.length === 0
-            && CVSaveState.runtimeOnly.indexOf(property.path) < 0;
+            && !property.schema.transient;
     }
 }

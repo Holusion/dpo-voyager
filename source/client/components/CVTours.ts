@@ -35,10 +35,12 @@ export default class CVTours extends Component
     static readonly sceneSnapshotId = "scene-default";
 
     protected static readonly ins = {
-        enabled: types.Boolean("Tours.Enabled"),
-        tourIndex: types.Integer("Tours.Index", -1),
+        // Where playback is: which tour is running and which step of it.
+        // The tours themselves are saved, this is the visitor's position.
+        enabled: types.Boolean("Tours.Enabled", { transient: true }),
+        tourIndex: types.Integer("Tours.Index", { preset: -1, transient: true }),
         closed: types.Event("Tours.Closed"),
-        stepIndex: types.Integer("Step.Index"),
+        stepIndex: types.Integer("Step.Index", { transient: true }),
         next: types.Event("Step.Next"),
         previous: types.Event("Step.Previous"),
         first: types.Event("Step.First"),

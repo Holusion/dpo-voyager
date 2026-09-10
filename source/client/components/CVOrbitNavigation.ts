@@ -68,10 +68,14 @@ export default class CVOrbitNavigation extends CObject3D
 
     protected static readonly ins = {
         enabled: types.Boolean("Settings.Enabled", true),
-        pointerEnabled: types.Boolean("Settings.PointerEnabled", true),
-        promptEnabled: types.Boolean("Settings.PromptEnabled", true),
-        isInUse: types.Boolean("Camera.IsInUse", false),
-        preset: types.Enum("Camera.ViewPreset", EViewPreset, EViewPreset.None),
+        // Embedding options, set from the query string, never from the scene.
+        pointerEnabled: types.Boolean("Settings.PointerEnabled", { preset: true, transient: true }),
+        promptEnabled: types.Boolean("Settings.PromptEnabled", { preset: true, transient: true }),
+        // Whether the visitor has touched the scene yet.
+        isInUse: types.Boolean("Camera.IsInUse", { preset: false, transient: true }),
+        // A trigger: applying a preset writes the property straight back to
+        // None, and what it moves is the camera.
+        preset: types.Enum("Camera.ViewPreset", EViewPreset, { preset: EViewPreset.None, transient: true }),
         projection: types.Enum("Camera.Projection", EProjection, EProjection.Perspective),
         lightsFollowCamera: types.Boolean("Navigation.LightsFollowCam", true),
         autoRotation: types.Boolean("Navigation.AutoRotation", false),
@@ -85,8 +89,8 @@ export default class CVOrbitNavigation extends CObject3D
         minOffset: types.Vector3("Limits.Min.Offset", [ -Infinity, -Infinity, 0.1 ]),
         maxOrbit: types.Vector3("Limits.Max.Orbit", [ 90, Infinity, Infinity ]),
         maxOffset: types.Vector3("Limits.Max.Offset", [ Infinity, Infinity, Infinity ]),
-        keyNavActive: types.Enum("Navigation.KeyNavActive", EKeyNavMode),
-        promptActive: types.Boolean("Navigation.PromptActive", false)
+        keyNavActive: types.Enum("Navigation.KeyNavActive", EKeyNavMode, { transient: true }),
+        promptActive: types.Boolean("Navigation.PromptActive", { preset: false, transient: true })
     };
 
     ins = this.addInputs<CObject3D, typeof CVOrbitNavigation.ins>(CVOrbitNavigation.ins);

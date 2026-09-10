@@ -68,8 +68,9 @@ export default class CVViewer extends Component
     protected static readonly ins = {
         annotationsVisible: types.Boolean("Annotations.Visible"),
         annotationExit: types.Event("Annotations.Exit"),
-        annotationFocus: types.Boolean("Annotations.Focus", false),
-        activeAnnotation: types.String("Annotations.ActiveId"),
+        // Which annotation the visitor has open.
+        annotationFocus: types.Boolean("Annotations.Focus", { preset: false, transient: true }),
+        activeAnnotation: types.String("Annotations.ActiveId", { transient: true }),
         activeTags: types.Tags("Tags.Active"),
         sortedTags: types.Tags("Tags.Sorted"),
         radioTags: types.Boolean("Tags.Radio"),

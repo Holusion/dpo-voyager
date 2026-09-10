@@ -51,12 +51,15 @@ export default class CVReader extends Component
 
     protected static readonly ins = {
         enabled: types.Boolean("Reader.Enabled"),
-        visible: types.Boolean("Reader.Visible", true), // TODO: Swap enabled and visible
+        // Whether the reader panel is open right now; toData saves enabled.
+        visible: types.Boolean("Reader.Visible", { preset: true, transient: true }), // TODO: Swap enabled and visible
         closed: types.Event("Reader.Closed"),
         refresh: types.Event("Reader.Refresh"),
         position: types.Enum("Reader.Position", EReaderPosition),
-        articleId: types.String("Article.ID"),
-        focus: types.Boolean("Reader.Focus"),
+        // Which article is being read, and whether it has focus: where the
+        // visitor is in the document, not what the document says.
+        articleId: types.String("Article.ID", { transient: true }),
+        focus: types.Boolean("Reader.Focus", { transient: true }),
     };
 
     protected static readonly outs = {

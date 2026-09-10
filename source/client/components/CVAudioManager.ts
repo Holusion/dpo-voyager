@@ -59,8 +59,9 @@ export default class CVAudioManager extends Component
     protected static readonly ins = {
         playNarration: types.Event("Audio.PlayNarration"),
         reset: types.Event("Audio.Reset"),
-        activeCaption: types.String("Audio.ActiveCaption"),
-        captionsEnabled: types.Boolean("Audio.CaptionsEnabled", true),
+        // The caption on screen now, and whether the visitor wants captions.
+        activeCaption: types.String("Audio.ActiveCaption", { transient: true }),
+        captionsEnabled: types.Boolean("Audio.CaptionsEnabled", { preset: true, transient: true }),
     };
 
     protected static readonly outs = {

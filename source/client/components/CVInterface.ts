@@ -33,7 +33,8 @@ export default class CVInterface extends Component
         logo: types.Boolean("Interface.Logo", true),
         menu: types.Boolean("Interface.Menu", true),
         tools: types.Boolean("Interface.Tools", true),
-        visibleElements: types.Number("Interface.VisibleElements", 127)
+        // Which chrome an embedder asked for, via the query string.
+        visibleElements: types.Number("Interface.VisibleElements", { preset: 127, transient: true })
     };
 
     protected static readonly outs = {

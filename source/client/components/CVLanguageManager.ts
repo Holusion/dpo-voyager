@@ -51,11 +51,16 @@ export default class CVLanguageManager extends Component
     static readonly isSystemSingleton = true;
 
     protected static readonly ins = {
-        enabled: types.Boolean("Language.Enabled", false),
+        // Whether the viewer offers a language menu at all; chrome, not scene.
+        enabled: types.Boolean("Language.Enabled", { preset: false, transient: true }),
+        // The language the interface is in, which is the reader's choice.
+        // activeLanguage below is the one a save records, and the three share
+        // a path - so only the schema can tell them apart.
         uiLanguage: types.Enum("Interface.Language", ELanguageType, {
             preset: ELanguageType[DEFAULT_LANGUAGE],
             enum: ELanguageType,
-            options: enumToArray(ELanguageStringType).map(key => ELanguageStringType[key])
+            options: enumToArray(ELanguageStringType).map(key => ELanguageStringType[key]),
+            transient: true
         }),
         primarySceneLanguage: types.Enum("Interface.Language", ELanguageType, {
             preset: ELanguageType[DEFAULT_LANGUAGE],
