@@ -17,27 +17,32 @@
 
 import { IGeometryLoader, ILoaderModule } from "../types";
 
-import ObjLoaderPlugin from "./ObjLoaderPlugin";
-import PlyLoaderPlugin from "./PlyLoaderPlugin";
-
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Default (single-bundle) geometry loader registry.
+// Geometry loader registry.
 //
-// Every loader is statically imported here, so webpack compiles all of them
-// into the main bundle, as required by default. Selected via the
-// "@loaders/geometry" alias in webpack.config.js unless VOYAGER_MODULAR_LOADERS
-// is set, in which case registry.modular.ts is used instead.
+// Every entry below is loaded through a dynamic import(). Whether that turns
+// into a real on-demand network request or gets compiled straight into the
+// current bundle (the default) is decided entirely by webpack's
+// `module.parser.javascript.dynamicImportMode`, set in webpack.config.js from
+// VOYAGER_MODULAR_LOADERS - this file is identical either way. Extensions are
+// listed here rather than read off the loader class so a URL's validity can
+// be checked without the loader's code having run yet.
 //
 // To add a new geometry format: create a plugin implementing IGeometryLoader
-// (see ObjLoaderPlugin.ts), then add one entry below AND a matching one in
-// registry.modular.ts. Nothing else needs to change.
+// (see ObjLoaderPlugin.ts) and add one entry below. Nothing else needs to change.
 //
 ////////////////////////////////////////////////////////////////////////////////
 
 const modules: ILoaderModule<IGeometryLoader>[] = [
-    { extensions: ObjLoaderPlugin.extensions, load: async () => ObjLoaderPlugin },
-    { extensions: PlyLoaderPlugin.extensions, load: async () => PlyLoaderPlugin },
+    {
+        extensions: [ "obj" ],
+        load: () => import(/* webpackChunkName: "loader-obj" */ "./ObjLoaderPlugin").then(m => m.default),
+    },
+    {
+        extensions: [ "ply" ],
+        load: () => import(/* webpackChunkName: "loader-ply" */ "./PlyLoaderPlugin").then(m => m.default),
+    },
 ];
 
 export default modules;

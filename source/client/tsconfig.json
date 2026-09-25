@@ -13,11 +13,6 @@
 
         "baseUrl": ".",
         "paths": {
-            // Type-checked against the default (single-bundle) registry; webpack's
-            // own resolve.alias picks the "bundle" or "modular" one at build time -
-            // both export the same shape, so this doesn't affect which is used.
-            "@loaders/geometry": [ "./io/loaders/geometry/registry.bundle" ],
-            "@loaders/model": [ "./io/loaders/model/registry.bundle" ],
             "client/*": [ "./*" ],
             "@ff/core/*": [ "../../libs/ff-core/source/*" ],
             "@ff/graph/*": [ "../../libs/ff-graph/source/*" ],

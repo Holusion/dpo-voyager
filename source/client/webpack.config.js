@@ -23,7 +23,8 @@
 // VOYAGER_OFFLINE        True for an offline build (no external dependencies)
 // VOYAGER_ANALYTICS_ID   Google Analytics ID
 // VOYAGER_MODULAR_LOADERS  True to split model/geometry loaders (obj/ply/gltf) into
-//                          separate, lazily-fetched chunks instead of the single bundle.
+//                          separate, lazily-fetched chunks instead of the single bundle
+//                          (see module.parser.javascript.dynamicImportMode below).
 //                          Can also be set with `--env modularLoaders=true`.
 //
 ////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +101,6 @@ module.exports = function(env, argv)
     const isDevMode = argv.mode !== undefined ? argv.mode !== "production" : process.env["NODE_ENV"] !== "production";
     const isOffline = argv.offline !== undefined ? true : process.env["VOYAGER_OFFLINE"] === "true";
     const isModularLoaders = env.modularLoaders !== undefined ? true : process.env["VOYAGER_MODULAR_LOADERS"] === "true";
-    const loadersMode = isModularLoaders ? "modular" : "bundle";
 
 
     const devMode = isDevMode ? "development" : "production";
@@ -146,12 +146,6 @@ module.exports = function(env, argv)
         resolve: {
             // Aliases for FF Foundation Library components
             alias: {
-                // Loader registries: swapping these two entries between their
-                // "bundle" (default, single chunk) and "modular" (dynamic
-                // import() per format) implementations is the only thing
-                // VOYAGER_MODULAR_LOADERS changes. See source/client/io/loaders/.
-                "@loaders/geometry": path.resolve(dirs.source, `client/io/loaders/geometry/registry.${loadersMode}.ts`),
-                "@loaders/model": path.resolve(dirs.source, `client/io/loaders/model/registry.${loadersMode}.ts`),
                 "client": path.resolve(dirs.source, "client"),
                 "@ff/core": path.resolve(dirs.libs, "ff-core/source"),
                 "@ff/graph": path.resolve(dirs.libs, "ff-graph/source"),
@@ -209,6 +203,18 @@ module.exports = function(env, argv)
 
         // loaders execute transforms on a per-file basis
         module: {
+            parser: {
+                javascript: {
+                    // The obj/ply/gltf loaders (source/client/io/loaders/) are all
+                    // written as dynamic import()s. In the default ("eager") mode
+                    // webpack resolves them synchronously into whichever bundle
+                    // requested them - no extra chunk, no extra request, byte-for-byte
+                    // the same output as a static import. Setting VOYAGER_MODULAR_LOADERS
+                    // flips this one setting to "lazy", which is what makes those same
+                    // import() calls become real on-demand chunks instead.
+                    dynamicImportMode: isModularLoaders ? "lazy" : "eager",
+                },
+            },
             rules: [
                 {
                     // Raw text and shader files

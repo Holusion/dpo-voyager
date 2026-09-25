@@ -19,18 +19,19 @@ import { IModelLoader, ILoaderModule } from "../types";
 
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Modular model loader registry.
+// Model loader registry.
 //
-// Each loader is fetched with a dynamic import() only when a file of its
-// type is actually requested, so webpack splits it into its own chunk (named
-// via webpackChunkName below). Extensions/mimeTypes are listed here rather
-// than read off the loader class, so a URL's validity can be checked without
-// downloading that loader's code (and, for glTF, its DRACO/KTX2/meshopt
-// dependencies).
+// Every entry below is loaded through a dynamic import(). Whether that turns
+// into a real on-demand network request or gets compiled straight into the
+// current bundle (the default) is decided entirely by webpack's
+// `module.parser.javascript.dynamicImportMode`, set in webpack.config.js from
+// VOYAGER_MODULAR_LOADERS - this file is identical either way. Extensions and
+// mimeTypes are listed here rather than read off the loader class so a URL's
+// validity can be checked without the loader's code (and, for glTF, its
+// DRACO/KTX2/meshopt dependencies) having run yet.
 //
 // To add a new model format: create a plugin implementing IModelLoader (see
-// GltfLoaderPlugin.ts), then add one entry below AND a matching one in
-// registry.bundle.ts. Nothing else needs to change.
+// GltfLoaderPlugin.ts) and add one entry below. Nothing else needs to change.
 //
 ////////////////////////////////////////////////////////////////////////////////
 

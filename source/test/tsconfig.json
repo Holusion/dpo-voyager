@@ -14,8 +14,6 @@
       "baseUrl": ".",
       "outDir": "build",
       "paths": {
-          "@loaders/geometry": [ "../client/io/loaders/geometry/registry.bundle" ],
-          "@loaders/model": [ "../client/io/loaders/model/registry.bundle" ],
           "client/*": [ "../client/*" ],
           "@ff/core/*": [ "../../libs/ff-core/source/*" ],
           "@ff/graph/*": [ "../../libs/ff-graph/source/*" ],

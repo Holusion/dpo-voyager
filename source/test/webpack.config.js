@@ -41,10 +41,6 @@ module.exports = {
         ],
         // Aliases for FF Foundation Library components
         alias: {
-            // See source/client/webpack.config.js: tests always exercise the
-            // default (single-bundle) loader registries.
-            "@loaders/geometry": path.resolve(dirs.source, "client/io/loaders/geometry/registry.bundle.ts"),
-            "@loaders/model": path.resolve(dirs.source, "client/io/loaders/model/registry.bundle.ts"),
             "client": path.resolve(dirs.source, "client"),
             "@ff/core": path.resolve(dirs.libs, "ff-core/source"),
             "@ff/graph": path.resolve(dirs.libs, "ff-graph/source"),
@@ -61,6 +57,14 @@ module.exports = {
 
     // loaders execute transforms on a per-file basis
     module: {
+        parser: {
+            javascript: {
+                // Test bundles run as plain Node scripts, not in a browser, so the
+                // obj/ply/gltf loaders' dynamic import()s (source/client/io/loaders/)
+                // must resolve synchronously rather than as webpack-runtime-loaded chunks.
+                dynamicImportMode: "eager",
+            },
+        },
         rules: [
             {
                 // Raw text and shader files

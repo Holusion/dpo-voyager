@@ -21,7 +21,7 @@ import CRenderer from "@ff/scene/components/CRenderer";
 import { disposeObject } from "@ff/three/helpers";
 import { addCustomMaterialDefines, extendShaders } from "client/shaders/ShaderExtension";
 
-import modelLoaderModules from "@loaders/model";
+import modelLoaderModules from "./loaders/model/registry";
 import LoaderRegistry from "./loaders/LoaderRegistry";
 import { IModelLoader, IModelLoaderResult } from "./loaders/types";
 

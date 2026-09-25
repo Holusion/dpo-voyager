@@ -17,7 +17,7 @@
 
 import { LoadingManager, BufferGeometry } from "three";
 
-import geometryLoaderModules from "@loaders/geometry";
+import geometryLoaderModules from "./loaders/geometry/registry";
 import LoaderRegistry from "./loaders/LoaderRegistry";
 import { IGeometryLoader } from "./loaders/types";
 
