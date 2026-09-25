@@ -30,8 +30,8 @@ import { IModelLoader, ILoaderModule } from "../types";
 // validity can be checked without the loader's code (and, for glTF, its
 // DRACO/KTX2/meshopt dependencies) having run yet.
 //
-// To add a new model format: create a plugin implementing IModelLoader (see
-// GltfLoaderPlugin.ts) and add one entry below. Nothing else needs to change.
+// To add a new model format: create a loader implementing IModelLoader (see
+// GltfLoader.ts) and add one entry below. Nothing else needs to change.
 //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +39,7 @@ const modules: ILoaderModule<IModelLoader>[] = [
     {
         extensions: [ "gltf", "glb" ],
         mimeTypes: [ "model/gltf+json", "model/gltf-binary" ],
-        load: () => import(/* webpackChunkName: "loader-gltf" */ "./GltfLoaderPlugin").then(m => m.default),
+        load: () => import(/* webpackChunkName: "loader-gltf" */ "./GltfLoader").then(m => m.default),
     },
 ];
 

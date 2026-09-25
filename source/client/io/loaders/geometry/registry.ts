@@ -29,19 +29,19 @@ import { IGeometryLoader, ILoaderModule } from "../types";
 // listed here rather than read off the loader class so a URL's validity can
 // be checked without the loader's code having run yet.
 //
-// To add a new geometry format: create a plugin implementing IGeometryLoader
-// (see ObjLoaderPlugin.ts) and add one entry below. Nothing else needs to change.
+// To add a new geometry format: create a loader implementing IGeometryLoader
+// (see ObjLoader.ts) and add one entry below. Nothing else needs to change.
 //
 ////////////////////////////////////////////////////////////////////////////////
 
 const modules: ILoaderModule<IGeometryLoader>[] = [
     {
         extensions: [ "obj" ],
-        load: () => import(/* webpackChunkName: "loader-obj" */ "./ObjLoaderPlugin").then(m => m.default),
+        load: () => import(/* webpackChunkName: "loader-obj" */ "./ObjLoader").then(m => m.default),
     },
     {
         extensions: [ "ply" ],
-        load: () => import(/* webpackChunkName: "loader-ply" */ "./PlyLoaderPlugin").then(m => m.default),
+        load: () => import(/* webpackChunkName: "loader-ply" */ "./PlyLoader").then(m => m.default),
     },
 ];
 

@@ -22,10 +22,10 @@
  * URL and letting each caller abort just its own interest in it: the
  * underlying `fetch` is only cancelled once every caller has aborted.
  *
- * Extracted from the glTF loader so any binary-format loader plugin (glTF
- * today, potentially others later) can reuse the same cancellable, shared
- * fetch behavior without depending on three.js' LoadingManager/FileLoader,
- * whose progress tracking isn't used here.
+ * Extracted from the glTF loader so any binary-format loader (glTF today,
+ * potentially others later) can reuse the same cancellable, shared fetch
+ * behavior without depending on three.js' LoadingManager/FileLoader, whose
+ * progress tracking isn't used here.
  */
 export default class AbortableLoadQueue
 {

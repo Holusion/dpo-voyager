@@ -30,7 +30,7 @@ import AbortableLoadQueue from "../utils/AbortableLoadQueue";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-export default class GltfLoaderPlugin implements IModelLoader
+export default class GltfLoader implements IModelLoader
 {
     static readonly extensions = [ "gltf", "glb" ];
     static readonly mimeTypes = [ "model/gltf+json", "model/gltf-binary" ];

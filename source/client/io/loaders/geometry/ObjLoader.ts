@@ -22,7 +22,7 @@ import { IGeometryLoader, ILoaderContext } from "../types";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-export default class ObjLoaderPlugin implements IGeometryLoader
+export default class ObjLoader implements IGeometryLoader
 {
     static readonly extensions = [ "obj" ];
 

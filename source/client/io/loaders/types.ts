@@ -20,7 +20,7 @@ import CRenderer from "@ff/scene/components/CRenderer";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/** Shared construction context passed to every loader plugin. */
+/** Shared construction context passed to every loader. */
 export interface ILoaderContext
 {
     loadingManager: LoadingManager;
@@ -34,10 +34,9 @@ export interface ILoaderContext
  * listed statically here so a file can be routed to the right loader before
  * that loader's module has been fetched.
  *
- * `load()` resolves to the loader's class. In the default (single-bundle)
- * registry it resolves immediately from a static import; in the modular
- * registry it resolves via a dynamic `import()`, which is what lets webpack
- * split that loader into its own chunk.
+ * `load()` resolves to the loader's class via a dynamic `import()`. Whether
+ * that turns into a real on-demand chunk or gets resolved straight into the
+ * current bundle depends on webpack's `dynamicImportMode` (see webpack.config.js).
  */
 export interface ILoaderModule<TLoader>
 {
@@ -46,20 +45,20 @@ export interface ILoaderModule<TLoader>
     load(): Promise<{ new(context: ILoaderContext): TLoader }>;
 }
 
-/** A loader plugin able to parse geometry-only formats (e.g. OBJ, PLY). */
+/** A loader able to parse geometry-only formats (e.g. OBJ, PLY). */
 export interface IGeometryLoader
 {
     load(url: string): Promise<BufferGeometry>;
 }
 
-/** Common result shape every model loader plugin must produce, regardless of source format. */
+/** Common result shape every model loader must produce, regardless of source format. */
 export interface IModelLoaderResult
 {
     scene: Object3D;
     animations?: AnimationClip[];
 }
 
-/** A loader plugin able to parse full scene/model formats (e.g. glTF/GLB). */
+/** A loader able to parse full scene/model formats (e.g. glTF/GLB). */
 export interface IModelLoader
 {
     load(url: string, options?: { signal?: AbortSignal }): Promise<IModelLoaderResult>;

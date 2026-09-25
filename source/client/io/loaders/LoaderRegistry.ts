@@ -20,11 +20,10 @@ import { ILoaderContext, ILoaderModule } from "./types";
 ////////////////////////////////////////////////////////////////////////////////
 
 /**
- * Resolves file extensions to loader plugin instances.
+ * Resolves file extensions to loader instances.
  *
  * Instantiation is lazy and cached per extension: the first file of a given
- * type triggers `module.load()` (a no-op in the default bundle, a dynamic
- * `import()` in the modular one) and construction of the plugin; every
+ * type triggers `module.load()` and construction of the loader; every
  * subsequent file of that type reuses the same instance. Concurrent requests
  * for the same, not-yet-resolved extension share a single in-flight promise.
  */
