@@ -22,6 +22,9 @@
 // NODE_ENV               development | production
 // VOYAGER_OFFLINE        True for an offline build (no external dependencies)
 // VOYAGER_ANALYTICS_ID   Google Analytics ID
+// VOYAGER_MODULAR_LOADERS  True to split model/geometry loaders (obj/ply/gltf) into
+//                          separate, lazily-fetched chunks instead of the single bundle.
+//                          Can also be set with `--env modularLoaders=true`.
 //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -96,6 +99,8 @@ module.exports = function(env, argv)
     const appKey = env.app || "explorer";
     const isDevMode = argv.mode !== undefined ? argv.mode !== "production" : process.env["NODE_ENV"] !== "production";
     const isOffline = argv.offline !== undefined ? true : process.env["VOYAGER_OFFLINE"] === "true";
+    const isModularLoaders = env.modularLoaders !== undefined ? true : process.env["VOYAGER_MODULAR_LOADERS"] === "true";
+    const loadersMode = isModularLoaders ? "modular" : "bundle";
 
 
     const devMode = isDevMode ? "development" : "production";
@@ -132,12 +137,21 @@ module.exports = function(env, argv)
         output: {
             path: dirs.output,
             filename: isDevMode ? "js/[name].dev.js" : "js/[name].min.js",
+            // Only matters when VOYAGER_MODULAR_LOADERS chunks off the individual loaders;
+            // in the default (single-bundle) build no async chunks are ever created.
+            chunkFilename: isDevMode ? "js/[name].dev.js" : "js/[name].min.js",
             //clean: true,
         },
 
         resolve: {
             // Aliases for FF Foundation Library components
             alias: {
+                // Loader registries: swapping these two entries between their
+                // "bundle" (default, single chunk) and "modular" (dynamic
+                // import() per format) implementations is the only thing
+                // VOYAGER_MODULAR_LOADERS changes. See source/client/io/loaders/.
+                "@loaders/geometry": path.resolve(dirs.source, `client/io/loaders/geometry/registry.${loadersMode}.ts`),
+                "@loaders/model": path.resolve(dirs.source, `client/io/loaders/model/registry.${loadersMode}.ts`),
                 "client": path.resolve(dirs.source, "client"),
                 "@ff/core": path.resolve(dirs.libs, "ff-core/source"),
                 "@ff/graph": path.resolve(dirs.libs, "ff-graph/source"),

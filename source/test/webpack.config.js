@@ -41,6 +41,10 @@ module.exports = {
         ],
         // Aliases for FF Foundation Library components
         alias: {
+            // See source/client/webpack.config.js: tests always exercise the
+            // default (single-bundle) loader registries.
+            "@loaders/geometry": path.resolve(dirs.source, "client/io/loaders/geometry/registry.bundle.ts"),
+            "@loaders/model": path.resolve(dirs.source, "client/io/loaders/model/registry.bundle.ts"),
             "client": path.resolve(dirs.source, "client"),
             "@ff/core": path.resolve(dirs.libs, "ff-core/source"),
             "@ff/graph": path.resolve(dirs.libs, "ff-graph/source"),

@@ -17,57 +17,36 @@
 
 import { LoadingManager, BufferGeometry } from "three";
 
-import {OBJLoader} from "three/examples/jsm/loaders/OBJLoader.js";
-import {PLYLoader} from "three/examples/jsm/loaders/PLYLoader.js";
+import geometryLoaderModules from "@loaders/geometry";
+import LoaderRegistry from "./loaders/LoaderRegistry";
+import { IGeometryLoader } from "./loaders/types";
 
 ////////////////////////////////////////////////////////////////////////////////
 
 export default class GeometryReader
 {
-    static readonly extensions = [ "obj", "ply" ];
+    // Kept as a static for compatibility with code that checks supported
+    // extensions before constructing a reader.
+    static get extensions(): string[]
+    {
+        return geometryLoaderModules.flatMap(module => module.extensions);
+    }
 
-    protected objLoader: any;
-    protected plyLoader: any;
+    private registry: LoaderRegistry<IGeometryLoader>;
 
     constructor(loadingManager: LoadingManager)
     {
-        this.objLoader = new OBJLoader(loadingManager);
-        this.plyLoader = new PLYLoader(loadingManager);
+        this.registry = new LoaderRegistry(geometryLoaderModules, { loadingManager });
     }
 
     isValid(url: string): boolean
     {
-        const extension = url.split(".").pop().toLowerCase();
-        return GeometryReader.extensions.indexOf(extension) >= 0;
+        return this.registry.isValid(url);
     }
 
-    get(url: string): Promise<BufferGeometry>
+    async get(url: string): Promise<BufferGeometry>
     {
-        const extension = url.split(".").pop().toLowerCase();
-
-        return new Promise((resolve, reject) => {
-            if (extension === "obj") {
-                this.objLoader.load(url, result => {
-                    const geometry = result.children[0].geometry;
-                    if (geometry && geometry.type === "Geometry" || geometry.type === "BufferGeometry") {
-                        return resolve(geometry);
-                    }
-
-                    return reject(new Error(`Can't parse geometry from '${url}'`));
-                });
-            }
-            else if (extension === "ply") {
-                this.plyLoader.load(url, geometry => {
-                    if (geometry && geometry.type === "Geometry" || geometry.type === "BufferGeometry") {
-                        return resolve(geometry);
-                    }
-
-                    return reject(new Error(`Can't parse geometry from '${url}'`));
-                });
-            }
-            else {
-                throw new Error(`Can't load geometry, unknown extension: '${extension}' in '${url}'`);
-            }
-        });
+        const loader = await this.registry.resolve(url);
+        return loader.load(url);
     }
 }
