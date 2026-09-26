@@ -18,16 +18,23 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 /**
- * Fetches raw bytes for a URL, deduplicating concurrent requests for the same
- * URL and letting each caller abort just its own interest in it: the
- * underlying `fetch` is only cancelled once every caller has aborted.
+ * Fetches raw bytes for a URL, letting each caller abort just its own
+ * interest in it: the underlying `fetch` is only cancelled once every caller
+ * for that URL has aborted.
  *
- * Extracted from the glTF loader so any binary-format loader (glTF today,
- * potentially others later) can reuse the same cancellable, shared fetch
- * behavior without depending on three.js' LoadingManager/FileLoader, whose
- * progress tracking isn't used here.
+ * three.js' own loaders (via FileLoader) already coalesce concurrent requests
+ * for the same URL into one in-flight request - but they expose no way to
+ * cancel a single one of those requests. The only cancellation they offer is
+ * a loader-wide `abort()`/LoadingManager.abortController, which would tear
+ * down every load that loader currently has in flight, not just the one a
+ * particular caller (e.g. one Derivative being replaced) wants to give up on.
+ * This queue exists to get that per-caller cancellation, needed because
+ * ModelReader supports aborting an individual model load.
+ *
+ * Extracted from the glTF loader so any other binary-format loader added
+ * later can reuse the same behavior.
  */
-export default class AbortableLoadQueue
+export default class LoadQueue
 {
     private loading: Record<string, {
         listeners: { onload: (data: ArrayBuffer) => any, onerror: (e: Error) => any, signal?: AbortSignal }[],

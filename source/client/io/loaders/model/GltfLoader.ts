@@ -26,7 +26,7 @@ import CRenderer from "@ff/scene/components/CRenderer";
 import { DEFAULT_SYSTEM_ASSET_PATH } from "client/components/CVAssetReader";
 
 import { IModelLoader, IModelLoaderResult, ILoaderContext } from "../types";
-import AbortableLoadQueue from "../utils/AbortableLoadQueue";
+import LoadQueue from "../utils/LoadQueue";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +41,7 @@ export default class GltfLoader implements IModelLoader
     private dracoLoader: DRACOLoader;
     private ktx2Loader: KTX2Loader;
 
-    private loadQueue = new AbortableLoadQueue();
+    private loadQueue = new LoadQueue();
 
     private customDracoPath: string = null;
 
