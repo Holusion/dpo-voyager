@@ -236,15 +236,16 @@ export default class CVDocument extends CRenderGraph
         if (ENV_DEVELOPMENT) {
             console.log("CVDocument.openDocument - assetPath: %s, mergeParent: %s", assetPath, mergeParent);
         }
-        if(!assetPath) return; //Don't validate default document
-        this.validateDocument(documentData, (err) => {
-            if (err) {
-                console.error(err);
-                Notification.show(`Document validation failed : ${err.message}`, "error");
-            } else if (ENV_DEVELOPMENT) {
-                console.log(`JSONValidator.validateDocument - OK${assetPath?` (${assetPath})`:""}`);
-            }
-        });
+        if(!assetPath) {  //Don't validate default document
+            this.validateDocument(documentData, (err) => {
+                if (err) {
+                    console.error(err);
+                    Notification.show(`Document validation failed : ${err.message}`, "error");
+                } else if (ENV_DEVELOPMENT) {
+                    console.log(`JSONValidator.validateDocument - OK${assetPath?` (${assetPath})`:""}`);
+                }
+            });
+        }
 
         if (!mergeParent) {
             this.clearNodeTree();
