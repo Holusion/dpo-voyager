@@ -87,6 +87,7 @@ export default class RenderView extends Publisher implements IManip
         //this.renderer.gammaOutput = true;
         //this.renderer.gammaFactor = 2;
         this.renderer.outputColorSpace = SRGBColorSpace;
+        this.renderer.localClippingEnabled = true;
 
         this.picker = new GPUPicker(this.renderer);
     }

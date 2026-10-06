@@ -186,9 +186,6 @@ export default class CVSlicer extends Component
 
         if (ins.enabled.changed && material.defines) {
             const enabled = ins.enabled.value && model.ins.slicerEnabled.value;
-            const renderer = this.getMainComponent(CRenderer);
-            renderer.views.forEach(view => view.renderer.localClippingEnabled = enabled);
-
             // configure material
             material.defines["CUT_PLANE"] = enabled;
             enabled || material.userData["sideCache"] == undefined ? material.userData["sideCache"] = material.side : null;
