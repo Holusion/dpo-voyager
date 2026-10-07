@@ -191,7 +191,7 @@ export default class CVSlicer extends Component
             enabled || material.userData["sideCache"] == undefined ? material.userData["sideCache"] = material.side : null;
             material.side = enabled ? DoubleSide : material.userData["sideCache"];
 
-            enabled ? material.clippingPlanes = [localPlane] : null;
+            material.clippingPlanes = enabled ? [localPlane] : null;
         }
 
         const shader = material.userData.shader;
