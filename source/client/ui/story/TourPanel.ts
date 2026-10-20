@@ -17,7 +17,8 @@
 
 import Subscriber from "@ff/core/Subscriber";
 import { IComponentEvent } from "@ff/graph/Component";
-import { EEasingCurve, ITweenState } from "@ff/graph/components/CTweenMachine";
+import { EEasingCurve, IDeltaState, ITweenState } from "@ff/graph/components/CTweenMachine";
+import { EActionType, IAction, TActionType } from "client/schema/meta";
 
 import Table, { ITableColumn, ITableRowClickEvent } from "@ff/ui/Table";
 
@@ -33,9 +34,8 @@ import { ILineEditChangeEvent } from "@ff/ui/LineEdit";
 interface IStepEntry
 {
     title: string | TemplateResult;
-    curve: string;
+    changes: string;
     duration: string;
-    threshold: string;
 }
 
 @customElement("sv-tour-panel")
@@ -43,10 +43,9 @@ export default class TourPanel extends DocumentView
 {
     protected static tableColumns: ITableColumn<IStepEntry>[] = [
         { header: "#", width: 0.05, cell: (row, index) => (index + 1).toString() },
-        { header: "Title", width: 0.4, cell: "title" },
-        { header: "Curve", width: 0.25, cell: "curve" },
+        { header: "Title", width: 0.35, cell: "title" },
+        { header: "Changes", width: 0.45, cell: "changes" },
         { header: "Duration", width: 0.15, cell: "duration" },
-        { header: "Threshold", width: 0.15, cell: "threshold" },
     ];
 
     protected stateTable: Table<IStepEntry> = null;
@@ -127,15 +126,22 @@ export default class TourPanel extends DocumentView
             <sv-property-view .property=${task.ins.stepThreshold} commitonly></sv-property-view>
             <div class="sv-label">Alt Text</div>
             <ff-text-edit name="altText" text=${task.ins.stepAltText.value} @change=${this.onTextEdit}></ff-text-edit>
+            <div class="sv-label">${languageManager.getUILocalizedString("Actions")}</div>
+            ${tours.getStepActions(activeStep.id).map(action => this.renderAction(action))}
         </div>` : html`<div class="ff-placeholder"><div>${languageManager.getUILocalizedString("Create or select a tour step to edit.")}</div></div>`;
 
         this.stateTable.rows = tours.activeSteps.map(step => {
-            const state = machine.getState(step.id);
+            const states = tours.getStepStates(step.id);
+            const others = tours.getStepActions(step.id).length - states.length;
+            const changes = states.map(state => state.paths.length > 6 ? `${state.paths.length} changes`
+                : state.paths.map(path => this.getPathLabel(path)).join(", "));
+            if (others > 0) {
+                changes.push(`+${others} action${others > 1 ? "s" : ""}`);
+            }
             return {
                 title: step.titles[languageManager.codeString()] || missingTitle,
-                curve: EEasingCurve[state.curve],
-                duration: state.duration.toFixed(1) + "s",
-                threshold: (state.threshold * 100).toFixed(0) + "%",
+                changes: changes.join(" | ") || "-",
+                duration: states.length ? states[0].duration.toFixed(1) + "s" : "-",
             };
         });
 
@@ -157,6 +163,47 @@ export default class TourPanel extends DocumentView
                 ${stepDetailView}
             </div>
         </div>`;
+    }
+
+    protected renderAction(action: IAction)
+    {
+        const machine = this.tours.snapshots;
+        const isState = action.type === EActionType[EActionType.StateChange] as TActionType;
+        const state = isState ? machine.getState(action.stateId) as IDeltaState : null;
+
+        const detail = isState ? (state ? state.title : "missing state") :
+            action.animation || action.audioId || action.actionAnnoId || action.actionTargetId || "";
+
+        const changes = state && state.paths ? html`<div class="sv-property-tags"><div class="sv-tags-selected">
+            ${state.paths.map((path, index) => {
+                let value = state.values[index];
+                if (Array.isArray(value) && value.every(item => typeof item === "number")) {
+                    value = value.map(num => Number(num.toFixed(3)));
+                }
+                return html`<div class="sv-tag-chip">
+                    <span class="sv-tag-chip-label"><b>${this.getPathLabel(path)}</b><i>${"  [" + value + "]"}</i></span>
+                    <ff-button class="sv-tag-chip-remove" icon="close" title="Remove" @click=${() => this.onRemoveChange(state, index)}></ff-button>
+                </div>`;
+            })}
+        </div></div>` : null;
+
+        return html`<div class="sv-label"><b>${action.name}</b>: ${action.type} ${detail}${action.enabled ? "" : " (disabled)"}</div>${changes}`;
+    }
+
+    protected getPathLabel(path: string)
+    {
+        // setup features are named by their key only, model and light properties (and transforms) by their node
+        const component = this.tours.snapshots.getComponentById(path.split("/")[0]);
+        const key = path.split("/").pop();
+        return component && component.node !== this.tours.node ? component.node.name + " " + key : key;
+    }
+
+    protected onRemoveChange(state: IDeltaState, index: number)
+    {
+        state.paths.splice(index, 1);
+        state.values.splice(index, 1);
+        this.tours.snapshots.outs.update.set();
+        this.requestUpdate();
     }
 
     protected onClickTableRow(event: ITableRowClickEvent<ITweenState>)
@@ -199,7 +246,8 @@ export default class TourPanel extends DocumentView
             this.subscriber.on(
                 this.tours.ins.enabled,
                 this.tours.ins.tourIndex,
-                this.tours.outs.stepIndex
+                this.tours.outs.stepIndex,
+                this.tours.snapshots.outs.update
             );
         }
 

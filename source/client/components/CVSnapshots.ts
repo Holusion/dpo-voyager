@@ -29,6 +29,8 @@ import CVModel2 from "./CVModel2";
 import Property, { types } from "@ff/graph/Property";
 import CVTours from "./CVTours";
 import CVAnnotationView from "./CVAnnotationView";
+import uniqueId from "@ff/core/uniqueId";
+import { IPathValues, ValueMap } from "client/utils/tourSteps";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -47,6 +49,8 @@ export default class CVSnapshots extends CTweenMachine
     };
 
     addIns = this.addInputs(CVSnapshots.snapshotAddIns);
+
+    private _globalTargets: ITargetEntry[] = null;
 
     create()
     {
@@ -152,25 +156,123 @@ export default class CVSnapshots extends CTweenMachine
         if(this.outs.tweening.value) {
             return;
         }
-        
-        const id = this.addIns.deltaID.value;
+
+        this.activateDelta(this.addIns.deltaID.value);
+    }
+
+    /**
+     * Tweens to a delta state, regardless of a tween in progress (a zero duration jumps to it).
+     * Callers must end a delta tween in progress first (see endTween).
+     */
+    activateDelta(id: string)
+    {
         const state = this.getState(id) as IDeltaState;
-        const targetCache : ITargetEntry[] = [];
-        this.targets.forEach(target => { targetCache.push(target);});
+
+        // the global targets are swapped for the delta paths until the tween ends
+        if (!this._globalTargets) {
+            this._globalTargets = this.targets.slice();
+            this.outs.end.once("value", this.restoreGlobalTargets, this);
+        }
         this.targets.length = 0;
+
+        // drop paths whose component has been removed from the scene
+        for (let i = state.paths.length - 1; i >= 0; --i) {
+            if (!this.getPathProperty(state.paths[i])) {
+                console.warn(`state '${state.title}': dropping missing property '${state.paths[i]}'`);
+                state.paths.splice(i, 1);
+                state.values.splice(i, 1);
+            }
+        }
         state.paths.forEach(path => {
-            const pathTokens = path.split('/');
-            const property = this.getProperty(pathTokens[0], pathTokens[1]);
-            
+            const property = this.getPathProperty(path);
             const isNumber = property.type === "number" && !property.schema.options;
             const isArray = property.isArray();
             this.targets.push({ property, isNumber, isArray });
         });
-        
+
         this.ins.id.setValue(id);
         this.ins.tween.set();
+    }
 
-        this.outs.end.once("value", () => {this.targets.length = 0; this.targets.push(...targetCache);}, this);
+    protected restoreGlobalTargets()
+    {
+        if (this._globalTargets) {
+            this.targets.length = 0;
+            this.targets.push(...this._globalTargets);
+            this._globalTargets = null;
+        }
+    }
+
+    createDeltaState(title: string, values: IPathValues, transition: { curve: EEasingCurve, duration: number, threshold: number }): IDeltaState
+    {
+        const state: IDeltaState = {
+            id: uniqueId(6),
+            title,
+            paths: values.paths.slice(),
+            values: values.values.slice(),
+            curve: transition.curve,
+            duration: transition.duration,
+            threshold: transition.threshold,
+        };
+        this.setState(state);
+        this.deltaStates.push(state);
+        this.outs.update.set();
+        return state;
+    }
+
+    deleteDeltaState(id: string)
+    {
+        this.deleteState(id);
+        const index = this.deltaStates.findIndex(state => state.id === id);
+        if (index >= 0) {
+            this.deltaStates.splice(index, 1);
+        }
+        this.outs.update.set();
+    }
+
+    /** Path identifying a property in delta states: "componentId/propertyKey". */
+    getPropertyPath(property: Property)
+    {
+        return (property.group.linkable as Component).id + "/" + property.key;
+    }
+
+    getPathProperty(path: string): Property | null
+    {
+        const index = path.lastIndexOf("/");
+        return this.getProperty(path.slice(0, index), path.slice(index + 1)) || null;
+    }
+
+    /**
+     * Every property a state can record: snapshot properties of setup features, models and lights,
+     * independently of the target features selected for full snapshots.
+     */
+    getRecordableProperties(): Property[]
+    {
+        const setup = this.getGraphComponent(CVSetup);
+        const components: Component[] = Object.keys(setup.featureMap).map(name => setup[name]);
+        this.getGraphComponents(CVModel2).forEach(model => components.push(model.transform, model));
+        this.getGraphComponents(CLight).forEach(light => components.push(light.transform, light));
+
+        // model quality is driven by the derivatives controller at runtime, it would show up in every recording
+        const volatile = this.getGraphComponents(CVModel2).map(model => model.ins.quality as Property);
+
+        const properties: Property[] = [];
+        components.forEach(component => {
+            const snapshotProperties = component?.["snapshotProperties"] as Property[];
+            snapshotProperties?.forEach(property => {
+                const isSerializable = (property.type !== "object" && !property.schema.event) || property.schema.semantic === "datetime";
+                if (isSerializable && volatile.indexOf(property) < 0 && properties.indexOf(property) < 0) {
+                    properties.push(property);
+                }
+            });
+        });
+        return properties;
+    }
+
+    /** Current values of the given properties (all recordable properties by default), keyed by path. */
+    captureValues(properties: Property[] = this.getRecordableProperties()): ValueMap
+    {
+        return new Map(properties.map(property => [this.getPropertyPath(property), property.cloneValue()]));
     }
 
     protected onLightComponentEvent = (event: IObjectEvent<CLight>) => {
@@ -242,26 +344,32 @@ export default class CVSnapshots extends CTweenMachine
         });
 
         data.states.forEach(state => {
-            if(state.id !== CVTours.sceneSnapshotId) {
+            if(!CVTours.isTransientState(state.id)) {
+                const isDelta = "paths" in state;
                 this.setState({
                     id: state.id,
                     curve: state.curve !== undefined ? EEasingCurve[state.curve] : EEasingCurve.EaseQuad,
                     duration: state.duration !== undefined ? state.duration : 2,
                     threshold: state.threshold !== undefined ? state.threshold : 0.5,
-                    values: state.values.filter((value, index) => !missingTargets.has(index)),
+                    // delta state values are aligned with their own paths, not with the targets
+                    values: isDelta ? state.values.slice() : state.values.filter((value, index) => !missingTargets.has(index)),
                 });
 
-                if("paths" in state) {
+                if(isDelta) {
                     const delta = this.getState(state.id) as IDeltaState;
                     delta.title = state.title;
-                    delta.paths = state.paths.map(path => {
+                    delta.paths = [];
+                    const values = delta.values;
+                    delta.values = [];
+                    state.paths.forEach((path, index) => {
                         const idx = path.lastIndexOf("/");
-                        const parts = [path.slice(0, idx), path.slice(idx+1)];
-                        const component = pathMap.get(parts[0]);
-                        if(!component) {
-                            throw new Error(`registered state change component not found for path: '${parts[0]}'`);
+                        const component = pathMap.get(path.slice(0, idx));
+                        if(!component || !component.ins[path.slice(idx+1)]) {
+                            console.warn(`state '${state.title}': missing property '${path}'`);
+                            return;
                         }
-                        return component.id + "/" + parts[1];
+                        delta.paths.push(component.id + "/" + path.slice(idx+1));
+                        delta.values.push(values[index]);
                     });
                     this.deltaStates.push(delta);
                 }
@@ -286,7 +394,7 @@ export default class CVSnapshots extends CTweenMachine
                 }
                 return componentPath + "/" + key;
             }),
-            states: Object.keys(this.states).map(key => {
+            states: Object.keys(this.states).filter(key => !CVTours.isTransientState(key)).map(key => {
                 const state = this.states[key];
                 const data: any = { id: state.id, values: state.values };
                 if (state.curve !== EEasingCurve.EaseQuad) {
@@ -299,19 +407,18 @@ export default class CVSnapshots extends CTweenMachine
                     data.threshold = state.threshold;
                 }
                 if ("paths" in state) {
+                    // always write paths, an empty delta state must not be reloaded as a full snapshot
                     const delta = state as IDeltaState;
-                    if(delta.paths.length > 0) {
-                        data.paths = delta.paths.map(path => {
-                            const parts = path.split('/');
-                            const component = this.getComponentById(parts[0]);
-                            const compPath = pathMap.get(component);
-                            if (!compPath) {
-                                throw new Error(`snapshot path not registered for state change '${component.displayName}'`);
-                            }
-                            return compPath + "/" + parts[1];
-                        });
-                        data.title = delta.title;
-                    }
+                    data.paths = delta.paths.map(path => {
+                        const parts = path.split('/');
+                        const component = this.getComponentById(parts[0]);
+                        const compPath = pathMap.get(component);
+                        if (!compPath) {
+                            throw new Error(`snapshot path not registered for state change '${component.displayName}'`);
+                        }
+                        return compPath + "/" + parts[1];
+                    });
+                    data.title = delta.title;
                 }
                 return data;
             }),

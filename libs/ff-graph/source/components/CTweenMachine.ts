@@ -278,11 +278,8 @@ export default class CTweenMachine extends Component
 
         this.targets.push({ property, isNumber, isArray });
 
-        const states = this.states;
-        const keys = Object.keys(states);
-        for (let i = 0, n = keys.length; i < n; ++i) {
-            states[keys[i]].values.push(property.cloneValue());
-        }
+        // delta states hold values for their own paths, not for the global targets
+        this.getTargetStates().forEach(state => state.values.push(property.cloneValue()));
         if (this._currentValues) {
             this._currentValues.push(property.cloneValue());
         }
@@ -385,14 +382,16 @@ export default class CTweenMachine extends Component
 
     protected removeChannel(index: number)
     {
-        const states = this.states;
-        const keys = Object.keys(states);
-        for (let i = 0, n = keys.length; i < n; ++i) {
-            states[keys[i]].values.splice(index, 1);
-        }
+        this.getTargetStates().forEach(state => state.values.splice(index, 1));
         if (this._currentValues) {
             this._currentValues.splice(index, 1);
         }
+    }
+
+    /** States whose values are aligned with the global targets (excludes delta states). */
+    protected getTargetStates()
+    {
+        return Object.values(this.states).filter(state => !("paths" in state));
     }
 
     protected getTarget(property: Property)

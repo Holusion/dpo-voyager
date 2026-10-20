@@ -16,16 +16,20 @@
  */
 
 import Component, { types } from "@ff/graph/Component";
-import { ITweenState } from "@ff/graph/components/CTweenMachine";
+import { IDeltaState } from "@ff/graph/components/CTweenMachine";
 import { IPulseContext } from "@ff/graph/components/CPulse";
+import Document from "@ff/core/Document";
 
 import { ITour, ITours, ITourStep } from "client/schema/setup";
 import { ELanguageType, DEFAULT_LANGUAGE } from "client/schema/common";
+import { EActionTrigger, EActionType, EActionPlayStyle, IAction, TActionTrigger, TActionType, TActionPlayStyle } from "client/schema/meta";
+import { composeStep, IPathValues, sparsifySteps, touchedPaths, ValueMap } from "client/utils/tourSteps";
 
 import CVSnapshots, { EEasingCurve } from "./CVSnapshots";
 import CVAnalytics from "./CVAnalytics";
 import CVLanguageManager from "./CVLanguageManager";
 import CVSetup from "./CVSetup";
+import CVMeta from "./CVMeta";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -33,6 +37,12 @@ export default class CVTours extends Component
 {
     static readonly typeName: string = "CVTours";
     static readonly sceneSnapshotId = "scene-default";
+    /** Transient delta state holding the composed values of the step being played. */
+    static readonly stepStateId = "tour-step";
+
+    static isTransientState(id: string) {
+        return id === CVTours.sceneSnapshotId || id === CVTours.stepStateId;
+    }
 
     protected static readonly ins = {
         enabled: types.Boolean("Tours.Enabled"),
@@ -59,6 +69,8 @@ export default class CVTours extends Component
     outs = this.addOutputs(CVTours.outs);
 
     private _tours: ITour[] = [];
+    /** Recordable values when tours were enabled: what steps are composed on, and restored on exit. */
+    private _base: ValueMap = null;
 
     protected get analytics() {
         return this.getMainComponent(CVAnalytics);
@@ -184,7 +196,6 @@ export default class CVTours extends Component
         const { ins, outs } = this;
 
         const tours = this._tours;
-        const machine = this.snapshots;
         const navigation = this.setup.navigation;
         const srElement = this.setup.viewer.rootElement.shadowRoot.querySelector("#sceneview-sr");
 
@@ -195,24 +206,17 @@ export default class CVTours extends Component
                 this.snapshots.endTween();
 
                 // store pre-tour scene state
-                const state: ITweenState = {
-                    id: CVTours.sceneSnapshotId,
-                    curve: EEasingCurve.EaseOutQuad,
-                    duration: 1,
-                    threshold: 0,
-                    values: machine.getCurrentValues(),
-                };
-                machine.setState(state);
+                this._base = this.captureBase();
             }
             else {
                 outs.tourIndex.set();
-                this.snapshots.endTween();
 
-                this.normalizeViewOrbit(CVTours.sceneSnapshotId);
-
-                // recall pre-tour scene state
-                machine.tweenTo(CVTours.sceneSnapshotId, context.secondsElapsed);
-                machine.deleteState(CVTours.sceneSnapshotId);
+                // recall pre-tour scene state for everything the tours may have changed
+                if (this._base) {
+                    const paths = touchedPaths([].concat(...tours.map(tour => this.getTourStates(tour))));
+                    this.playValues(this._base, paths, { curve: EEasingCurve.EaseOutQuad, duration: 1, threshold: 0 }, true);
+                    this._base = null;
+                }
 
                 srElement.textContent = "";
 
@@ -273,20 +277,12 @@ export default class CVTours extends Component
             nextStepIndex = (outs.stepIndex.value + stepCount - 1) % stepCount;
         }
 
-        // normalize orbit on tour start
-        if(nextStepIndex === 0) {
-            this.snapshots.endTween();
-            this.normalizeViewOrbit(tour.steps[0].id);
-        }
-
         if (nextStepIndex >= 0) {
             navigation.setChanged(true); // disable autoZoom
-            // tween to the next step
-            const step = tour.steps[nextStepIndex];
             outs.stepIndex.setValue(nextStepIndex);
             outs.stepTitle.setValue(this.stepTitle || "Missing content");
-            machine.ins.id.setValue(step.id);
-            tween ? machine.ins.tween.set() : machine.ins.recall.set();
+            // tween to the next step
+            this.playStep(tour, nextStepIndex, tween);
             srElement.textContent = this.stepAltText != "Missing content" ? "Alt text: " + this.stepAltText : "";
         }
 
@@ -377,16 +373,166 @@ export default class CVTours extends Component
         });
     }
 
-    // helper function to bring saved state orbit into alignment with current view orbit
-    protected normalizeViewOrbit(viewId: string) {
-        const orbitIdx = this.snapshots.getTargetProperties().findIndex(prop => prop.name == "Orbit");
-        const viewState = this.snapshots.getState(viewId);
-        const currentOrbit = this.snapshots.getCurrentValues()[orbitIdx];
-        if(viewState) {
-            currentOrbit.forEach((n, i) => {
-                const mult = Math.round((viewState.values[orbitIdx][i]-n)/360);
-                this.snapshots.getTargetProperties()[orbitIdx].value[i] += 360*mult;
+    get base(): ValueMap {
+        if (!this._base) {
+            this._base = this.captureBase();
+        }
+        return this._base;
+    }
+
+    /** Recordable values, plus whatever else the tours change (e.g. model quality in migrated steps), so exiting restores it. */
+    protected captureBase(): ValueMap
+    {
+        const machine = this.snapshots;
+        const base = machine.captureValues();
+        const paths = touchedPaths([].concat(...this.tours.map(tour => this.getTourStates(tour))));
+        const properties = Array.from(paths).filter(path => !base.has(path)).map(path => machine.getPathProperty(path)).filter(property => property);
+        machine.captureValues(properties).forEach((value, path) => base.set(path, value));
+        return base;
+    }
+
+    /** Actions triggered by entering the given step, from every meta (scene and models). */
+    getStepActions(stepId: string): IAction[]
+    {
+        const actions: IAction[] = [];
+        this.getGraphComponents(CVMeta).forEach(meta => meta.actions.items.forEach(action => {
+            if (action.trigger === EActionTrigger[EActionTrigger.OnTourStep] as TActionTrigger && action.triggerDetail === stepId) {
+                actions.push(action);
+            }
+        }));
+        return actions;
+    }
+
+    /** Delta states set by the given step's enabled state change actions, in action order. */
+    getStepStates(stepId: string): IDeltaState[]
+    {
+        return this.getStepActions(stepId)
+            .filter(action => action.enabled && action.type === EActionType[EActionType.StateChange] as TActionType)
+            .map(action => this.snapshots.getState(action.stateId) as IDeltaState)
+            .filter(state => state && "paths" in state);
+    }
+
+    getTourStates(tour: ITour): IDeltaState[][]
+    {
+        return tour.steps.map(step => this.getStepStates(step.id));
+    }
+
+    /**
+     * Values of the scene at the given step: the pre-tour values, overlaid with the states of steps 0..index.
+     * States in `exclude` are left out (used to record a step's own state).
+     */
+    composeValues(tour: ITour, index: number, exclude: IDeltaState[] = []): ValueMap
+    {
+        const steps = this.getTourStates(tour).map(states => states.filter(state => exclude.indexOf(state) < 0));
+        return composeStep(this.base, steps, index);
+    }
+
+    /** Creates a delta state with the given values, linked to the step by a state change action of the scene meta. */
+    createStepState(step: ITourStep, values: IPathValues, transition: { curve: EEasingCurve, duration: number, threshold: number }): IDeltaState
+    {
+        const title = step.titles[DEFAULT_LANGUAGE] || Object.values(step.titles).find(title => !!title) || step.title || "Step";
+        const state = this.snapshots.createDeltaState(title, values, transition);
+
+        const action: IAction = {
+            id: Document.generateId(),
+            name: title,
+            type: EActionType[EActionType.StateChange] as TActionType,
+            trigger: EActionTrigger[EActionTrigger.OnTourStep] as TActionTrigger,
+            triggerDetail: step.id,
+            stateId: state.id,
+            style: EActionPlayStyle[EActionPlayStyle.Single] as TActionPlayStyle,
+            speed: 1,
+            audioId: "",
+            animation: "",
+            enabled: true,
+        };
+        this.getComponent(CVMeta).actions.insert(action);
+        return state;
+    }
+
+    /** Removes the step's actions, and their states unless other actions still use them. */
+    deleteStepActions(stepId: string)
+    {
+        const actions = this.getStepActions(stepId);
+        const metas = this.getGraphComponents(CVMeta);
+        metas.forEach(meta => actions.forEach(action => meta.actions.remove(action.id)));
+
+        actions.forEach(action => {
+            const isUsed = metas.some(meta => meta.actions.items.some(other => other.stateId === action.stateId));
+            if (action.stateId && !isUsed) {
+                this.snapshots.deleteDeltaState(action.stateId);
+            }
+        });
+    }
+
+    /**
+     * Converts tour steps owning a full snapshot (legacy format) into sparse delta states, each linked
+     * to its step by a state change action of the scene meta. Composing the converted states reproduces
+     * the legacy snapshots at every step (see sparsifySteps).
+     */
+    migrateLegacySteps()
+    {
+        const machine = this.snapshots;
+        const targetPaths = machine.getTargetProperties().map(property => machine.getPropertyPath(property));
+        const navigationPaths = this.setup.navigation.snapshotProperties.map(property => machine.getPropertyPath(property));
+
+        this._tours.forEach(tour => {
+            const legacy = tour.steps.map(step => {
+                const state = machine.getState(step.id);
+                return state && !("paths" in state) ? state : null;
+            });
+            const sparse = sparsifySteps(legacy.map(state => state ? { paths: targetPaths, values: state.values } : null), navigationPaths);
+
+            tour.steps.forEach((step, index) => {
+                const state = legacy[index];
+                if (state) {
+                    machine.deleteState(step.id);
+                    this.createStepState(step, sparse[index], state);
+                }
+            });
+        });
+    }
+
+    /** Tweens to the values of the given step (jumps to them if tween is false). */
+    protected playStep(tour: ITour, index: number, tween: boolean)
+    {
+        const steps = this.getTourStates(tour);
+        const transition = steps[index][0] || { curve: EEasingCurve.EaseOutQuad, duration: 1, threshold: 0.5 };
+        this.playValues(composeStep(this.base, steps, index), touchedPaths(steps), {
+            curve: transition.curve,
+            duration: tween ? transition.duration : 0,
+            threshold: transition.threshold,
+        }, index === 0);  // normalize orbit on tour start
+    }
+
+    protected playValues(values: ValueMap, paths: Iterable<string>, transition: { curve: EEasingCurve, duration: number, threshold: number }, normalizeOrbit: boolean = false)
+    {
+        const machine = this.snapshots;
+        const state: IDeltaState = { id: CVTours.stepStateId, title: "", paths: [], values: [], ...transition };
+        for (const path of paths) {
+            if (values.has(path)) {
+                state.paths.push(path);
+                state.values.push(values.get(path));
+            }
+        }
+
+        machine.endTween();
+        if (normalizeOrbit) {
+            this.normalizeViewOrbit(state);
+        }
+        machine.setState(state);
+        machine.activateDelta(state.id);
+    }
+
+    // helper function to bring target orbit into alignment with current view orbit
+    protected normalizeViewOrbit(state: IDeltaState) {
+        const orbit = this.setup.navigation.ins.orbit;
+        const target = state.values[state.paths.indexOf(this.snapshots.getPropertyPath(orbit))];
+        if(target) {
+            orbit.value.forEach((n, i) => {
+                const mult = Math.round((target[i]-n)/360);
+                orbit.value[i] += 360*mult;
             });
         }
     }
-}
+}

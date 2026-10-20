@@ -24,6 +24,8 @@ import CVDocument from "./CVDocument";
 import CVTours from "./CVTours";
 import CVSnapshots, { EEasingCurve } from "./CVSnapshots";
 import { ELanguageType } from "client/schema/common";
+import { diffValues } from "client/utils/tourSteps";
+import uniqueId from "@ff/core/uniqueId";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -113,47 +115,70 @@ export default class CVToursTask extends CVTask
 
             // tour step actions
             if (ins.createStep.changed) {
-                const id = machine.setState({
-                    values: machine.getCurrentValues(),
+                // the new step records what changed since the current step
+                const values = diffValues(tours.composeValues(tour, stepIndex), machine.captureValues(), this.alwaysRecordedPaths);
+
+                const newStep = {
+                    title: "",
+                    titles: {},
+                    altTexts: {},
+                    id: uniqueId(6),
+                };
+                newStep.titles[ELanguageType[languageManager.ins.primarySceneLanguage.value]] = languageManager.getSceneSetupLocalizedString("New Step #") + _nextStepIndex++;
+                stepList.splice(stepIndex + 1, 0, newStep);
+
+                tours.createStepState(newStep, values, {
                     curve: EEasingCurve.EaseOutQuad,
                     duration: 1.5,
                     threshold: 0.5,
                 });
-
-                stepList.splice(stepIndex + 1, 0, {
-                    title: "",
-                    titles: {},
-                    altTexts: {},
-                    id
-                });
-                stepList[stepIndex + 1].titles[ELanguageType[languageManager.ins.primarySceneLanguage.value]] = languageManager.getSceneSetupLocalizedString("New Step #") + _nextStepIndex++;
 
                 tours.ins.stepIndex.setValue(stepIndex + 1);
                 return true;
             }
 
             if (step) {
+                const state = tours.getStepStates(step.id)[0];
+
                 if (ins.stepTitle.changed || ins.stepCurve.changed || ins.stepAltText.changed) {
                     tours.stepTitle = ins.stepTitle.value;
                     tours.stepAltText = ins.stepAltText.value;
-                    machine.ins.curve.setValue(ins.stepCurve.value);
+                    if (state) {
+                        state.curve = ins.stepCurve.value;
+                    }
                     tours.ins.stepIndex.setValue(stepIndex);
                     return true;
                 }
                 if(ins.stepDuration.changed || ins.stepThreshold.changed) {
-                    machine.ins.duration.setValue(ins.stepDuration.value);
-                    machine.ins.threshold.setValue(ins.stepThreshold.value);
+                    if (state) {
+                        state.duration = ins.stepDuration.value;
+                        state.threshold = ins.stepThreshold.value;
+                        machine.outs.update.set();
+                    }
                     return true;
                 }
 
                 if (ins.updateStep.changed) {
-                    machine.ins.id.setValue(step.id);
-                    machine.ins.store.set();
+                    // the step's own state records what differs from the previous step and the step's other states
+                    const ownState = state || tours.createStepState(step, { paths: [], values: [] }, {
+                        curve: EEasingCurve.EaseOutQuad,
+                        duration: 1.5,
+                        threshold: 0.5,
+                    });
+                    const reference = tours.composeValues(tour, stepIndex - 1);
+                    tours.getStepStates(step.id).filter(other => other !== ownState).forEach(other => {
+                        other.paths.forEach((path, index) => reference.set(path, other.values[index]));
+                    });
+                    const values = diffValues(reference, machine.captureValues(), this.alwaysRecordedPaths);
+                    ownState.paths = values.paths;
+                    ownState.values = values.values;
+                    machine.outs.update.set();
+                    tours.ins.stepIndex.setValue(stepIndex);
                     return true;
                 }
                 if (ins.deleteStep.changed) {
                     stepList.splice(stepIndex, 1);
-                    machine.ins.delete.set();
+                    tours.deleteStepActions(step.id);
                     tours.ins.stepIndex.setValue(stepIndex);
                     return true;
                 }
@@ -186,7 +211,7 @@ export default class CVToursTask extends CVTask
                 return true;
             }
             if (ins.deleteTour.changed) {
-                tour.steps.forEach(step => machine.deleteState(step.id));
+                tour.steps.forEach(step => tours.deleteStepActions(step.id));
                 tourList.splice(tourIndex, 1);
                 tours.ins.tourIndex.setValue(tourIndex);
                 tours.outs.count.setValue(tourList.length);
@@ -229,6 +254,12 @@ export default class CVToursTask extends CVTask
     createView()
     {
         return new ToursTaskView(this);
+    }
+
+    /** The camera is recorded in every step, even when unchanged: tour steps are views first. */
+    protected get alwaysRecordedPaths()
+    {
+        return this.activeDocument.setup.navigation.snapshotProperties.map(property => this.machine.getPropertyPath(property));
     }
 
     activateTask()
@@ -294,7 +325,7 @@ export default class CVToursTask extends CVTask
     {
         const ins = this.ins;
         const step = this.tours.activeStep;
-        const state = step ? this.machine.getState(step.id) : null;
+        const state = step ? this.tours.getStepStates(step.id)[0] : null;
 
         ins.stepTitle.setValue(step ? this.tours.stepTitle : "", true);
         ins.stepAltText.setValue(step ? this.tours.stepAltText : "", true);

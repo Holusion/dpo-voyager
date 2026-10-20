@@ -167,10 +167,9 @@ export default class CVActionManager extends Component
     refreshActions() {
         this._actions.length = 0;
         this.getSystemComponents(CVMeta).forEach((meta) => {
+            // scene-level actions (e.g. tour step states) have no model
             const model = meta.node.getComponent(CVModel2, true);
-            if(model) {
-                this._actions.push(...(meta.actions.items.map(action => ({model: model, action: action}))));
-            }
+            this._actions.push(...(meta.actions.items.map(action => ({model: model, action: action}))));
         });
     }
 
@@ -350,7 +349,16 @@ export default class CVActionManager extends Component
                 });
                 if(actions.length > 0) {
                     actions.forEach((action) => {
-                        if(action.type !== EActionType[EActionType.PlayAudio] as TActionType) {
+                        if(action.type === EActionType[EActionType.StateChange] as TActionType) {
+                            // state changes are composed into the tour step transition by CVTours,
+                            // queue what they trigger to play when the transition ends
+                            if(action.enabled) {
+                                this._actionQueue.push(...this._actions.filter(element => element.action.triggerDetail === action.id
+                                    && (element.action.trigger === EActionTrigger[EActionTrigger.OnActionBegin] as TActionTrigger
+                                    || element.action.trigger === EActionTrigger[EActionTrigger.OnActionEnd] as TActionTrigger)));
+                            }
+                        }
+                        else if(action.type !== EActionType[EActionType.PlayAudio] as TActionType) {
                             const model = meta.node.getComponent(CVModel2);
                             this._actionQueue.push({model: model, action: action}); // queue actions to play when tour transition ends
                         }

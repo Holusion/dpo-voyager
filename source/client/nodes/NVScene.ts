@@ -72,6 +72,7 @@ export default class NVScene extends NVNode
             const setupData = document.setups[scene.setup];
             if (setupData.snapshots) {
                 this.setup.snapshots.fromData(setupData.snapshots, pathMap);
+                this.setup.tours.migrateLegacySteps();
             }
         }
     }
