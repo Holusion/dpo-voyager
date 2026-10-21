@@ -71,6 +71,8 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
         const languageManager = this.languageManager;
 
         if (ins.mode.changed) {
+            // Deactivate while the task still observes its document, before disposal clears it.
+            this.activeComponent = null;
             this.scopedComponents.forEach(task => task.dispose());
 
             const taskSet = taskSets[ins.mode.getValidatedValue()];
