@@ -26,7 +26,6 @@ import CVTaskProvider from "../../components/CVTaskProvider";
 import CVNodeProvider from "../../components/CVNodeProvider";
 import CVAnnotationView from "../../components/CVAnnotationView";
 import NVNode from "../../nodes/NVNode";
-import CVPoseTask from "../../components/CVPoseTask";
 import CVAnnotationsTask from "../../components/CVAnnotationsTask";
 import CVToursTask from "../../components/CVToursTask";
 import DocumentView, { customElement, html } from "../explorer/DocumentView";
@@ -50,9 +49,11 @@ export default class StoryWorkspace extends DocumentView
     private collection: CollectionPanel;
     private explorer: ExplorerPanel;
     private task: TaskPanel;
+    private list: TaskPanel;
     private bottomTask: TaskPanel;
     private settings: SettingsTaskView;
-    private bottomTasks = new Set<string>(["CVActionsTask", "CVAudioTask", "CVOverlayTask", "CVToursTask", "CVArticlesTask", "CVDerivativesTask", "CVCaptureTask"]);
+    private listTasks = new Set<string>(["CVAnnotationsTask", "CVArticlesTask", "CVToursTask", "CVAudioTask"]);
+    private bottomTasks = new Set<string>(["CVCaptureTask"]);
     private article: ArticleEditor;
     private tour: TourPanel;
     private states: StatePanel;
@@ -79,7 +80,11 @@ export default class StoryWorkspace extends DocumentView
         this.collection = new CollectionPanel(system);
         this.explorer = new ExplorerPanel(application.explorer);
         this.task = new TaskPanel(system);
-        this.task.showTask = task => task instanceof CVPoseTask || task instanceof CVAnnotationsTask;
+        this.task.showTask = task => !this.bottomTasks.has(task.typeName);
+        this.task.section = "details";
+        this.list = new TaskPanel(system);
+        this.list.showTask = task => this.listTasks.has(task.typeName);
+        this.list.section = "list";
         this.bottomTask = new TaskPanel(system);
         this.bottomTask.showTask = task => this.bottomTasks.has(task.typeName);
         this.settings = new SettingsTaskView(system);
@@ -166,7 +171,8 @@ export default class StoryWorkspace extends DocumentView
     {
         const expert = this.tasks.expertMode;
         const activeTask = this.tasks.activeComponent;
-        const contextualTask = activeTask instanceof CVPoseTask || activeTask instanceof CVAnnotationsTask;
+        const contextualTask = !!activeTask && !this.bottomTasks.has(activeTask.typeName);
+        const hasList = !!activeTask && this.listTasks.has(activeTask.typeName);
         const hasTask = contextualTask || !!this.nodes.activeNode;
         const hasBottomTask = !!activeTask && this.bottomTasks.has(activeTask.typeName);
         const hasArticle = this.article.hasArticle;
@@ -196,6 +202,8 @@ export default class StoryWorkspace extends DocumentView
                                 aria-labelledby=${`story-tab-${index}`} ?hidden=${this.navigationIndex !== index}>${panel}</div>
                         `)}
                     </section>
+                    <ff-splitter direction="vertical" margin="100" ?hidden=${!hasList}></ff-splitter>
+                    <section class="sv-workspace-region sv-workspace-list" aria-label="Items" ?hidden=${!hasList}>${this.list}</section>
                     <ff-splitter direction="vertical" margin="100" ?hidden=${!hasTask}></ff-splitter>
                     <section class="sv-workspace-region sv-workspace-task" aria-label="Context" ?hidden=${!hasTask}>
                         <div class="sv-workspace-region" ?hidden=${!contextualTask}>${this.task}</div>

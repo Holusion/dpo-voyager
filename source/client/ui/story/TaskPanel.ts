@@ -31,6 +31,7 @@ import CVTask from "../../components/CVTask";
 export default class TaskPanel extends SystemView
 {
     showTask: (task: CVTask) => boolean = () => true;
+    section: "all" | "list" | "details" = "all";
     protected taskProvider: CVTaskProvider = null;
 
     constructor(system?: System)
@@ -69,6 +70,7 @@ export default class TaskPanel extends SystemView
         }
 
         const viewElement = task.createView();
+        viewElement.section = this.section;
 
         return html`
             <div class="sv-panel-header">

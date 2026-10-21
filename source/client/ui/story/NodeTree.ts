@@ -25,7 +25,7 @@ import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDoc
 import CVLanguageManager from "../../components/CVLanguageManager";
 import CVNodeProvider, { IActiveNodeEvent, INodesEvent } from "../../components/CVNodeProvider";
 import CVTaskProvider from "../../components/CVTaskProvider";
-import CVAnnotationsTask from "../../components/CVAnnotationsTask";
+import CVPoseTask from "../../components/CVPoseTask";
 import { ELightType, ICVLight } from "../../components/lights/CVLight";
 import CVSunLight from "../../components/lights/CVSunLight";
 import NVNode from "../../nodes/NVNode";
@@ -180,7 +180,7 @@ class NodeTree extends Tree<NVNode>
         else {
             this.nodeProvider.activeNode = node;
             const tasks = this.system.getMainComponent(CVTaskProvider);
-            if (tasks.activeComponent instanceof CVAnnotationsTask) {
+            if (tasks.activeComponent && !(tasks.activeComponent instanceof CVPoseTask)) {
                 tasks.activeComponent = null;
             }
         }
