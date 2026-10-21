@@ -103,13 +103,11 @@ sv-story-workspace {
     min-width: 0;
   }
 
-  .sv-workspace-tabs, .sv-workspace-tools {
+  .sv-workspace-tabs {
     display: flex;
     flex: 0 0 auto;
     background: common.$color-background-dark;
   }
-
-  .sv-workspace-tools > ff-button { flex: 0 0 auto; }
 
   .sv-workspace-tabs button {
     font: inherit;

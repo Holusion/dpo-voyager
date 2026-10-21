@@ -213,11 +213,6 @@ export default class StoryWorkspace extends DocumentView
                         <div class="sv-workspace-region" ?hidden=${editor !== "tour"}>${this.tour}</div>
                         <div class="sv-workspace-region" ?hidden=${editor !== "states"}>${this.states}</div>
                     </section>
-                    <div class="sv-workspace-tools">
-                        <ff-button text="State Editor" ?selected=${this.showStates}
-                            aria-pressed=${this.showStates ? "true" : "false"}
-                            @click=${() => { this.showStates = !this.showStates; this.requestUpdate(); }}></ff-button>
-                    </div>
                 </div>
                 <ff-splitter margin="180" ?hidden=${!expert}></ff-splitter>
                 <div class="sv-workspace-column sv-workspace-inspection" ?hidden=${!expert}>
