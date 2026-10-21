@@ -86,11 +86,21 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
             <ff-button title="${languageManager.getUILocalizedString("Move Article Down")}" icon="down" ?disabled=${!activeArticle} @click=${this.onClickDown}></ff-button>          
             <ff-button text="${languageManager.getUILocalizedString("Delete")}" icon="trash" ?disabled=${!activeArticle} @click=${this.onClickDelete}></ff-button>  
         </div>
-        <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-        <div class="ff-flex-item-stretch ff-scroll-y ff-flex-column">
-            <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
+        <div class="ff-flex-item-stretch">
+            <div class="ff-flex-column ff-fullsize">
+                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
+                <div class="ff-splitter-section" style="flex-basis: ${this.section === "list" ? "100%" : "30%"}">
+                    <div class="ff-scroll-y ff-flex-column">
+                        <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
+                    </div>
+                </div>
+                <ff-splitter direction="vertical" ?hidden=${this.section === "list"}></ff-splitter>
+                <div class="ff-splitter-section" style="flex-basis: 70%" ?hidden=${this.section === "list"}>
+                    ${detailView}
+                </div>
+            </div>
         </div>
-        ${this.section === "all" ? detailView : null}`;
+        `;
     }
 
     protected onClickCreate()
