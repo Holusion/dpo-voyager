@@ -97,6 +97,10 @@ export default class ToursTaskView extends TaskView<CVToursTask>
             <ff-text-edit name="lead" text=${props.tourLead.value} @change=${this.onTextEdit}></ff-text-edit>
         </div>` : null;
 
+        if (this.section === "details") {
+            return detailView;
+        }
+
         return html`<div class="sv-commands">
             <ff-button title="${languageManager.getUILocalizedString("Create Tour")}" icon="create" @click=${this.onClickCreate}></ff-button>
             <ff-button title="${languageManager.getUILocalizedString("Move Tour Up")}" icon="up" ?disabled=${!activeTour} @click=${this.onClickUp}></ff-button>
@@ -107,13 +111,13 @@ export default class ToursTaskView extends TaskView<CVToursTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: 30%">
+                <div class="ff-splitter-section" style="flex-basis: ${this.section === "list" ? "100%" : "30%"}">
                     <div class="ff-scroll-y ff-flex-column">
                         <sv-tour-list .data=${tourList.slice()} .selectedItem=${activeTour} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectTour}></sv-tour-list>
                     </div>
                 </div>
-                <ff-splitter direction="vertical"></ff-splitter>
-                <div class="ff-splitter-section" style="flex-basis: 70%">
+                <ff-splitter direction="vertical" ?hidden=${this.section === "list"}></ff-splitter>
+                <div class="ff-splitter-section" style="flex-basis: 70%" ?hidden=${this.section === "list"}>
                     ${detailView}
                 </div>
             </div>
