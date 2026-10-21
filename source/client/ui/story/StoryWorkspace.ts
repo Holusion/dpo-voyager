@@ -24,6 +24,8 @@ import StoryApplication from "../../applications/StoryApplication";
 import CVDocument from "../../components/CVDocument";
 import CVTaskProvider from "../../components/CVTaskProvider";
 import CVNodeProvider from "../../components/CVNodeProvider";
+import CVAnnotationView from "../../components/CVAnnotationView";
+import NVNode from "../../nodes/NVNode";
 import CVPoseTask from "../../components/CVPoseTask";
 import CVAnnotationsTask from "../../components/CVAnnotationsTask";
 import CVToursTask from "../../components/CVToursTask";
@@ -112,8 +114,12 @@ export default class StoryWorkspace extends DocumentView
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
         this.subscriber.off();
+        if (previous) {
+            previous.setup.viewer.ins.activeAnnotation.off("value", this.onAnnotation, this);
+        }
         if (next) {
             this.subscriber.on(next.setup.tours.ins.enabled, next.setup.tours.outs.tourIndex);
+            next.setup.viewer.ins.activeAnnotation.on("value", this.onAnnotation, this);
         }
         this.showStates = false;
         this.requestUpdate();
@@ -134,6 +140,20 @@ export default class StoryWorkspace extends DocumentView
         this.assets.requestUpdate();
         this.showStates = false;
         this.requestUpdate();
+    }
+
+    private onAnnotation()
+    {
+        const id = this.activeDocument?.setup.viewer.ins.activeAnnotation.value;
+        if (!id) return;
+
+        const view = this.system.getComponents(CVAnnotationView)
+            .find(view => view.getAnnotations().some(annotation => annotation.id === id));
+        const task = this.tasks.scopedComponents.find(task => task instanceof CVAnnotationsTask);
+        if (view && task) {
+            this.nodes.activeNode = view.node as NVNode;
+            this.tasks.activeComponent = task;
+        }
     }
 
     protected updated()
