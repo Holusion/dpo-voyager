@@ -15,34 +15,13 @@
  * limitations under the License.
  */
 
-import ExplorerPanel from "./ExplorerPanel";
-
-import localStorage from "@ff/browser/localStorage";
-
 import StoryApplication, { IStoryApplicationProps } from "../../applications/StoryApplication";
-
 import CustomElement, { customElement, html } from "@ff/ui/CustomElement";
 import Icon from "@ff/ui/Icon";
-import DockView, { DockContentRegistry, IDockElementLayout } from "@ff/ui/DockView";
-
-import HierarchyTreeView from "@ff/scene/ui/HierarchyTreeView";
-
-import NavigatorPanel from "./NavigatorPanel";
-import CVTaskProvider, { ETaskMode } from "../../components/CVTaskProvider";
-
 import TaskBar from "./TaskBar";
-
-import EditorPanel from "./EditorPanel";
-import TourPanel from "./TourPanel";
-import TaskPanel from "./TaskPanel";
-import NotesPanel from "./NotesPanel";
-import ConsolePanel from "./ConsolePanel";
-import InspectorPanel from "./InspectorPanel";
-import AssetPanel from "./AssetPanel";
-import CollectionPanel from "./CollectionPanel";
+import StoryWorkspace from "./StoryWorkspace";
 
 import "./styles.scss";
-import StatePanel from "./StatePanel";
 
 ////////////////////////////////////////////////////////////////////////////////
 // STORY ICONS
@@ -76,27 +55,10 @@ Icon.add("record", html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100
 
 ////////////////////////////////////////////////////////////////////////////////
 
-interface IUIState
-{
-    regularLayout: IDockElementLayout;
-    expertLayout: IDockElementLayout;
-    expertMode: boolean;
-}
-
 @customElement("voyager-story")
 export default class MainView extends CustomElement
 {
-    static readonly stateKey: string = "main-view-2";
-
     protected application: StoryApplication;
-    protected dockView: DockView;
-
-    protected registry: DockContentRegistry;
-    protected state: IUIState;
-
-    protected get taskProvider() {
-        return this.application.system.getMainComponent(CVTaskProvider);
-    }
 
     get app() {
         return this.application;
@@ -105,7 +67,6 @@ export default class MainView extends CustomElement
     constructor(application?: StoryApplication)
     {
         super();
-        this.onUnload = this.onUnload.bind(this);
 
         if (application) {
             this.application = application;
@@ -135,241 +96,12 @@ export default class MainView extends CustomElement
 
         window["voyagerStory"] = this.application;
 
-        this.dockView = null;
-
-        const system = this.application.system;
-
-        const taskProvider = system.components.get(CVTaskProvider);
-        taskProvider.ins.mode.on("value", this.onTaskMode, this);
-
-        const registry = this.registry = new Map();
-        const explorer = this.application.explorer;
-        registry.set("explorer", () => new ExplorerPanel(explorer));
-        registry.set("tour-editor", () => new TourPanel(system));
-        registry.set("state-editor", () => new StatePanel(system));
-        registry.set("task", () => new TaskPanel(system));
-        registry.set("notes", () => new NotesPanel(system));
-        registry.set("console", () => new ConsolePanel(system));
-        registry.set("navigator", () => new NavigatorPanel(system));
-        registry.set("hierarchy", () => new HierarchyTreeView(system));
-        registry.set("inspector", () => new InspectorPanel(system));
-        registry.set("assets", () => new AssetPanel(system));
-        registry.set("article-editor", () => new EditorPanel(system));
-        registry.set("collection", () => new CollectionPanel(system));
-
-        const reset = new URL(window.location.href).searchParams.get("reset") !== null;
-        const state = reset ? null : localStorage.get("voyager-story", MainView.stateKey);
-
-        this.state = state || {
-            regularLayout: MainView.regularLayout,
-            expertLayout: MainView.expertLayout,
-        };
     }
 
     protected firstConnected()
     {
-        this.setStyle({
-            display: "flex",
-            flexDirection: "column"
-        });
-
+        this.setStyle({ display: "flex", flexDirection: "column" });
         this.appendElement(new TaskBar(this.application.system));
-
-        this.dockView = this.appendElement(DockView);
-        this.restoreLayout();
-
-        window.addEventListener("beforeunload", this.onUnload);
+        this.appendElement(new StoryWorkspace(this.application));
     }
-
-    protected disconnected()
-    {
-        this.storeLayout();
-        localStorage.set("voyager-story", MainView.stateKey, this.state);
-    }
-
-    protected onUnload()
-    {
-        this.storeLayout();
-        localStorage.set("voyager-story", MainView.stateKey, this.state);
-    }
-
-    protected onTaskMode(mode: ETaskMode)
-    {
-        this.storeLayout();
-        this.restoreLayout();
-    }
-
-    protected storeLayout()
-    {
-        const state = this.state;
-        const expertMode = this.taskProvider.expertMode;
-
-        if (expertMode) {
-            state.expertLayout = this.dockView.getLayout();
-        }
-        else {
-            state.regularLayout = this.dockView.getLayout();
-        }
-    }
-
-    protected restoreLayout()
-    {
-        const state = this.state;
-        const expertMode = this.taskProvider.expertMode;
-
-        this.dockView.setLayout(expertMode ? state.expertLayout : state.regularLayout, this.registry);
-        this.dockView.setPanelsMovable(true)
-    }
-
-    protected static readonly regularLayout: IDockElementLayout = {
-        type: "strip",
-        direction: "horizontal",
-        size: 1,
-        elements: [{
-            type: "strip",
-            direction: "vertical",
-            size: 0.22,
-            elements: [{
-                type: "stack",
-                size: 0.35,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "navigator",
-                    text: "Navigator"
-                }, {
-                    contentId: "assets",
-                    text: "Media"
-                }, {
-                    contentId: "collection",
-                    text: "Collection"
-                }]
-            }, {
-                type: "stack",
-                size: 0.65,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "task",
-                    text: "Task"
-                }]
-            }]
-        }, {
-            type: "strip",
-            direction: "vertical",
-            size: 0.78,
-            elements: [{
-                type: "stack",
-                size: 0.75,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "explorer",
-                    text: "Explorer"
-                }]
-            }, {
-                type: "stack",
-                size: 0.25,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "article-editor",
-                    text: "Article Editor"
-                }, {
-                    contentId: "tour-editor",
-                    text: "Tour Editor"
-                }, {
-                    contentId: "state-editor",
-                    text: "State Editor"
-                }, {
-                    contentId: "notes",
-                    text: "Note Editor"
-                }]
-            }]
-        }]
-    };
-
-    protected static readonly expertLayout: IDockElementLayout = {
-        type: "strip",
-        direction: "horizontal",
-        size: 1,
-        elements: [{
-            type: "strip",
-            direction: "vertical",
-            size: 0.2,
-            elements: [{
-                type: "stack",
-                size: 0.3,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "navigator",
-                    text: "Navigator"
-                }, {
-                    contentId: "assets",
-                    text: "Media"
-                }, {
-                    contentId: "collection",
-                    text: "Collection"
-                }]
-            }, {
-                type: "stack",
-                size: 0.7,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "task",
-                    text: "Task"
-                }]
-            }]
-        },{
-            type: "strip",
-            direction: "vertical",
-            size: 0.6,
-            elements: [{
-                type: "stack",
-                size: 0.8,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "explorer",
-                    text: "Explorer"
-                }]
-            }, {
-                type: "stack",
-                size: 0.2,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "article-editor",
-                    text: "Article Editor"
-                }, {
-                    contentId: "tour-editor",
-                    text: "Tour Editor"
-                }, {
-                    contentId: "state-editor",
-                    text: "State Editor"
-                }, {
-                    contentId: "notes",
-                    text: "Note Editor"
-                }, {
-                    contentId: "console",
-                    text: "Console"
-                }]
-            }]
-        }, {
-            type: "strip",
-            direction: "vertical",
-            size: 0.2,
-            elements: [{
-                type: "stack",
-                size: 0.6,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "hierarchy",
-                    text: "Hierarchy"
-                }]
-            }, {
-                type: "stack",
-                size: 0.4,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "inspector",
-                    text: "Inspector"
-                }]
-            }]
-        }]
-    };
 }

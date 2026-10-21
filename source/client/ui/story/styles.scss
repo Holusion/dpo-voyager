@@ -63,22 +63,63 @@ voyager-story {
   line-height: 1.35;
 }
 
-ff-dock-view {
-  flex: 1 1 auto;
+sv-story-workspace {
+  background: common.$color-background-dark;
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
   font-size: 0.85em;
-}
 
-ff-tab-header, ff-dock-panel-header {
-  .ff-text {
-    display: inline;
+  [hidden] { display: none !important; }
+
+  .sv-workspace-row, .sv-workspace-column, .sv-workspace-region {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    flex: 1 1 0;
   }
 
-  .ff-icon {
-    height: 0.94em;
+  .sv-workspace-column, .sv-workspace-region {
+    flex-direction: column;
+    // Keep the embedded viewer's overlays below the surrounding splitter handles.
+    isolation: isolate;
+  }
+  .sv-workspace-sidebar { flex-basis: 22%; }
+  .sv-workspace-main { flex-basis: 78%; }
+  .sv-workspace-inspection { flex-basis: 22%; }
+  .sv-workspace-navigation { flex-basis: 35%; }
+  .sv-workspace-task { flex-basis: 65%; }
+  .sv-workspace-explorer { flex-basis: 68%; }
+  .sv-workspace-editor { flex-basis: 32%; }
+
+  .sv-workspace-region > .sv-panel,
+  .sv-workspace-region > sv-article-editor,
+  .sv-workspace-region > ff-hierarchy-tree-view {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
   }
 
-  label {
-    font-weight: normal;
+  .sv-workspace-tabs, .sv-workspace-tools {
+    display: flex;
+    flex: 0 0 auto;
+    background: common.$color-background-dark;
+  }
+
+  .sv-workspace-tools > ff-button { flex: 0 0 auto; }
+
+  .sv-workspace-tabs button {
+    font: inherit;
+    color: common.$color-text;
+    background: transparent;
+    border: 0;
+    padding: 6px 10px;
+    cursor: pointer;
+
+    &[aria-selected="true"], &:hover { background: common.$color-background; }
+    &:focus-visible { outline: 2px solid common.$color-primary; outline-offset: -2px; }
   }
 }
 
@@ -411,12 +452,6 @@ $color-component-meta-light: #d9d998;
     &[disabled] {
       background-color: common.$color-primary-dark;
     }
-  }
-}
-
-.sv-notes-panel {
-  .ff-text-edit, .ff-line-edit {
-    margin: 2px 0;
   }
 }
 
@@ -759,23 +794,6 @@ $color-component-meta-light: #d9d998;
 
   .sv-container {
     overflow: hidden;
-  }
-
-  .sv-custom-buttons {
-    float: left;
-    padding-right: 1em;
-    border-right: 1px solid common.$color-icon;
-
-    .ff-button.ff-transparent {
-      float: left;
-      padding: 0 8px;
-    }
-  }
-
-  .sv-overlay {
-    @include common.fullsize;
-    background-color: color.adjust(common.$color-background-dark, $alpha: -0.5);
-    z-index: 0;
   }
 }
 
