@@ -50,7 +50,7 @@ export default class StoryWorkspace extends DocumentView
     private task: TaskPanel;
     private bottomTask: TaskPanel;
     private settings: SettingsTaskView;
-    private bottomTasks = new Set<string>(["CVAudioTask", "CVOverlayTask", "CVToursTask", "CVArticlesTask", "CVDerivativesTask", "CVCaptureTask"]);
+    private bottomTasks = new Set<string>(["CVActionsTask", "CVAudioTask", "CVOverlayTask", "CVToursTask", "CVArticlesTask", "CVDerivativesTask", "CVCaptureTask"]);
     private article: ArticleEditor;
     private tour: TourPanel;
     private states: StatePanel;
