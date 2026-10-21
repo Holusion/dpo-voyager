@@ -21,7 +21,6 @@ import CVMediaManager from "../components/CVMediaManager";
 
 import CVTaskProvider from "../components/CVTaskProvider";
 
-import CVSettingsTask from "../components/CVSettingsTask";
 import CVPoseTask from "../components/CVPoseTask";
 import CVCaptureTask from "../components/CVCaptureTask";
 import CVAnnotationsTask from "../components/CVAnnotationsTask";
@@ -48,7 +47,6 @@ const types = [
     CVTimeManager,
 
     CVTaskProvider,
-    CVSettingsTask,
     CVPoseTask,
     CVCaptureTask,
     CVAnnotationsTask,

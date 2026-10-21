@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-import CVSettingsTask from "../components/CVSettingsTask";
 import CVPoseTask from "../components/CVPoseTask";
 import CVCaptureTask from "../components/CVCaptureTask";
 import CVAnnotationsTask from "../components/CVAnnotationsTask";
@@ -41,13 +40,11 @@ export default {
         //CVOverlayTask,
         CVAudioTask,
         CVActionsTask,
-        CVSettingsTask,
     ],
     [ETaskMode.QC]: [
         CVPoseTask,
         CVCaptureTask,
         CVDerivativesTask,
-        CVSettingsTask,
     ],
     [ETaskMode.Authoring]: [
         CVAnnotationsTask,
@@ -55,7 +52,6 @@ export default {
         CVToursTask,
         CVAudioTask,
         CVActionsTask,
-        CVSettingsTask,
     ],
     [ETaskMode.Expert]: [
         CVPoseTask,
@@ -67,7 +63,6 @@ export default {
         CVOverlayTask,
         CVAudioTask,
         CVActionsTask,
-        CVSettingsTask,
     ],
     [ETaskMode.Standalone]: [
         CVPoseTask,
@@ -79,6 +74,5 @@ export default {
         //CVOverlayTask,
         CVAudioTask,
         CVActionsTask,
-        CVSettingsTask,
     ]
 }

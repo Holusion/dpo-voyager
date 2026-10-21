@@ -23,6 +23,9 @@ import "@ff/ui/Splitter";
 import StoryApplication from "../../applications/StoryApplication";
 import CVDocument from "../../components/CVDocument";
 import CVTaskProvider from "../../components/CVTaskProvider";
+import CVNodeProvider from "../../components/CVNodeProvider";
+import CVPoseTask from "../../components/CVPoseTask";
+import CVAnnotationsTask from "../../components/CVAnnotationsTask";
 import CVToursTask from "../../components/CVToursTask";
 import DocumentView, { customElement, html } from "../explorer/DocumentView";
 import ArticleEditor from "./ArticleEditor";
@@ -32,6 +35,7 @@ import ExplorerPanel from "./ExplorerPanel";
 import InspectorPanel from "./InspectorPanel";
 import NavigatorPanel from "./NavigatorPanel";
 import StatePanel from "./StatePanel";
+import SettingsTaskView from "./SettingsTaskView";
 import TaskPanel from "./TaskPanel";
 import TourPanel from "./TourPanel";
 
@@ -44,6 +48,9 @@ export default class StoryWorkspace extends DocumentView
     private collection: CollectionPanel;
     private explorer: ExplorerPanel;
     private task: TaskPanel;
+    private bottomTask: TaskPanel;
+    private settings: SettingsTaskView;
+    private bottomTasks = new Set<string>();
     private article: ArticleEditor;
     private tour: TourPanel;
     private states: StatePanel;
@@ -57,6 +64,10 @@ export default class StoryWorkspace extends DocumentView
         return this.system.getMainComponent(CVTaskProvider);
     }
 
+    private get nodes() {
+        return this.system.getMainComponent(CVNodeProvider);
+    }
+
     constructor(application: StoryApplication)
     {
         super(application.system);
@@ -66,6 +77,10 @@ export default class StoryWorkspace extends DocumentView
         this.collection = new CollectionPanel(system);
         this.explorer = new ExplorerPanel(application.explorer);
         this.task = new TaskPanel(system);
+        this.task.showTask = task => task instanceof CVPoseTask || task instanceof CVAnnotationsTask;
+        this.bottomTask = new TaskPanel(system);
+        this.bottomTask.showTask = task => this.bottomTasks.has(task.typeName);
+        this.settings = new SettingsTaskView(system);
         this.article = new ArticleEditor(system);
         this.tour = new TourPanel(system);
         this.states = new StatePanel(system);
@@ -81,12 +96,14 @@ export default class StoryWorkspace extends DocumentView
     {
         super.connected();
         this.tasks.on("active-component", this.onTask, this);
+        this.nodes.on("active-node", this.onUpdate, this);
         this.tasks.ins.mode.on("value", this.onMode, this);
     }
 
     protected disconnected()
     {
         this.tasks.off("active-component", this.onTask, this);
+        this.nodes.off("active-node", this.onUpdate, this);
         this.tasks.ins.mode.off("value", this.onMode, this);
         this.subscriber.off();
         super.disconnected();
@@ -128,7 +145,10 @@ export default class StoryWorkspace extends DocumentView
     protected render()
     {
         const expert = this.tasks.expertMode;
-        const hasTask = !!this.tasks.activeComponent;
+        const activeTask = this.tasks.activeComponent;
+        const contextualTask = activeTask instanceof CVPoseTask || activeTask instanceof CVAnnotationsTask;
+        const hasTask = contextualTask || !!this.nodes.activeNode;
+        const hasBottomTask = !!activeTask && this.bottomTasks.has(activeTask.typeName);
         const hasArticle = this.article.hasArticle;
         const tours = this.activeDocument && this.activeDocument.setup.tours;
         const hasTour = this.tasks.activeComponent instanceof CVToursTask &&
@@ -157,11 +177,16 @@ export default class StoryWorkspace extends DocumentView
                         `)}
                     </section>
                     <ff-splitter direction="vertical" margin="100" ?hidden=${!hasTask}></ff-splitter>
-                    <section class="sv-workspace-region sv-workspace-task" aria-label="Task" ?hidden=${!hasTask}>${this.task}</section>
+                    <section class="sv-workspace-region sv-workspace-task" aria-label="Context" ?hidden=${!hasTask}>
+                        <div class="sv-workspace-region" ?hidden=${!contextualTask}>${this.task}</div>
+                        <div class="sv-workspace-region sv-panel" ?hidden=${contextualTask}>${this.settings}</div>
+                    </section>
                 </div>
                 <ff-splitter margin="180"></ff-splitter>
                 <div class="sv-workspace-column sv-workspace-main">
                     <section class="sv-workspace-region sv-workspace-explorer" aria-label="Explorer">${this.explorer}</section>
+                    <ff-splitter direction="vertical" margin="120" ?hidden=${!hasBottomTask}></ff-splitter>
+                    <section class="sv-workspace-region sv-workspace-bottom-task" aria-label="Tools" ?hidden=${!hasBottomTask}>${this.bottomTask}</section>
                     <ff-splitter direction="vertical" margin="120" ?hidden=${!editor}></ff-splitter>
                     <section class="sv-workspace-region sv-workspace-editor" aria-label="Editor" ?hidden=${!editor}>
                         <div class="sv-workspace-region" ?hidden=${editor !== "article"}>${this.article}</div>

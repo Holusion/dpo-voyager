@@ -23,15 +23,21 @@ import "@ff/scene/ui/PropertyView";
 import { customElement, html, property } from "@ff/ui/CustomElement";
 import Tree from "@ff/ui/Tree";
 
-import CVSettingsTask from "../../components/CVSettingsTask";
-import { TaskView } from "../../components/CVTask";
+import System from "@ff/graph/System";
+import NodeView from "../explorer/NodeView";
 import NVNode from "../../nodes/NVNode";
 
 ////////////////////////////////////////////////////////////////////////////////
 
 @customElement("sv-settings-task-view")
-export default class SettingsTaskView extends TaskView<CVSettingsTask>
+export default class SettingsTaskView extends NodeView
 {
+    constructor(system: System)
+    {
+        super(system);
+        this.classList.add("sv-task-view");
+    }
+
     protected render()
     {
         if(!this.activeDocument) {

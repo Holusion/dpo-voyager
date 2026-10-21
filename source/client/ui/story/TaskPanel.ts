@@ -20,6 +20,7 @@ import System from "@ff/graph/System";
 import SystemView, { customElement, html } from "@ff/scene/ui/SystemView";
 
 import CVTaskProvider, { IActiveTaskEvent } from "../../components/CVTaskProvider";
+import CVTask from "../../components/CVTask";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -29,6 +30,7 @@ import CVTaskProvider, { IActiveTaskEvent } from "../../components/CVTaskProvide
 @customElement("sv-task-panel")
 export default class TaskPanel extends SystemView
 {
+    showTask: (task: CVTask) => boolean = () => true;
     protected taskProvider: CVTaskProvider = null;
 
     constructor(system?: System)
@@ -62,7 +64,7 @@ export default class TaskPanel extends SystemView
     protected render()
     {
         const task = this.taskProvider.activeComponent;
-        if (!task) {
+        if (!task || !this.showTask(task)) {
             return html``;
         }
 
