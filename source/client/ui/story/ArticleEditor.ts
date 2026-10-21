@@ -59,9 +59,15 @@ import CVReader from "../../components/CVReader";
 @customElement("sv-article-editor")
 export default class ArticleEditor extends SystemView
 {
+    static readonly changeEvent = "sv-article-editor-change";
+
     private _container: HTMLDivElement = null;
     private _overlay: HTMLElement = null;
     private _assetPath: string = "";
+
+    get hasArticle() {
+        return !!this._assetPath;
+    }
 
     protected get mediaManager() {
         return this.system.getMainComponent(CVMediaManager);
@@ -135,6 +141,7 @@ export default class ArticleEditor extends SystemView
             if(this._overlay.parentElement === this) {
                 this.removeChild(this._overlay);
             }
+            this.dispatchEvent(new CustomEvent(ArticleEditor.changeEvent, { bubbles: true }));
         });
     }
 
@@ -191,6 +198,7 @@ export default class ArticleEditor extends SystemView
         tinymce.activeEditor.setDirty(false);
 
         this.appendChild(this._overlay);
+        this.dispatchEvent(new CustomEvent(ArticleEditor.changeEvent, { bubbles: true }));
 
         return Promise.resolve();
     }

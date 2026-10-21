@@ -66,6 +66,10 @@ voyager-story {
 ff-dock-view {
   flex: 1 1 auto;
   font-size: 0.85em;
+
+  .sv-dock-hidden {
+    display: none !important;
+  }
 }
 
 ff-tab-header, ff-dock-panel-header {

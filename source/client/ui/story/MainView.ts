@@ -17,20 +17,25 @@
 
 import ExplorerPanel from "./ExplorerPanel";
 
-import localStorage from "@ff/browser/localStorage";
+import Subscriber from "@ff/core/Subscriber";
 
 import StoryApplication, { IStoryApplicationProps } from "../../applications/StoryApplication";
 
 import CustomElement, { customElement, html } from "@ff/ui/CustomElement";
 import Icon from "@ff/ui/Icon";
 import DockView, { DockContentRegistry, IDockElementLayout } from "@ff/ui/DockView";
+import DockPanel from "@ff/ui/DockPanel";
+import DockStrip from "@ff/ui/DockStrip";
 
 import HierarchyTreeView from "@ff/scene/ui/HierarchyTreeView";
 
 import NavigatorPanel from "./NavigatorPanel";
-import CVTaskProvider, { ETaskMode } from "../../components/CVTaskProvider";
+import CVTaskProvider from "../../components/CVTaskProvider";
+import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDocumentProvider";
+import CVToursTask from "../../components/CVToursTask";
 
 import TaskBar from "./TaskBar";
+import ArticleEditor from "./ArticleEditor";
 
 import EditorPanel from "./EditorPanel";
 import TourPanel from "./TourPanel";
@@ -76,26 +81,27 @@ Icon.add("record", html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100
 
 ////////////////////////////////////////////////////////////////////////////////
 
-interface IUIState
-{
-    regularLayout: IDockElementLayout;
-    expertLayout: IDockElementLayout;
-    expertMode: boolean;
-}
+/** Editors for the active task, shown below the explorer. */
+type EditorId = "article-editor" | "tour-editor" | "state-editor" | "notes";
 
 @customElement("voyager-story")
 export default class MainView extends CustomElement
 {
-    static readonly stateKey: string = "main-view-2";
-
     protected application: StoryApplication;
     protected dockView: DockView;
 
     protected registry: DockContentRegistry;
-    protected state: IUIState;
+    protected panels = new Map<string, DockPanel>();
+
+    private layoutReady = false;
+    private editor: EditorId = null;
+    private documentSubscriber = new Subscriber("value", this.updatePanels, this);
 
     protected get taskProvider() {
         return this.application.system.getMainComponent(CVTaskProvider);
+    }
+    protected get documentProvider() {
+        return this.application.system.getMainComponent(CVDocumentProvider);
     }
 
     get app() {
@@ -105,7 +111,6 @@ export default class MainView extends CustomElement
     constructor(application?: StoryApplication)
     {
         super();
-        this.onUnload = this.onUnload.bind(this);
 
         if (application) {
             this.application = application;
@@ -157,13 +162,7 @@ export default class MainView extends CustomElement
         registry.set("article-editor", () => new EditorPanel(system));
         registry.set("collection", () => new CollectionPanel(system));
 
-        const reset = new URL(window.location.href).searchParams.get("reset") !== null;
-        const state = reset ? null : localStorage.get("voyager-story", MainView.stateKey);
-
-        this.state = state || {
-            regularLayout: MainView.regularLayout,
-            expertLayout: MainView.expertLayout,
-        };
+        this.addEventListener(ArticleEditor.changeEvent, this.updatePanels);
     }
 
     protected firstConnected()
@@ -176,116 +175,105 @@ export default class MainView extends CustomElement
         this.appendElement(new TaskBar(this.application.system));
 
         this.dockView = this.appendElement(DockView);
-        this.restoreLayout();
+        this.dockView.setLayout(MainView.layout, this.registry);
 
-        window.addEventListener("beforeunload", this.onUnload);
+        const panels = Array.from(this.dockView.getElementsByTagName(DockPanel.tagName)) as DockPanel[];
+        panels.forEach(panel => this.panels.set(panel.getLayout().contentId, panel));
+
+        // The explorer takes the space the side columns leave.
+        this.getColumn("navigator").style.flexGrow = "0";
+        this.getColumn("hierarchy").style.flexGrow = "0";
+
+        // Strips set their sizes from their first layout: everything must be visible until then.
+        const strips = Array.from(this.dockView.getElementsByTagName(DockStrip.tagName)) as DockStrip[];
+        Promise.all(strips.map(strip => strip.updateComplete)).then(() => {
+            this.layoutReady = true;
+            this.updatePanels();
+        });
+    }
+
+    protected connected()
+    {
+        const document = this.documentProvider.activeComponent;
+        this.onActiveDocument({ previous: null, next: document } as IActiveDocumentEvent);
+        this.documentProvider.on<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
+        this.taskProvider.on("active-component", this.onTask, this);
     }
 
     protected disconnected()
     {
-        this.storeLayout();
-        localStorage.set("voyager-story", MainView.stateKey, this.state);
+        this.documentProvider.off<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
+        this.taskProvider.off("active-component", this.onTask, this);
+        this.documentSubscriber.off();
     }
 
-    protected onUnload()
+    protected onTaskMode()
     {
-        this.storeLayout();
-        localStorage.set("voyager-story", MainView.stateKey, this.state);
+        this.getContent<AssetPanel>("assets")?.requestUpdate();
+        this.updatePanels();
     }
 
-    protected onTaskMode(mode: ETaskMode)
+    protected onActiveDocument(event: IActiveDocumentEvent)
     {
-        this.storeLayout();
-        this.restoreLayout();
-    }
-
-    protected storeLayout()
-    {
-        const state = this.state;
-        const expertMode = this.taskProvider.expertMode;
-
-        if (expertMode) {
-            state.expertLayout = this.dockView.getLayout();
+        this.documentSubscriber.off();
+        if (event.next) {
+            this.documentSubscriber.on(event.next.setup.tours.ins.enabled, event.next.setup.tours.outs.tourIndex);
         }
-        else {
-            state.regularLayout = this.dockView.getLayout();
+        this.updatePanels();
+    }
+
+    protected onTask()
+    {
+        this.updatePanels();
+    }
+
+    /** Shows the panels that apply to the active task, the selection and the mode. */
+    protected updatePanels()
+    {
+        if (!this.layoutReady) {
+            return;
+        }
+
+        const tasks = this.taskProvider;
+
+        const editor = this.getEditor();
+        // An editor comes forward when it gets work.
+        if (editor && editor !== this.editor) {
+            this.panels.get(editor).activatePanel();
+        }
+        this.editor = editor;
+
+        const inspection = this.getColumn("hierarchy");
+        if (inspection.classList.contains("sv-dock-hidden") === tasks.expertMode) {
+            inspection.classList.toggle("sv-dock-hidden", !tasks.expertMode);
+            inspection.previousElementSibling.classList.toggle("sv-dock-hidden", !tasks.expertMode);
+            window.dispatchEvent(new Event("resize"));
         }
     }
 
-    protected restoreLayout()
+    /** The editor the active task works with; task editors come before an open article. */
+    protected getEditor(): EditorId
     {
-        const state = this.state;
-        const expertMode = this.taskProvider.expertMode;
-
-        this.dockView.setLayout(expertMode ? state.expertLayout : state.regularLayout, this.registry);
-        this.dockView.setPanelsMovable(true)
+        const task = this.taskProvider.activeComponent;
+        const tours = this.documentProvider.activeComponent?.setup.tours;
+        if (task instanceof CVToursTask && tours?.ins.enabled.value && tours.activeTour) {
+            return "tour-editor";
+        }
+        return this.getContent<EditorPanel>("article-editor").editor.hasArticle ? "article-editor" : null;
     }
 
-    protected static readonly regularLayout: IDockElementLayout = {
-        type: "strip",
-        direction: "horizontal",
-        size: 1,
-        elements: [{
-            type: "strip",
-            direction: "vertical",
-            size: 0.22,
-            elements: [{
-                type: "stack",
-                size: 0.35,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "navigator",
-                    text: "Navigator"
-                }, {
-                    contentId: "assets",
-                    text: "Media"
-                }, {
-                    contentId: "collection",
-                    text: "Collection"
-                }]
-            }, {
-                type: "stack",
-                size: 0.65,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "task",
-                    text: "Task"
-                }]
-            }]
-        }, {
-            type: "strip",
-            direction: "vertical",
-            size: 0.78,
-            elements: [{
-                type: "stack",
-                size: 0.75,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "explorer",
-                    text: "Explorer"
-                }]
-            }, {
-                type: "stack",
-                size: 0.25,
-                activePanelIndex: 0,
-                panels: [{
-                    contentId: "article-editor",
-                    text: "Article Editor"
-                }, {
-                    contentId: "tour-editor",
-                    text: "Tour Editor"
-                }, {
-                    contentId: "state-editor",
-                    text: "State Editor"
-                }, {
-                    contentId: "notes",
-                    text: "Note Editor"
-                }]
-            }]
-        }]
-    };
+    protected getContent<T extends Element>(id: string): T
+    {
+        return this.panels.get(id)?.firstElementChild as T;
+    }
 
-    protected static readonly expertLayout: IDockElementLayout = {
+    /** The strip holding the given panel's stack. */
+    protected getColumn(id: string)
+    {
+        return this.panels.get(id).parentStack.parentElement as DockStrip;
+    }
+
+    protected static readonly layout: IDockElementLayout = {
         type: "strip",
         direction: "horizontal",
         size: 1,
@@ -322,7 +310,7 @@ export default class MainView extends CustomElement
             size: 0.6,
             elements: [{
                 type: "stack",
-                size: 0.8,
+                size: 0.7,
                 activePanelIndex: 0,
                 panels: [{
                     contentId: "explorer",
@@ -330,7 +318,7 @@ export default class MainView extends CustomElement
                 }]
             }, {
                 type: "stack",
-                size: 0.2,
+                size: 0.3,
                 activePanelIndex: 0,
                 panels: [{
                     contentId: "article-editor",
@@ -344,9 +332,6 @@ export default class MainView extends CustomElement
                 }, {
                     contentId: "notes",
                     text: "Note Editor"
-                }, {
-                    contentId: "console",
-                    text: "Console"
                 }]
             }]
         }, {
@@ -368,6 +353,9 @@ export default class MainView extends CustomElement
                 panels: [{
                     contentId: "inspector",
                     text: "Inspector"
+                }, {
+                    contentId: "console",
+                    text: "Console"
                 }]
             }]
         }]
