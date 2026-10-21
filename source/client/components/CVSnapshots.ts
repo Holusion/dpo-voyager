@@ -157,7 +157,13 @@ export default class CVSnapshots extends CTweenMachine
             return;
         }
 
-        this.activateDelta(this.addIns.deltaID.value);
+        // an action may have no state yet, or one deleted since
+        const id = this.addIns.deltaID.value;
+        if (!this.getState(id)) {
+            console.warn(`state change: no state '${id}'`);
+            return;
+        }
+        this.activateDelta(id);
     }
 
     /**
