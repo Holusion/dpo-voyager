@@ -27,6 +27,7 @@ import { IDocument, IScene } from "client/schema/document";
 import CVNode from "./CVNode";
 import CVModel2 from "./CVModel2";
 import unitScaleFactor from "client/utils/unitScaleFactor";
+import roundSaved from "client/utils/roundSaved";
 import CTransform from "client/../../libs/ff-scene/source/components/CTransform";
 import CVCamera from "./CVCamera";
 import CVSetup from "./CVSetup";
@@ -41,6 +42,8 @@ import CSunLight from "@ff/scene/components/CSunLight";
 
 const _vec3 = new Vector3();
 const _vec3b = new Vector3();
+const _box = new Box3();
+const _box2 = new Box3();
 
 function light_has_shadowSize(l : CLight): l is (CLight & {ins: {shadowSize: Property<number>}}) {
     return "shadowSize" in l.ins;
@@ -78,6 +81,11 @@ export default class CVScene extends CVNode
 
     ins = this.addInputs<CVNode, typeof CVScene.ins>(CVScene.ins);
     outs = this.addOutputs<CVNode, typeof CVScene.outs>(CVScene.outs);
+
+    /** Models' bounds each light has been fitted to (see getSavedBoundsRadius). */
+    private _lightRadius = new WeakMap<CLight, number>();
+    /** Lights of a loaded document are where it saved them: fitted to its bounds. */
+    private _documentLights = false;
 
 
     get settingProperties() {
@@ -155,6 +163,7 @@ export default class CVScene extends CVNode
     {
         this.ins.units.setValue(EUnitType[scene.units] || 0);
         this.outs.units.setValue(EUnitType[scene.units] || 0);
+        this._documentLights = true;
     }
 
     toDocument(document: IDocument, scene: IScene)
@@ -199,6 +208,26 @@ export default class CVScene extends CVNode
         }
     }
 
+    /**
+     * Radius of the visible models' bounds, as documents save them: a model's geometry loading in place of
+     * its saved bounding box doesn't change it.
+     */
+    protected getSavedBoundsRadius()
+    {
+        const box = _box.makeEmpty();
+
+        this.models.forEach(model => {
+            const local = model.localBoundingBox;
+            if (model.object3D.visible && !local.isEmpty()) {
+                _box2.min.fromArray(local.min.toArray().map(roundSaved));
+                _box2.max.fromArray(local.max.toArray().map(roundSaved));
+                box.union(_box2.applyMatrix4(model.object3D.matrixWorld));
+            }
+        });
+
+        return box.isEmpty() ? 0 : box.getSize(_vec3).length() * 0.5;
+    }
+
     protected updateTransformHierarchy()
     {
         if(this.models.length === 0) {
@@ -230,6 +259,7 @@ export default class CVScene extends CVNode
         if(lightNode) {
             const lightTransform = lightNode.getComponent(CTransform, true);       
             const unitScale = unitScaleFactor(outs.units.value, ins.units.value);
+            const radius = this.getSavedBoundsRadius();
 
             lightTransform.ins.scale.setValue([1.0,1.0,1.0]);  // Hack to avoid dealing with group scaling
             
@@ -237,6 +267,15 @@ export default class CVScene extends CVNode
             lightTransform.children.forEach(light => {
                 const lights = light.getComponents(CLight) as Array<CLight>;
                 for(let lightNode of lights){
+                    // fit lights to the scene once, then when its bounds or units change
+                    if (this._documentLights) {
+                        this._lightRadius.set(lightNode, radius);
+                    }
+                    if (unitScale === 1 && this._lightRadius.get(lightNode) === radius) {
+                        continue;
+                    }
+                    this._lightRadius.set(lightNode, radius);
+
                     if(lightNode instanceof CDirectionalLight || lightNode instanceof CSunLight){
 
                         if(lightNode instanceof CDirectionalLight){
@@ -292,6 +331,7 @@ export default class CVScene extends CVNode
 
             });
         }
+        this._documentLights = false;
     }
 
     protected updateCameras()
