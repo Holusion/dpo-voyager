@@ -205,8 +205,16 @@ export default class StoryWorkspace extends DocumentView
                 <ff-splitter margin="180"></ff-splitter>
                 <div class="sv-workspace-column sv-workspace-main">
                     <section class="sv-workspace-region sv-workspace-explorer" aria-label="Explorer">${this.explorer}</section>
-                    <ff-splitter direction="vertical" margin="120" ?hidden=${!hasBottomTask}></ff-splitter>
-                    <section class="sv-workspace-region sv-workspace-bottom-task" aria-label="Tools" ?hidden=${!hasBottomTask}>${this.bottomTask}</section>
+                    <ff-splitter direction="vertical" margin="120" ?hidden=${!hasBottomTask}
+                        @pointerdown=${() => this.classList.add("sv-workspace-resizing")}
+                        @pointerup=${() => this.classList.remove("sv-workspace-resizing")}
+                        @pointercancel=${() => this.classList.remove("sv-workspace-resizing")}></ff-splitter>
+                    <section class="sv-workspace-region sv-workspace-bottom-task" aria-label="Tools"
+                        ?data-open=${hasBottomTask} ?inert=${!hasBottomTask}
+                        aria-hidden=${hasBottomTask ? "false" : "true"}
+                        @transitionend=${(event: TransitionEvent) => {
+                            if (event.propertyName === "flex-basis") window.dispatchEvent(new Event("resize"));
+                        }}>${this.bottomTask}</section>
                     <ff-splitter direction="vertical" margin="120" ?hidden=${!editor}></ff-splitter>
                     <section class="sv-workspace-region sv-workspace-editor" aria-label="Editor" ?hidden=${!editor}>
                         <div class="sv-workspace-region" ?hidden=${editor !== "article"}>${this.article}</div>
