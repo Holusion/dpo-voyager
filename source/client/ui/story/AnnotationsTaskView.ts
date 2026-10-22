@@ -101,14 +101,14 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: 30%">
-                    <div class="ff-scroll-y ff-flex-column">
-                        <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
+                <div class="ff-flex-item-stretch ff-flex-row">
+                    <div class="ff-splitter-section" style=${annotation ? "flex-basis: 40%" : "flex-basis: 100%"}>
+                        <div class="ff-scroll-y ff-flex-column">
+                            <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
+                        </div>
                     </div>
-                </div>
-                <ff-splitter direction="vertical"></ff-splitter>
-                <div class="ff-splitter-section" style="flex-basis: 70%">
-                    ${annotation ? this.renderDetailView(annotations) : null}
+                    ${annotation ? html`<ff-splitter></ff-splitter>
+                        <div class="ff-splitter-section" style="flex-basis: 60%">${this.renderDetailView(annotations)}</div>` : null}
                 </div>
             </div>
         </div>`;

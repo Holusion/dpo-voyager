@@ -28,6 +28,7 @@ import CVAnnotationView from "../../components/CVAnnotationView";
 import NVNode from "../../nodes/NVNode";
 import CVAnnotationsTask from "../../components/CVAnnotationsTask";
 import CVToursTask from "../../components/CVToursTask";
+import CVPoseTask from "../../components/CVPoseTask";
 import DocumentView, { customElement, html } from "../explorer/DocumentView";
 import ArticleEditor from "./ArticleEditor";
 import AssetPanel from "./AssetPanel";
@@ -51,7 +52,7 @@ export default class StoryWorkspace extends DocumentView
     private task: TaskPanel;
     private bottomTask: TaskPanel;
     private settings: SettingsPanel;
-    private bottomTasks = new Set<string>(["CVCaptureTask"]);
+    private bottomTasks = new Set<string>(["CVCaptureTask", "CVPoseTask", "CVAnnotationsTask", "CVArticlesTask", "CVToursTask"]);
     private article: ArticleEditor;
     private tour: TourPanel;
     private states: StatePanel;
@@ -60,6 +61,7 @@ export default class StoryWorkspace extends DocumentView
     private navigationIndex = 0;
     private contextTab: "settings" | "task" = "settings";
     private showStates = false;
+    private showTourSteps = false;
     private subscriber = new Subscriber("value", this.onUpdate, this);
 
     private get tasks() {
@@ -123,6 +125,7 @@ export default class StoryWorkspace extends DocumentView
             next.setup.viewer.ins.activeAnnotation.on("value", this.onAnnotation, this);
         }
         this.showStates = false;
+        this.showTourSteps = false;
         this.requestUpdate();
     }
 
@@ -130,7 +133,10 @@ export default class StoryWorkspace extends DocumentView
     {
         const task = this.tasks.activeComponent;
         this.contextTab = task && !this.bottomTasks.has(task.typeName) ? "task" : "settings";
+        this.settings.poseMode = task instanceof CVPoseTask;
+        this.settings.requestUpdate();
         this.showStates = false;
+        this.showTourSteps = false;
         // An article opened from Media also closes before the tour editor takes over.
         if (this.tasks.activeComponent instanceof CVToursTask && this.article.hasArticle) {
             this.article.closeArticle();
@@ -142,6 +148,7 @@ export default class StoryWorkspace extends DocumentView
     {
         this.assets.requestUpdate();
         this.showStates = false;
+        this.showTourSteps = false;
         this.requestUpdate();
     }
 
@@ -175,7 +182,13 @@ export default class StoryWorkspace extends DocumentView
         const tours = this.activeDocument && this.activeDocument.setup.tours;
         const hasTour = this.tasks.activeComponent instanceof CVToursTask &&
             tours && tours.ins.enabled.value && !!tours.activeTour;
-        const editor = this.showStates ? "states" : hasArticle ? "article" : hasTour ? "tour" : null;
+        const editor = this.showStates ? "states" : hasArticle ? "article" :
+            hasTour && this.showTourSteps ? "tour" : null;
+        const pose = activeTask instanceof CVPoseTask;
+        if (this.settings.poseMode !== pose) {
+            this.settings.poseMode = pose;
+            this.settings.requestUpdate();
+        }
         const hasBottom = hasBottomTask || !!editor;
         const navigation = [this.navigator, this.assets, this.collection];
         const titles = ["Navigator", "Media", "Collection"];
@@ -203,7 +216,7 @@ export default class StoryWorkspace extends DocumentView
                     </section>
                     <ff-splitter direction="vertical" margin="100"></ff-splitter>
                     <section class="sv-workspace-region sv-workspace-task" aria-label="Context">
-                        <div class="sv-workspace-tabs" role="tablist" aria-label="Context" ?hidden=${!contextualTask}>
+                        <div class="sv-workspace-tabs" role="tablist" aria-label="Context" ?hidden=${!contextualTask || pose}>
                             <button id="story-context-settings-tab" role="tab" aria-controls="story-context-settings"
                                 aria-selected=${this.contextTab === "settings" ? "true" : "false"}
                                 tabindex=${this.contextTab === "settings" ? 0 : -1}
@@ -217,7 +230,7 @@ export default class StoryWorkspace extends DocumentView
                         </div>
                         <div class="sv-panel-header sv-workspace-context-title">
                             <ff-icon name=${contextualTask && this.contextTab === "task" ? activeTask.icon : "eye"}></ff-icon>
-                            <div class="ff-text">${contextualTask && this.contextTab === "task" ? taskTitle : language?.getUILocalizedString("Settings") || "Settings"}</div>
+                            <div class="ff-text">${pose ? "Model Settings" : contextualTask && this.contextTab === "task" ? taskTitle : language?.getUILocalizedString("Settings") || "Settings"}</div>
                         </div>
                         <div class="sv-workspace-region sv-panel" id="story-context-settings"
                             role=${contextualTask ? "tabpanel" : "region"} aria-label="Settings"
@@ -240,10 +253,13 @@ export default class StoryWorkspace extends DocumentView
                         @transitionend=${(event: TransitionEvent) => {
                             if (event.propertyName === "flex-basis") window.dispatchEvent(new Event("resize"));
                         }}>
-                        <div class="sv-workspace-region" ?hidden=${!!editor}>${this.bottomTask}</div>
+                        <div class="sv-workspace-region" ?hidden=${!!editor} @sv-open-tour-steps=${this.onOpenTourSteps}>${this.bottomTask}</div>
                         <div class="sv-workspace-region" ?hidden=${!editor}>
                             <div class="sv-workspace-region" ?hidden=${editor !== "article"}>${this.article}</div>
-                            <div class="sv-workspace-region" ?hidden=${editor !== "tour"}>${this.tour}</div>
+                            <div class="sv-workspace-region" ?hidden=${editor !== "tour"}>
+                                <div class="sv-panel-header"><ff-button text="Back to Tours" @click=${this.onBackToTours}></ff-button></div>
+                                ${this.tour}
+                            </div>
                             <div class="sv-workspace-region" ?hidden=${editor !== "states"}>${this.states}</div>
                         </div>
                     </section>
@@ -261,6 +277,18 @@ export default class StoryWorkspace extends DocumentView
     private selectNavigation(index: number)
     {
         this.navigationIndex = index;
+        this.requestUpdate();
+    }
+
+    private onOpenTourSteps()
+    {
+        this.showTourSteps = true;
+        this.requestUpdate();
+    }
+
+    private onBackToTours()
+    {
+        this.showTourSteps = false;
         this.requestUpdate();
     }
 

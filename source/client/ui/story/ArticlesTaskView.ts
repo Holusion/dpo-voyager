@@ -71,13 +71,9 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
             <sv-property-view class="sv-property-block" disabled .property=${task.ins.uri}></sv-property-view>
         </div>` : null;
 
-        const uri = activeArticle ? activeArticle.uri : null;
-
-        // Trying article UI without edit button
-        //<ff-button text="Edit" icon="pen" ?disabled=${!uri} @click=${this.onClickEdit}></ff-button>
-
         return html`<div class="sv-commands">
             <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" @click=${this.onClickCreate}></ff-button>
+            <ff-button text="${languageManager.getUILocalizedString("Edit")}" icon="pen" ?disabled=${!activeArticle} @click=${this.onClickEdit}></ff-button>
             <ff-button title="${languageManager.getUILocalizedString("Move Article Up")}" icon="up" ?disabled=${!activeArticle} @click=${this.onClickUp}></ff-button>
             <ff-button title="${languageManager.getUILocalizedString("Move Article Down")}" icon="down" ?disabled=${!activeArticle} @click=${this.onClickDown}></ff-button>          
             <ff-button text="${languageManager.getUILocalizedString("Delete")}" icon="trash" ?disabled=${!activeArticle} @click=${this.onClickDelete}></ff-button>  
@@ -85,14 +81,14 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: 30%">
-                    <div class="ff-scroll-y ff-flex-column">
-                        <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
+                <div class="ff-flex-item-stretch ff-flex-row">
+                    <div class="ff-splitter-section" style=${activeArticle ? "flex-basis: 40%" : "flex-basis: 100%"}>
+                        <div class="ff-scroll-y ff-flex-column">
+                            <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
+                        </div>
                     </div>
-                </div>
-                <ff-splitter direction="vertical"></ff-splitter>
-                <div class="ff-splitter-section" style="flex-basis: 70%">
-                    ${detailView}
+                    ${activeArticle ? html`<ff-splitter></ff-splitter>
+                        <div class="ff-splitter-section" style="flex-basis: 60%">${detailView}</div>` : null}
                 </div>
             </div>
         </div>

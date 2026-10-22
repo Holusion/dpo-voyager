@@ -314,9 +314,6 @@ export default class CVArticlesTask extends CVTask
                 article.uri = `${defaultFolder}/new-article-${article.id}-${languageManager.codeString()}.html`;
                 this.ins.version.set();
             }
-            else {
-                this.ins.edit.set();
-            }
 
             ins.uri.setValue(article.uri, true);
             outs.article.setValue(article);

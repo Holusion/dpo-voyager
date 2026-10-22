@@ -99,6 +99,7 @@ export default class ToursTaskView extends TaskView<CVToursTask>
 
         return html`<div class="sv-commands">
             <ff-button title="${languageManager.getUILocalizedString("Create Tour")}" icon="create" @click=${this.onClickCreate}></ff-button>
+            ${activeTour ? html`<ff-button text="Steps" @click=${this.onClickSteps}></ff-button>` : null}
             <ff-button title="${languageManager.getUILocalizedString("Move Tour Up")}" icon="up" ?disabled=${!activeTour} @click=${this.onClickUp}></ff-button>
             <ff-button title="${languageManager.getUILocalizedString("Move Tour Down")}" icon="down" ?disabled=${!activeTour} @click=${this.onClickDown}></ff-button>
             <ff-button title="${languageManager.getUILocalizedString("Delete Tour")}" icon="trash" ?disabled=${!activeTour} @click=${this.onClickDelete}></ff-button>
@@ -107,14 +108,14 @@ export default class ToursTaskView extends TaskView<CVToursTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: 30%">
-                    <div class="ff-scroll-y ff-flex-column">
-                        <sv-tour-list .data=${tourList.slice()} .selectedItem=${activeTour} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectTour}></sv-tour-list>
+                <div class="ff-flex-item-stretch ff-flex-row">
+                    <div class="ff-splitter-section" style=${activeTour ? "flex-basis: 40%" : "flex-basis: 100%"}>
+                        <div class="ff-scroll-y ff-flex-column">
+                            <sv-tour-list .data=${tourList.slice()} .selectedItem=${activeTour} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectTour}></sv-tour-list>
+                        </div>
                     </div>
-                </div>
-                <ff-splitter direction="vertical"></ff-splitter>
-                <div class="ff-splitter-section" style="flex-basis: 70%">
-                    ${detailView}
+                    ${activeTour ? html`<ff-splitter></ff-splitter>
+                        <div class="ff-splitter-section" style="flex-basis: 60%">${detailView}</div>` : null}
                 </div>
             </div>
         </div>`;
@@ -123,6 +124,11 @@ export default class ToursTaskView extends TaskView<CVToursTask>
     protected onClickCreate()
     {
         this.task.ins.createTour.set();
+    }
+
+    protected onClickSteps()
+    {
+        this.dispatchEvent(new CustomEvent("sv-open-tour-steps", { bubbles: true }));
     }
 
     protected onClickDelete()

@@ -32,6 +32,8 @@ import NVNode from "../../nodes/NVNode";
 @customElement("sv-settings-panel")
 export default class SettingsPanel extends NodeView
 {
+    poseMode = false;
+
     constructor(system: System)
     {
         super(system);
@@ -45,6 +47,18 @@ export default class SettingsPanel extends NodeView
         }
         const languageManager = this.activeDocument.setup.language;
         const node = this.activeNode;
+        if (this.poseMode) {
+            const model = node && node.model;
+            if (!model) {
+                return html`<div class="sv-placeholder">${languageManager.getUILocalizedString("Please select a model to edit its pose")}</div>`;
+            }
+            return html`<div class="ff-flex-item-stretch ff-scroll-y ff-flex-column sv-detail-view">
+                <sv-property-view .property=${this.activeDocument.root.scene.ins.units} label="Global Units"></sv-property-view>
+                <sv-property-view .property=${model.ins.localUnits} label="Item Units"></sv-property-view>
+                <sv-property-view .property=${model.ins.position}></sv-property-view>
+                <sv-property-view .property=${model.ins.rotation}></sv-property-view>
+            </div>`;
+        }
         if (!node) {
             return html`<div class="sv-placeholder">${languageManager.getUILocalizedString("Please select a node to display its properties.")}</div>`;
         }
