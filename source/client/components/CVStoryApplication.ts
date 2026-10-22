@@ -33,6 +33,7 @@ import { ETaskMode } from "../applications/taskSets";
 import CVMediaManager from "./CVMediaManager";
 import CVMeta from "./CVMeta";
 import CVStandaloneFileManager from "./CVStandaloneFileManager";
+import roundSaved from "client/utils/roundSaved";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -114,7 +115,7 @@ export default class CVStoryApplication extends Component
             if (ins.save.changed) {
                 const data = cvDocument.deflateDocument(components);
                 const json = JSON.stringify(data, (key, value) =>
-                    typeof value === "number" ? parseFloat(value.toFixed(7)) : value);
+                    typeof value === "number" ? roundSaved(value) : value);
 
                 if(storyMode !== ETaskMode.Standalone) {
                     this.assetWriter.putJSON(json, cvDocument.assetPath)
