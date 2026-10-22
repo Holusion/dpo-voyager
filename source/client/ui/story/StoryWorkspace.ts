@@ -223,8 +223,16 @@ export default class StoryWorkspace extends DocumentView
                         @transitionend=${(event: TransitionEvent) => {
                             if (event.propertyName === "flex-basis") window.dispatchEvent(new Event("resize"));
                         }}>${this.bottomTask}</section>
-                    <ff-splitter direction="vertical" margin="120" ?hidden=${!editor}></ff-splitter>
-                    <section class="sv-workspace-region sv-workspace-editor" aria-label="Editor" ?hidden=${!editor}>
+                    <ff-splitter direction="vertical" margin="120" ?hidden=${!editor}
+                        @pointerdown=${() => this.classList.add("sv-workspace-resizing")}
+                        @pointerup=${() => this.classList.remove("sv-workspace-resizing")}
+                        @pointercancel=${() => this.classList.remove("sv-workspace-resizing")}></ff-splitter>
+                    <section class="sv-workspace-region sv-workspace-editor" aria-label="Editor"
+                        ?data-open=${!!editor} ?inert=${!editor}
+                        aria-hidden=${editor ? "false" : "true"}
+                        @transitionend=${(event: TransitionEvent) => {
+                            if (event.propertyName === "flex-basis") window.dispatchEvent(new Event("resize"));
+                        }}>
                         <div class="sv-workspace-region" ?hidden=${editor !== "article"}>${this.article}</div>
                         <div class="sv-workspace-region" ?hidden=${editor !== "tour"}>${this.tour}</div>
                         <div class="sv-workspace-region" ?hidden=${editor !== "states"}>${this.states}</div>
