@@ -92,10 +92,6 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         const annotations = this.task.activeAnnotations;
         const annotation = annotations && annotations.activeAnnotation;
 
-        if (this.section === "details") {
-            return annotation ? this.renderDetailView(annotations) : null;
-        }
-
         return html`<div class="sv-commands">
             <ff-button text="${languageManager.getUILocalizedString("Select")}" icon="select" index=${EAnnotationsTaskMode.Off} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
             <ff-button text="${languageManager.getUILocalizedString("Move")}" icon="move" index=${EAnnotationsTaskMode.Move} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
@@ -105,13 +101,13 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: ${this.section === "list" ? "100%" : "30%"}">
+                <div class="ff-splitter-section" style="flex-basis: 30%">
                     <div class="ff-scroll-y ff-flex-column">
                         <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
                     </div>
                 </div>
-                <ff-splitter direction="vertical" ?hidden=${this.section === "list"}></ff-splitter>
-                <div class="ff-splitter-section" style="flex-basis: 70%" ?hidden=${this.section === "list"}>
+                <ff-splitter direction="vertical"></ff-splitter>
+                <div class="ff-splitter-section" style="flex-basis: 70%">
                     ${annotation ? this.renderDetailView(annotations) : null}
                 </div>
             </div>

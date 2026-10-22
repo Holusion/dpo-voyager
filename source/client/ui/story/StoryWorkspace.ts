@@ -49,10 +49,8 @@ export default class StoryWorkspace extends DocumentView
     private collection: CollectionPanel;
     private explorer: ExplorerPanel;
     private task: TaskPanel;
-    private list: TaskPanel;
     private bottomTask: TaskPanel;
     private settings: SettingsPanel;
-    private listTasks = new Set<string>(["CVAnnotationsTask", "CVArticlesTask", "CVToursTask", "CVAudioTask"]);
     private bottomTasks = new Set<string>(["CVCaptureTask"]);
     private article: ArticleEditor;
     private tour: TourPanel;
@@ -83,10 +81,6 @@ export default class StoryWorkspace extends DocumentView
         this.task = new TaskPanel(system);
         this.task.showTask = task => !this.bottomTasks.has(task.typeName);
         this.task.showHeader = false;
-        this.task.section = "details";
-        this.list = new TaskPanel(system);
-        this.list.showTask = task => this.listTasks.has(task.typeName);
-        this.list.section = "list";
         this.bottomTask = new TaskPanel(system);
         this.bottomTask.showTask = task => this.bottomTasks.has(task.typeName);
         this.settings = new SettingsPanel(system);
@@ -176,7 +170,6 @@ export default class StoryWorkspace extends DocumentView
         const expert = this.tasks.expertMode;
         const activeTask = this.tasks.activeComponent;
         const contextualTask = !!activeTask && !this.bottomTasks.has(activeTask.typeName);
-        const hasList = !!activeTask && this.listTasks.has(activeTask.typeName);
         const hasBottomTask = !!activeTask && this.bottomTasks.has(activeTask.typeName);
         const hasArticle = this.article.hasArticle;
         const tours = this.activeDocument && this.activeDocument.setup.tours;
@@ -208,8 +201,6 @@ export default class StoryWorkspace extends DocumentView
                                 aria-labelledby=${`story-tab-${index}`} ?hidden=${this.navigationIndex !== index}>${panel}</div>
                         `)}
                     </section>
-                    <ff-splitter direction="vertical" margin="100" ?hidden=${!hasList}></ff-splitter>
-                    <section class="sv-workspace-region sv-workspace-list" aria-label="Items" ?hidden=${!hasList}>${this.list}</section>
                     <ff-splitter direction="vertical" margin="100"></ff-splitter>
                     <section class="sv-workspace-region sv-workspace-task" aria-label="Context">
                         <div class="sv-workspace-tabs" role="tablist" aria-label="Context" ?hidden=${!contextualTask}>
@@ -223,6 +214,10 @@ export default class StoryWorkspace extends DocumentView
                                 tabindex=${this.contextTab === "task" ? 0 : -1}
                                 @keydown=${(event: KeyboardEvent) => this.onContextKey(event)}
                                 @click=${() => this.selectContext("task")}>${taskTitle}</button>
+                        </div>
+                        <div class="sv-panel-header sv-workspace-context-title">
+                            <ff-icon name=${contextualTask && this.contextTab === "task" ? activeTask.icon : "eye"}></ff-icon>
+                            <div class="ff-text">${contextualTask && this.contextTab === "task" ? taskTitle : language?.getUILocalizedString("Settings") || "Settings"}</div>
                         </div>
                         <div class="sv-workspace-region sv-panel" id="story-context-settings"
                             role=${contextualTask ? "tabpanel" : "region"} aria-label="Settings"

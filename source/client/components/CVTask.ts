@@ -198,9 +198,6 @@ export class TaskView<T extends CVTask = CVTask> extends NodeView
     @property({ attribute: false })
     task: T = null;
 
-    @property({ attribute: false })
-    section: "all" | "list" | "details" = "all";
-
     constructor(task?: T)
     {
         super(task.system);

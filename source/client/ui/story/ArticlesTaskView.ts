@@ -76,10 +76,6 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         // Trying article UI without edit button
         //<ff-button text="Edit" icon="pen" ?disabled=${!uri} @click=${this.onClickEdit}></ff-button>
 
-        if (this.section === "details") {
-            return detailView;
-        }
-
         return html`<div class="sv-commands">
             <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" @click=${this.onClickCreate}></ff-button>
             <ff-button title="${languageManager.getUILocalizedString("Move Article Up")}" icon="up" ?disabled=${!activeArticle} @click=${this.onClickUp}></ff-button>
@@ -89,13 +85,13 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: ${this.section === "list" ? "100%" : "30%"}">
+                <div class="ff-splitter-section" style="flex-basis: 30%">
                     <div class="ff-scroll-y ff-flex-column">
                         <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
                     </div>
                 </div>
-                <ff-splitter direction="vertical" ?hidden=${this.section === "list"}></ff-splitter>
-                <div class="ff-splitter-section" style="flex-basis: 70%" ?hidden=${this.section === "list"}>
+                <ff-splitter direction="vertical"></ff-splitter>
+                <div class="ff-splitter-section" style="flex-basis: 70%">
                     ${detailView}
                 </div>
             </div>
