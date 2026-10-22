@@ -86,6 +86,8 @@ export default class CVScene extends CVNode
     private _lightRadius = new WeakMap<CLight, number>();
     /** Lights of a loaded document are where it saved them: fitted to its bounds. */
     private _documentLights = false;
+    /** Lights not fitted while a tour shows its steps are fitted once its tweens end. */
+    private _fitAfterTour = false;
 
 
     get settingProperties() {
@@ -260,6 +262,10 @@ export default class CVScene extends CVNode
             const lightTransform = lightNode.getComponent(CTransform, true);       
             const unitScale = unitScaleFactor(outs.units.value, ins.units.value);
             const radius = this.getSavedBoundsRadius();
+            // lights fit the document's models, not what a tour shows of them (a step hiding one, say)
+            const setup = this.getGraphComponent(CVSetup, true);
+            const showsTour = !!setup && (setup.tours.ins.enabled.value || setup.snapshots.outs.tweening.value);
+            let held = false;
 
             lightTransform.ins.scale.setValue([1.0,1.0,1.0]);  // Hack to avoid dealing with group scaling
             
@@ -272,6 +278,10 @@ export default class CVScene extends CVNode
                         this._lightRadius.set(lightNode, radius);
                     }
                     if (unitScale === 1 && this._lightRadius.get(lightNode) === radius) {
+                        continue;
+                    }
+                    if (unitScale === 1 && showsTour) {
+                        held = true;
                         continue;
                     }
                     this._lightRadius.set(lightNode, radius);
@@ -330,6 +340,15 @@ export default class CVScene extends CVNode
                 }
 
             });
+
+            // fit them when the tour's tweens are over
+            if (held && !this._fitAfterTour) {
+                this._fitAfterTour = true;
+                setup.snapshots.outs.end.once("value", () => {
+                    this._fitAfterTour = false;
+                    this.ins.lightUpdated.set();
+                });
+            }
         }
         this._documentLights = false;
     }
