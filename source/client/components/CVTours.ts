@@ -15,9 +15,13 @@
  * limitations under the License.
  */
 
+import { Euler, EulerOrder, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
+
 import Component, { types } from "@ff/graph/Component";
+import Property from "@ff/graph/Property";
 import { ITweenState } from "@ff/graph/components/CTweenMachine";
 import { IPulseContext } from "@ff/graph/components/CPulse";
+import CTransform from "@ff/scene/components/CTransform";
 
 import { ITour, ITours, ITourStep } from "client/schema/setup";
 import { ELanguageType, DEFAULT_LANGUAGE } from "client/schema/common";
@@ -26,6 +30,12 @@ import CVSnapshots, { EEasingCurve } from "./CVSnapshots";
 import CVAnalytics from "./CVAnalytics";
 import CVLanguageManager from "./CVLanguageManager";
 import CVSetup from "./CVSetup";
+import { equalOnceSaved } from "client/utils/roundSaved";
+
+const _vec3 = new Vector3();
+const _vec3b = new Vector3();
+const _quat = new Quaternion();
+const _euler = new Euler();
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -59,6 +69,8 @@ export default class CVTours extends Component
     outs = this.addOutputs(CVTours.outs);
 
     private _tours: ITour[] = [];
+    /** Id of the step state last played, which the scene shows unless edited since */
+    private _stepId: string = null;
 
     protected get analytics() {
         return this.getMainComponent(CVAnalytics);
@@ -207,6 +219,7 @@ export default class CVTours extends Component
             else {
                 outs.tourIndex.set();
                 this.snapshots.endTween();
+                this._stepId = null;
 
                 this.normalizeViewOrbit(CVTours.sceneSnapshotId);
 
@@ -287,6 +300,7 @@ export default class CVTours extends Component
             outs.stepTitle.setValue(this.stepTitle || "Missing content");
             machine.ins.id.setValue(step.id);
             tween ? machine.ins.tween.set() : machine.ins.recall.set();
+            this._stepId = step.id;
             srElement.textContent = this.stepAltText != "Missing content" ? "Alt text: " + this.stepAltText : "";
         }
 
@@ -375,6 +389,74 @@ export default class CVTours extends Component
 
             return data as ITour;
         });
+    }
+
+    /**
+     * Returns what `serialize` returns with models and lights holding the document's values rather than what the
+     * tour shows (see getDocumentValues). Values are swapped in place: the graph doesn't see a change.
+     */
+    withDocumentValues<T>(serialize: () => T): T
+    {
+        const swapped: [Property, any][] = [];
+        const matrices = new Map<CTransform, Matrix4>();
+        const properties = this.snapshots.getTargetProperties();
+
+        this.getDocumentValues().forEach((value, index) => {
+            const property = properties[index];
+            if (!equalOnceSaved(property.value, value)) {
+                swapped.push([ property, property.value ]);
+                property.value = Array.isArray(value) ? value.slice() : value;
+
+                const component = property.group.linkable;
+                if (component instanceof CTransform && !matrices.has(component)) {
+                    matrices.set(component, component.object3D.matrix.clone());
+                }
+            }
+        });
+
+        // nodes save their object's matrix, which only follows the transform's properties on update
+        matrices.forEach((matrix, transform) => {
+            const { position, rotation, order, scale } = transform.ins;
+            _euler.setFromVector3(_vec3.fromArray(rotation.value).multiplyScalar(MathUtils.DEG2RAD), order.getOptionText() as EulerOrder);
+            _quat.setFromEuler(_euler);
+            transform.object3D.matrix.compose(_vec3.fromArray(position.value), _quat, _vec3b.fromArray(scale.value));
+        });
+
+        try {
+            return serialize();
+        }
+        finally {
+            swapped.forEach(([ property, value ]) => property.value = value);
+            matrices.forEach((matrix, transform) => transform.object3D.matrix.copy(matrix));
+        }
+    }
+
+    /**
+     * Values the document holds for the models' and lights' snapshot targets while a tour is shown, by target index:
+     * their values before the tour, but for those edited since the step was shown, which the step doesn't show.
+     * Values in between while tweening are the tour's. Setup features are saved as captured (see CVSetup.cacheSetupState).
+     */
+    protected getDocumentValues(): Map<number, any>
+    {
+        const values = new Map<number, any>();
+        const machine = this.snapshots;
+        const scene = machine.getState(CVTours.sceneSnapshotId);
+        if (!scene) {
+            return values;
+        }
+
+        const shown = machine.outs.tweening.value ? null : machine.getState(this._stepId) || scene;
+        const features = Object.keys(this.setup.featureMap).map(name => this.setup[name]);
+        const current = machine.getCurrentValues();
+
+        machine.getTargetProperties().forEach((property, index) => {
+            if (features.indexOf(property.group.linkable) < 0) {
+                const isEdit = shown && !equalOnceSaved(current[index], shown.values[index]);
+                values.set(index, isEdit ? current[index] : scene.values[index]);
+            }
+        });
+
+        return values;
     }
 
     // helper function to bring saved state orbit into alignment with current view orbit

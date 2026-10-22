@@ -293,7 +293,8 @@ export default class CVDocument extends CRenderGraph
         }
 
         const pathMap = new Map<Component, string>();
-        document.scene = this.root.toDocument(document, pathMap, components);
+        // models and lights as the document holds them, not as a tour step shows them
+        document.scene = this.setup.tours.withDocumentValues(() => this.root.toDocument(document, pathMap, components));
 
         //pathMap.forEach((path, comp) => console.log("CVDocument - pathMap: %s - '%s'", path, comp.displayName));
 

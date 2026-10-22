@@ -20,3 +20,21 @@ export default function roundSaved(value: number): number
 {
     return parseFloat(value.toFixed(7));
 }
+
+/**
+ * Whether two property values are saved the same: numbers recomputed at runtime, or a tween ending on
+ * `a + 1 * (b - a)` rather than exactly `b`, aren't different.
+ */
+export function equalOnceSaved(a: any, b: any): boolean
+{
+    if (typeof a === "number" && typeof b === "number") {
+        return roundSaved(a) === roundSaved(b);
+    }
+    if (Array.isArray(a) && Array.isArray(b)) {
+        return a.length === b.length && a.every((v, i) => equalOnceSaved(v, b[i]));
+    }
+    if (a instanceof Date || b instanceof Date) {
+        return new Date(a).getTime() === new Date(b).getTime();
+    }
+    return a === b;
+}
