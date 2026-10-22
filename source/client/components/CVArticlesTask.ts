@@ -35,6 +35,7 @@ import CVAssetWriter from "./CVAssetWriter";
 import { ELanguageStringType, ELanguageType, DEFAULT_LANGUAGE } from "client/schema/common";
 import CVStandaloneFileManager from "./CVStandaloneFileManager";
 import CVAnnotationView from "./CVAnnotationView";
+import NVNode from "../nodes/NVNode";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -76,6 +77,14 @@ export default class CVArticlesTask extends CVTask
     }
     get activeArticle() {
         return this.outs.article.value;
+    }
+
+    get selectedAttachmentNode(): NVNode {
+        return this.activeNode;
+    }
+
+    getArticleAttachment(article: Article): CVMeta {
+        return this.getArticleMeta(article);
     }
 
     protected get metas(): Readonly<CVMeta[]> {
@@ -213,6 +222,11 @@ export default class CVArticlesTask extends CVTask
     createView()
     {
         return new ArticlesTaskView(this);
+    }
+
+    protected onActiveNode(previous: NVNode, next: NVNode)
+    {
+        this.outs.article.set();
     }
 
     /**

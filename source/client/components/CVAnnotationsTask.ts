@@ -35,6 +35,7 @@ import CVScene from "client/components/CVScene";
 import { getMeshTransform } from "client/utils/Helpers";
 import CVSnapshots, { EEasingCurve } from "./CVSnapshots";
 import CPulse from "@ff/graph/components/CPulse";
+import NVNode from "../nodes/NVNode";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -95,6 +96,14 @@ export default class CVAnnotationsTask extends CVTask
      */
     get annotationViews(): Readonly<CVAnnotationView[]> {
         return this.activeDocument ? this.activeDocument.innerComponents.getArray(CVAnnotationView) : [];
+    }
+
+    get selectedAttachmentNode(): NVNode {
+        return this.activeNode;
+    }
+
+    getAnnotationAttachment(annotation: Annotation): CVAnnotationView {
+        return this.annotationViews.find(view => view.getAnnotationById(annotation.id) === annotation) || null;
     }
 
     /**
@@ -470,6 +479,11 @@ export default class CVAnnotationsTask extends CVTask
     {
         this.emit("update");
         this.ins.selection.set();
+    }
+
+    protected onActiveNode(previous: NVNode, next: NVNode)
+    {
+        this.emitUpdateEvent();
     }
 
     // Handles annotation selection in outside of task.

@@ -584,6 +584,32 @@ $color-component-meta-light: #d9d998;
   color: #cc3d3d;
 }
 
+.sv-attachment-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  background-color: common.$color-background;
+  color: common.$color-text;
+
+  select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.sv-attachment-list-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sv-attachment-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .sv-disabled {
   color: gray;
 }

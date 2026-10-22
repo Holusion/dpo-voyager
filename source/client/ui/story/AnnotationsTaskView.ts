@@ -43,6 +43,7 @@ export const MAX_LEAD_CHARS = 200;
 @customElement("sv-annotations-task-view")
 export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
 {
+    private _selectionMatchOnly = false;
     private _dragCounter = 0;
     private _leadLimit = MAX_LEAD_CHARS;
     private _leadCharCount = 0;
@@ -87,7 +88,9 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         this.sceneview.style.cursor = this.task.ins.mode.value > 0 ? "default" : "grab";
 
         const modeProp = this.task.ins.mode;
-        const annotationList = this.task.annotationViews.flatMap(view => view.getAnnotations());
+        const annotationList = this.task.annotationViews
+            .filter(view => !this._selectionMatchOnly || view.node === this.task.selectedAttachmentNode)
+            .flatMap(view => view.getAnnotations());
 
         const annotations = this.task.activeAnnotations;
         const annotation = annotations && annotations.activeAnnotation;
@@ -101,8 +104,16 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: 30%">
-                    <div class="ff-scroll-y ff-flex-column">
+                <div class="ff-splitter-section sv-attachment-list-section" style="flex-basis: 30%">
+                    <label class="sv-attachment-filter">Show
+                        <select class="ff-input" aria-label="Show annotations" .value=${this._selectionMatchOnly ? "selection" : "all"} @change=${this.onScopeChange}>
+                            <option value="all">All annotations</option>
+                            <option value="selection">Selected node only</option>
+                        </select>
+                    </label>
+                    <div class="sv-attachment-list-scroll ff-flex-column">
+                        ${this._selectionMatchOnly && !this.task.selectedAttachmentNode ? html`<div class="sv-placeholder">Select a node to show its annotations.</div>` : null}
+                        ${this._selectionMatchOnly && this.task.selectedAttachmentNode && !annotationList.length ? html`<div class="sv-placeholder">No annotations attached to this node.</div>` : null}
                         <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
                     </div>
                 </div>
@@ -112,6 +123,12 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
                 </div>
             </div>
         </div>`;
+    }
+
+    protected onScopeChange(event: Event)
+    {
+        this._selectionMatchOnly = (event.target as HTMLSelectElement).value === "selection";
+        this.onUpdate();
     }
 
     protected renderDetailView(annotations: CVAnnotationView)

@@ -34,6 +34,8 @@ import { DEFAULT_LANGUAGE, ELanguageType } from "client/schema/common";
 @customElement("sv-articles-task-view")
 export default class ArticlesTaskView extends TaskView<CVArticlesTask>
 {
+    private _selectionMatchOnly = false;
+
     protected connected()
     {
         super.connected();
@@ -55,7 +57,9 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         }
         
         const task = this.task;
-        const articles = task.articles;
+        const articles = this._selectionMatchOnly
+            ? task.articles.filter(article => task.getArticleAttachment(article)?.node === task.selectedAttachmentNode)
+            : task.articles;
         const activeArticle = task.activeArticle;
         const languageManager = this.activeDocument.setup.language;
         const activeLanguage = ELanguageType[languageManager.ins.activeLanguage.value];
@@ -85,8 +89,16 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
                 <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-splitter-section" style="flex-basis: 30%">
-                    <div class="ff-scroll-y ff-flex-column">
+                <div class="ff-splitter-section sv-attachment-list-section" style="flex-basis: 30%">
+                    <label class="sv-attachment-filter">Show
+                        <select class="ff-input" aria-label="Show articles" .value=${this._selectionMatchOnly ? "selection" : "all"} @change=${this.onScopeChange}>
+                            <option value="all">All articles</option>
+                            <option value="selection">Selected node only</option>
+                        </select>
+                    </label>
+                    <div class="sv-attachment-list-scroll ff-flex-column">
+                        ${this._selectionMatchOnly && !task.selectedAttachmentNode ? html`<div class="sv-placeholder">Select a node to show its articles.</div>` : null}
+                        ${this._selectionMatchOnly && task.selectedAttachmentNode && !articles.length ? html`<div class="sv-placeholder">No articles attached to this node.</div>` : null}
                         <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
                     </div>
                 </div>
@@ -96,6 +108,12 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
                 </div>
             </div>
         </div>`
+    }
+
+    protected onScopeChange(event: Event)
+    {
+        this._selectionMatchOnly = (event.target as HTMLSelectElement).value === "selection";
+        this.onUpdate();
     }
 
     protected onClickCreate()
