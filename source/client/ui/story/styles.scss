@@ -584,6 +584,12 @@ $color-component-meta-light: #d9d998;
   color: #cc3d3d;
 }
 
+.ff-list .ff-list-item.sv-attachment-match:not([selected]) {
+  background-color: #294743;
+  border-left: 3px solid #65c8ae;
+  padding-left: 0;
+}
+
 .sv-disabled {
   color: gray;
 }

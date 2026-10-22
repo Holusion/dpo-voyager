@@ -88,6 +88,11 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
 
         const modeProp = this.task.ins.mode;
         const annotationList = this.task.annotationViews.flatMap(view => view.getAnnotations());
+        const attachmentNames = new Map(annotationList.map(item => {
+            const node = this.task.getAnnotationAttachment(item)?.node;
+            return [item, node?.name || node?.displayName || ""] as [typeof item, string];
+        }));
+        const matchingAnnotations = new Set(annotationList.filter(item => this.task.getAnnotationAttachment(item)?.node === this.task.selectedAttachmentNode));
 
         const annotations = this.task.activeAnnotations;
         const annotation = annotations && annotations.activeAnnotation;
@@ -100,10 +105,10 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         </div>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
-                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
+                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${activeLanguage === primarySceneLanguage ? "Attached to" : languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
                 <div class="ff-splitter-section" style="flex-basis: 30%">
                     <div class="ff-scroll-y ff-flex-column">
-                        <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
+                        <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} .attachmentNames=${attachmentNames} .matchingAnnotations=${matchingAnnotations} @select=${this.onSelectAnnotation}></sv-annotation-list>
                     </div>
                 </div>
                 <ff-splitter direction="vertical"></ff-splitter>

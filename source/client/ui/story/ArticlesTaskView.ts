@@ -60,6 +60,11 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         const languageManager = this.activeDocument.setup.language;
         const activeLanguage = ELanguageType[languageManager.ins.activeLanguage.value];
         const primarySceneLanguage = ELanguageType[languageManager.ins.primarySceneLanguage.value];
+        const attachmentNames = new Map(articles.map(article => {
+            const node = task.getArticleAttachment(article)?.node;
+            return [article, node?.name || node?.displayName || ""] as [Article, string];
+        }));
+        const matchingArticles = new Set(articles.filter(article => task.getArticleAttachment(article)?.node === task.selectedAttachmentNode));
 
         const detailView = activeArticle ? html`<div class="ff-scroll-y ff-flex-column sv-detail-view">
             <sv-property-view .property=${languageManager.ins.activeLanguage}></sv-property-view>
@@ -84,10 +89,10 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         </div>
         <div class="ff-flex-item-stretch">
             <div class="ff-flex-column ff-fullsize">
-                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
+                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${activeLanguage === primarySceneLanguage ? "Attached to" : languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
                 <div class="ff-splitter-section" style="flex-basis: 30%">
                     <div class="ff-scroll-y ff-flex-column">
-                        <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
+                        <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} .attachmentNames=${attachmentNames} .matchingArticles=${matchingArticles} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
                     </div>
                 </div>
                 <ff-splitter direction="vertical"></ff-splitter>
@@ -185,6 +190,12 @@ export interface IEditArticleEvent extends CustomEvent
 export class ArticleList extends List<Article>
 {
     @property({ attribute: false })
+    attachmentNames: Map<Article, string> = new Map();
+
+    @property({ attribute: false })
+    matchingArticles: Set<Article> = new Set();
+
+    @property({ attribute: false })
     selectedItem: Article = null;
 
     @property({type: ELanguageType})
@@ -201,13 +212,19 @@ export class ArticleList extends List<Article>
 
     protected renderItem(item: Article)
     {
-        const primaryTitle = item.titleIn(this.primarySceneLanguage);
+        const primaryTitle = this.activeLanguage === this.primarySceneLanguage
+            ? this.attachmentNames.get(item) : item.titleIn(this.primarySceneLanguage);
         const activeTitle = item.titleIn(this.activeLanguage);
         const missingTitle = html `<span class="sv-missing-translation">Missing content</span>`
         return html`<div class="ff-flex-row ff-group">
             <div class="sv-task-item">${ primaryTitle? primaryTitle : missingTitle}</div>
             <div class="sv-task-item sv-item-border-l">${activeTitle ? activeTitle : missingTitle}</div>
             </div>`
+    }
+
+    protected getClass(item: Article): string
+    {
+        return this.matchingArticles.has(item) ? "sv-attachment-match" : "";
     }
 
     protected isItemSelected(item: Article)

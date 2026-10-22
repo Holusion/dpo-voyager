@@ -35,6 +35,12 @@ export interface ISelectAnnotationEvent extends CustomEvent
 class AnnotationList extends List<Annotation>
 {
     @property({ attribute: false })
+    attachmentNames: Map<Annotation, string> = new Map();
+
+    @property({ attribute: false })
+    matchingAnnotations: Set<Annotation> = new Set();
+
+    @property({ attribute: false })
     selectedItem: Annotation = null;
 
     @property({type: ELanguageType})
@@ -51,13 +57,19 @@ class AnnotationList extends List<Annotation>
 
     protected renderItem(item: Annotation)
     {
-        const primaryTitle = item.titleIn(this.primarySceneLanguage);
+        const primaryTitle = this.activeLanguage === this.primarySceneLanguage
+            ? this.attachmentNames.get(item) : item.titleIn(this.primarySceneLanguage);
         const activeTitle = item.titleIn(this.activeLanguage);
         const missingTitle = html `<span class="sv-missing-translation">Missing content</span>`
         return html`<div class="ff-flex-row ff-group">
             <div class="sv-task-item">${ primaryTitle? primaryTitle : missingTitle}</div>
             <div class="sv-task-item sv-item-border-l">${activeTitle ? activeTitle : missingTitle}
             </div></div>`
+    }
+
+    protected getClass(item: Annotation): string
+    {
+        return this.matchingAnnotations.has(item) ? "sv-attachment-match" : "";
     }
 
     protected isItemSelected(item: Annotation)
