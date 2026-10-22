@@ -29,8 +29,8 @@ import NVNode from "../../nodes/NVNode";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@customElement("sv-settings-task-view")
-export default class SettingsTaskView extends NodeView
+@customElement("sv-settings-panel")
+export default class SettingsPanel extends NodeView
 {
     constructor(system: System)
     {

@@ -36,7 +36,7 @@ import ExplorerPanel from "./ExplorerPanel";
 import InspectorPanel from "./InspectorPanel";
 import NavigatorPanel from "./NavigatorPanel";
 import StatePanel from "./StatePanel";
-import SettingsTaskView from "./SettingsTaskView";
+import SettingsPanel from "./SettingsPanel";
 import TaskPanel from "./TaskPanel";
 import TourPanel from "./TourPanel";
 
@@ -51,7 +51,7 @@ export default class StoryWorkspace extends DocumentView
     private task: TaskPanel;
     private list: TaskPanel;
     private bottomTask: TaskPanel;
-    private settings: SettingsTaskView;
+    private settings: SettingsPanel;
     private listTasks = new Set<string>(["CVAnnotationsTask", "CVArticlesTask", "CVToursTask", "CVAudioTask"]);
     private bottomTasks = new Set<string>(["CVCaptureTask"]);
     private article: ArticleEditor;
@@ -60,6 +60,7 @@ export default class StoryWorkspace extends DocumentView
     private hierarchy: HierarchyTreeView;
     private inspector: InspectorPanel;
     private navigationIndex = 0;
+    private contextTab: "settings" | "task" = "settings";
     private showStates = false;
     private subscriber = new Subscriber("value", this.onUpdate, this);
 
@@ -81,13 +82,14 @@ export default class StoryWorkspace extends DocumentView
         this.explorer = new ExplorerPanel(application.explorer);
         this.task = new TaskPanel(system);
         this.task.showTask = task => !this.bottomTasks.has(task.typeName);
+        this.task.showHeader = false;
         this.task.section = "details";
         this.list = new TaskPanel(system);
         this.list.showTask = task => this.listTasks.has(task.typeName);
         this.list.section = "list";
         this.bottomTask = new TaskPanel(system);
         this.bottomTask.showTask = task => this.bottomTasks.has(task.typeName);
-        this.settings = new SettingsTaskView(system);
+        this.settings = new SettingsPanel(system);
         this.article = new ArticleEditor(system);
         this.tour = new TourPanel(system);
         this.states = new StatePanel(system);
@@ -132,6 +134,8 @@ export default class StoryWorkspace extends DocumentView
 
     private onTask()
     {
+        const task = this.tasks.activeComponent;
+        this.contextTab = task && !this.bottomTasks.has(task.typeName) ? "task" : "settings";
         this.showStates = false;
         // An article opened from Media also closes before the tour editor takes over.
         if (this.tasks.activeComponent instanceof CVToursTask && this.article.hasArticle) {
@@ -173,7 +177,6 @@ export default class StoryWorkspace extends DocumentView
         const activeTask = this.tasks.activeComponent;
         const contextualTask = !!activeTask && !this.bottomTasks.has(activeTask.typeName);
         const hasList = !!activeTask && this.listTasks.has(activeTask.typeName);
-        const hasTask = contextualTask || !!this.nodes.activeNode;
         const hasBottomTask = !!activeTask && this.bottomTasks.has(activeTask.typeName);
         const hasArticle = this.article.hasArticle;
         const tours = this.activeDocument && this.activeDocument.setup.tours;
@@ -183,6 +186,8 @@ export default class StoryWorkspace extends DocumentView
         const hasBottom = hasBottomTask || !!editor;
         const navigation = [this.navigator, this.assets, this.collection];
         const titles = ["Navigator", "Media", "Collection"];
+        const language = this.activeDocument?.setup.language;
+        const taskTitle = contextualTask ? language?.getUILocalizedString(activeTask.text) || activeTask.text : "";
 
         return html`
             <div class="sv-workspace-row">
@@ -205,10 +210,26 @@ export default class StoryWorkspace extends DocumentView
                     </section>
                     <ff-splitter direction="vertical" margin="100" ?hidden=${!hasList}></ff-splitter>
                     <section class="sv-workspace-region sv-workspace-list" aria-label="Items" ?hidden=${!hasList}>${this.list}</section>
-                    <ff-splitter direction="vertical" margin="100" ?hidden=${!hasTask}></ff-splitter>
-                    <section class="sv-workspace-region sv-workspace-task" aria-label="Context" ?hidden=${!hasTask}>
-                        <div class="sv-workspace-region" ?hidden=${!contextualTask}>${this.task}</div>
-                        <div class="sv-workspace-region sv-panel" ?hidden=${contextualTask}>${this.settings}</div>
+                    <ff-splitter direction="vertical" margin="100"></ff-splitter>
+                    <section class="sv-workspace-region sv-workspace-task" aria-label="Context">
+                        <div class="sv-workspace-tabs" role="tablist" aria-label="Context" ?hidden=${!contextualTask}>
+                            <button id="story-context-settings-tab" role="tab" aria-controls="story-context-settings"
+                                aria-selected=${this.contextTab === "settings" ? "true" : "false"}
+                                tabindex=${this.contextTab === "settings" ? 0 : -1}
+                                @keydown=${(event: KeyboardEvent) => this.onContextKey(event)}
+                                @click=${() => this.selectContext("settings")}>${language?.getUILocalizedString("Settings") || "Settings"}</button>
+                            <button id="story-context-task-tab" role="tab" aria-controls="story-context-task"
+                                aria-selected=${this.contextTab === "task" ? "true" : "false"}
+                                tabindex=${this.contextTab === "task" ? 0 : -1}
+                                @keydown=${(event: KeyboardEvent) => this.onContextKey(event)}
+                                @click=${() => this.selectContext("task")}>${taskTitle}</button>
+                        </div>
+                        <div class="sv-workspace-region sv-panel" id="story-context-settings"
+                            role=${contextualTask ? "tabpanel" : "region"} aria-label="Settings"
+                            ?hidden=${contextualTask && this.contextTab !== "settings"}>${this.settings}</div>
+                        <div class="sv-workspace-region" id="story-context-task" role="tabpanel"
+                            aria-labelledby="story-context-task-tab"
+                            ?hidden=${!contextualTask || this.contextTab !== "task"}>${this.task}</div>
                     </section>
                 </div>
                 <ff-splitter margin="180"></ff-splitter>
@@ -246,6 +267,23 @@ export default class StoryWorkspace extends DocumentView
     {
         this.navigationIndex = index;
         this.requestUpdate();
+    }
+
+    private selectContext(tab: "settings" | "task")
+    {
+        this.contextTab = tab;
+        this.requestUpdate();
+    }
+
+    private onContextKey(event: KeyboardEvent)
+    {
+        const tab = event.key === "ArrowLeft" || event.key === "Home" ? "settings" :
+            event.key === "ArrowRight" || event.key === "End" ? "task" : null;
+        if (tab) {
+            event.preventDefault();
+            this.selectContext(tab);
+            this.updateComplete.then(() => (this.querySelector(`#story-context-${tab}-tab`) as HTMLElement).focus());
+        }
     }
 
     private onNavigationKey(event: KeyboardEvent, index: number)
