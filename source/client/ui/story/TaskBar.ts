@@ -107,7 +107,8 @@ export default class TaskBar extends SystemView
     {
         if (event.target instanceof Button) {
             const tasks = this.taskProvider.scopedComponents;
-            this.taskProvider.activeComponent = tasks[event.target.index];
+            const task = tasks[event.target.index];
+            this.taskProvider.activeComponent = this.taskProvider.activeComponent === task ? null : task;
         }
     }
 
