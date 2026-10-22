@@ -85,6 +85,7 @@ export default class StoryWorkspace extends DocumentView
         this.task.showHeader = false;
         this.bottomTask = new TaskPanel(system);
         this.bottomTask.showTask = task => this.bottomTasks.has(task.typeName);
+        this.bottomTask.showHeader = task => !["CVAnnotationsTask", "CVArticlesTask", "CVToursTask"].includes(task.typeName);
         this.settings = new SettingsPanel(system);
         this.article = new ArticleEditor(system);
         this.tour = new TourPanel(system);
@@ -121,7 +122,8 @@ export default class StoryWorkspace extends DocumentView
             previous.setup.viewer.ins.activeAnnotation.off("value", this.onAnnotation, this);
         }
         if (next) {
-            this.subscriber.on(next.setup.tours.ins.enabled, next.setup.tours.outs.tourIndex);
+            this.subscriber.on(next.setup.tours.ins.enabled, next.setup.tours.outs.tourIndex,
+                next.setup.tours.outs.tourTitle, next.setup.language.outs.activeLanguage);
             next.setup.viewer.ins.activeAnnotation.on("value", this.onAnnotation, this);
         }
         this.showStates = false;
@@ -256,8 +258,12 @@ export default class StoryWorkspace extends DocumentView
                         <div class="sv-workspace-region" ?hidden=${!!editor} @sv-open-tour-steps=${this.onOpenTourSteps}>${this.bottomTask}</div>
                         <div class="sv-workspace-region" ?hidden=${!editor}>
                             <div class="sv-workspace-region" ?hidden=${editor !== "article"}>${this.article}</div>
-                            <div class="sv-workspace-region" ?hidden=${editor !== "tour"}>
-                                <div class="sv-panel-header"><ff-button text="Back to Tours" @click=${this.onBackToTours}></ff-button></div>
+                            <div class="sv-workspace-region" ?hidden=${editor !== "tour"} @sv-back-to-tours=${this.onBackToTours}>
+                                <div class="sv-workspace-breadcrumb">
+                                    <ff-button icon=${CVToursTask.icon} text=${language?.getUILocalizedString("Tours") || "Tours"} @click=${this.onBackToTours}></ff-button>
+                                    <span aria-hidden="true">&gt;</span>
+                                    <span class="ff-ellipsis">${hasTour ? tours.title : ""}</span>
+                                </div>
                                 ${this.tour}
                             </div>
                             <div class="sv-workspace-region" ?hidden=${editor !== "states"}>${this.states}</div>

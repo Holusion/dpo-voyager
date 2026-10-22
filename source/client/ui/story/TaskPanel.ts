@@ -31,7 +31,7 @@ import CVTask from "../../components/CVTask";
 export default class TaskPanel extends SystemView
 {
     showTask: (task: CVTask) => boolean = () => true;
-    showHeader = true;
+    showHeader: boolean | ((task: CVTask) => boolean) = true;
     protected taskProvider: CVTaskProvider = null;
 
     constructor(system?: System)
@@ -72,7 +72,7 @@ export default class TaskPanel extends SystemView
         const viewElement = task.createView();
 
         return html`
-            ${this.showHeader ? html`<div class="sv-panel-header">
+            ${(typeof this.showHeader === "function" ? this.showHeader(task) : this.showHeader) ? html`<div class="sv-panel-header">
                 <ff-icon name=${task.icon}></ff-icon>
                 <div class="ff-text">${task.text}</div>
             </div>` : null}

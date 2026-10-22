@@ -92,25 +92,25 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         const annotations = this.task.activeAnnotations;
         const annotation = annotations && annotations.activeAnnotation;
 
-        return html`<div class="sv-commands">
-            <ff-button text="${languageManager.getUILocalizedString("Select")}" icon="select" index=${EAnnotationsTaskMode.Off} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
-            <ff-button text="${languageManager.getUILocalizedString("Move")}" icon="move" index=${EAnnotationsTaskMode.Move} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
-            <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" index=${EAnnotationsTaskMode.Create} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
-            <ff-button text="${languageManager.getUILocalizedString("Delete")}" icon="trash" ?disabled=${!annotation} @click=${this.onClickDelete}></ff-button>
-        </div>
-        <div class="ff-flex-item-stretch">
-            <div class="ff-flex-column ff-fullsize">
-                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-flex-item-stretch ff-flex-row">
-                    <div class="ff-splitter-section" style=${annotation ? "flex-basis: 40%" : "flex-basis: 100%"}>
-                        <div class="ff-scroll-y ff-flex-column">
-                            <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
-                        </div>
-                    </div>
-                    ${annotation ? html`<ff-splitter></ff-splitter>
-                        <div class="ff-splitter-section" style="flex-basis: 60%">${this.renderDetailView(annotations)}</div>` : null}
+        return html`<div class="ff-flex-item-stretch ff-flex-row sv-task-columns">
+            <div class="ff-splitter-section sv-task-column" style=${annotation ? "flex-basis: 40%" : "flex-basis: 100%"}>
+                <div class="sv-task-column-header"><ff-icon name=${this.task.icon}></ff-icon><span>${languageManager.getUILocalizedString("Annotations")}</span></div>
+                <div class="sv-commands">
+                    <ff-button text="${languageManager.getUILocalizedString("Select")}" icon="select" index=${EAnnotationsTaskMode.Off} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
+                    <ff-button text="${languageManager.getUILocalizedString("Move")}" icon="move" index=${EAnnotationsTaskMode.Move} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
+                    <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" index=${EAnnotationsTaskMode.Create} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
+                    <ff-button text="${languageManager.getUILocalizedString("Delete")}" icon="trash" ?disabled=${!annotation} @click=${this.onClickDelete}></ff-button>
+                </div>
+                <div class="ff-flex-row ff-group sv-task-language-row"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
+                <div class="ff-scroll-y ff-flex-column sv-task-list">
+                    <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
                 </div>
             </div>
+            ${annotation ? html`<ff-splitter></ff-splitter>
+                <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
+                    <div class="sv-task-column-header">${languageManager.getUILocalizedString("Annotation Settings")}</div>
+                    ${this.renderDetailView(annotations)}
+                </div>` : null}
         </div>`;
     }
 

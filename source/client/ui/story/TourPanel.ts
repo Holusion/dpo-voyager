@@ -142,6 +142,7 @@ export default class TourPanel extends DocumentView
         this.stateTable.selectedRows = this.stateTable.rows[tours.outs.stepIndex.value];
 
         return html`<div class="sv-panel-header">
+            <ff-button text="${languageManager.getUILocalizedString("Back")}" @click=${this.onClickBack}></ff-button>
             <ff-button text="${languageManager.getUILocalizedString("Update")}" icon="camera" @click=${this.onClickUpdate}></ff-button>
             <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" @click=${this.onClickCreate}></ff-button>
             <ff-button text="${languageManager.getUILocalizedString("Move Up")}" icon="up" ?disabled=${!activeStep} @click=${this.onClickUp}></ff-button>
@@ -162,6 +163,11 @@ export default class TourPanel extends DocumentView
     protected onClickTableRow(event: ITableRowClickEvent<ITweenState>)
     {
         this.tours.ins.stepIndex.setValue(event.detail.index);
+    }
+
+    protected onClickBack()
+    {
+        this.dispatchEvent(new CustomEvent("sv-back-to-tours", { bubbles: true }));
     }
 
     protected onClickUpdate()

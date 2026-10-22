@@ -97,27 +97,27 @@ export default class ToursTaskView extends TaskView<CVToursTask>
             <ff-text-edit name="lead" text=${props.tourLead.value} @change=${this.onTextEdit}></ff-text-edit>
         </div>` : null;
 
-        return html`<div class="sv-commands">
-            <ff-button title="${languageManager.getUILocalizedString("Create Tour")}" icon="create" @click=${this.onClickCreate}></ff-button>
-            ${activeTour ? html`<ff-button text="Steps" @click=${this.onClickSteps}></ff-button>` : null}
-            <ff-button title="${languageManager.getUILocalizedString("Move Tour Up")}" icon="up" ?disabled=${!activeTour} @click=${this.onClickUp}></ff-button>
-            <ff-button title="${languageManager.getUILocalizedString("Move Tour Down")}" icon="down" ?disabled=${!activeTour} @click=${this.onClickDown}></ff-button>
-            <ff-button title="${languageManager.getUILocalizedString("Delete Tour")}" icon="trash" ?disabled=${!activeTour} @click=${this.onClickDelete}></ff-button>
-            <ff-button title="${languageManager.getUILocalizedString("Snapshot Configuration")}" icon="bars" @click=${this.onClickConfig}></ff-button>
-        </div>
-        <div class="ff-flex-item-stretch">
-            <div class="ff-flex-column ff-fullsize">
-                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-flex-item-stretch ff-flex-row">
-                    <div class="ff-splitter-section" style=${activeTour ? "flex-basis: 40%" : "flex-basis: 100%"}>
-                        <div class="ff-scroll-y ff-flex-column">
-                            <sv-tour-list .data=${tourList.slice()} .selectedItem=${activeTour} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectTour}></sv-tour-list>
-                        </div>
-                    </div>
-                    ${activeTour ? html`<ff-splitter></ff-splitter>
-                        <div class="ff-splitter-section" style="flex-basis: 60%">${detailView}</div>` : null}
+        return html`<div class="ff-flex-item-stretch ff-flex-row sv-task-columns">
+            <div class="ff-splitter-section sv-task-column" style=${activeTour ? "flex-basis: 40%" : "flex-basis: 100%"}>
+                <div class="sv-task-column-header"><ff-icon name=${task.icon}></ff-icon><span>${languageManager.getUILocalizedString("Tours")}</span></div>
+                <div class="sv-commands">
+                    <ff-button title="${languageManager.getUILocalizedString("Create Tour")}" icon="create" @click=${this.onClickCreate}></ff-button>
+                    <ff-button title="${languageManager.getUILocalizedString("Move Tour Up")}" icon="up" ?disabled=${!activeTour} @click=${this.onClickUp}></ff-button>
+                    <ff-button title="${languageManager.getUILocalizedString("Move Tour Down")}" icon="down" ?disabled=${!activeTour} @click=${this.onClickDown}></ff-button>
+                    <ff-button title="${languageManager.getUILocalizedString("Delete Tour")}" icon="trash" ?disabled=${!activeTour} @click=${this.onClickDelete}></ff-button>
+                    <ff-button title="${languageManager.getUILocalizedString("Snapshot Configuration")}" icon="bars" @click=${this.onClickConfig}></ff-button>
+                </div>
+                <div class="ff-flex-row ff-group sv-task-language-row"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
+                <div class="ff-scroll-y ff-flex-column sv-task-list">
+                    <sv-tour-list .data=${tourList.slice()} .selectedItem=${activeTour} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectTour}></sv-tour-list>
                 </div>
             </div>
+            ${activeTour ? html`<ff-splitter></ff-splitter>
+                <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
+                    <div class="sv-task-column-header">${languageManager.getUILocalizedString("Tour Settings")}</div>
+                    <div class="sv-commands"><ff-button text="${languageManager.getUILocalizedString("Edit Steps")}" @click=${this.onClickSteps}></ff-button></div>
+                    ${detailView}
+                </div>` : null}
         </div>`;
     }
 

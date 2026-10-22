@@ -71,28 +71,27 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
             <sv-property-view class="sv-property-block" disabled .property=${task.ins.uri}></sv-property-view>
         </div>` : null;
 
-        return html`<div class="sv-commands">
-            <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" @click=${this.onClickCreate}></ff-button>
-            <ff-button text="${languageManager.getUILocalizedString("Edit")}" icon="pen" ?disabled=${!activeArticle} @click=${this.onClickEdit}></ff-button>
-            <ff-button title="${languageManager.getUILocalizedString("Move Article Up")}" icon="up" ?disabled=${!activeArticle} @click=${this.onClickUp}></ff-button>
-            <ff-button title="${languageManager.getUILocalizedString("Move Article Down")}" icon="down" ?disabled=${!activeArticle} @click=${this.onClickDown}></ff-button>          
-            <ff-button text="${languageManager.getUILocalizedString("Delete")}" icon="trash" ?disabled=${!activeArticle} @click=${this.onClickDelete}></ff-button>  
-        </div>
-        <div class="ff-flex-item-stretch">
-            <div class="ff-flex-column ff-fullsize">
-                <div class="ff-flex-row ff-group"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
-                <div class="ff-flex-item-stretch ff-flex-row">
-                    <div class="ff-splitter-section" style=${activeArticle ? "flex-basis: 40%" : "flex-basis: 100%"}>
-                        <div class="ff-scroll-y ff-flex-column">
-                            <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
-                        </div>
-                    </div>
-                    ${activeArticle ? html`<ff-splitter></ff-splitter>
-                        <div class="ff-splitter-section" style="flex-basis: 60%">${detailView}</div>` : null}
+        return html`<div class="ff-flex-item-stretch ff-flex-row sv-task-columns">
+            <div class="ff-splitter-section sv-task-column" style=${activeArticle ? "flex-basis: 40%" : "flex-basis: 100%"}>
+                <div class="sv-task-column-header"><ff-icon name=${task.icon}></ff-icon><span>${languageManager.getUILocalizedString("Articles")}</span></div>
+                <div class="sv-commands">
+                    <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" @click=${this.onClickCreate}></ff-button>
+                    <ff-button title="${languageManager.getUILocalizedString("Move Article Up")}" icon="up" ?disabled=${!activeArticle} @click=${this.onClickUp}></ff-button>
+                    <ff-button title="${languageManager.getUILocalizedString("Move Article Down")}" icon="down" ?disabled=${!activeArticle} @click=${this.onClickDown}></ff-button>
+                    <ff-button text="${languageManager.getUILocalizedString("Delete")}" icon="trash" ?disabled=${!activeArticle} @click=${this.onClickDelete}></ff-button>
+                </div>
+                <div class="ff-flex-row ff-group sv-task-language-row"><div class="sv-panel-header sv-task-item">${languageManager.getUILocalizedString("Default:") + " " + primarySceneLanguage}</div><div class="sv-panel-header sv-task-item sv-item-border-l">${languageManager.getUILocalizedString("Active:") + " " + activeLanguage}</div></div>
+                <div class="ff-scroll-y ff-flex-column sv-task-list">
+                    <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
                 </div>
             </div>
-        </div>
-        `;
+            ${activeArticle ? html`<ff-splitter></ff-splitter>
+                <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
+                    <div class="sv-task-column-header">${languageManager.getUILocalizedString("Article Settings")}</div>
+                    <div class="sv-commands"><ff-button text="${languageManager.getUILocalizedString("Edit")}" icon="pen" @click=${this.onClickEdit}></ff-button></div>
+                    ${detailView}
+                </div>` : null}
+        </div>`;
     }
 
     protected onClickCreate()
