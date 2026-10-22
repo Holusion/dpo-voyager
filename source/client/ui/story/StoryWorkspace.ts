@@ -180,6 +180,7 @@ export default class StoryWorkspace extends DocumentView
         const hasTour = this.tasks.activeComponent instanceof CVToursTask &&
             tours && tours.ins.enabled.value && !!tours.activeTour;
         const editor = this.showStates ? "states" : hasArticle ? "article" : hasTour ? "tour" : null;
+        const hasBottom = hasBottomTask || !!editor;
         const navigation = [this.navigator, this.assets, this.collection];
         const titles = ["Navigator", "Media", "Collection"];
 
@@ -213,29 +214,22 @@ export default class StoryWorkspace extends DocumentView
                 <ff-splitter margin="180"></ff-splitter>
                 <div class="sv-workspace-column sv-workspace-main">
                     <section class="sv-workspace-region sv-workspace-explorer" aria-label="Explorer">${this.explorer}</section>
-                    <ff-splitter direction="vertical" margin="120" ?hidden=${!hasBottomTask}
+                    <ff-splitter direction="vertical" margin="120" ?hidden=${!hasBottom}
                         @pointerdown=${() => this.classList.add("sv-workspace-resizing")}
                         @pointerup=${() => this.classList.remove("sv-workspace-resizing")}
                         @pointercancel=${() => this.classList.remove("sv-workspace-resizing")}></ff-splitter>
-                    <section class="sv-workspace-region sv-workspace-bottom-task" aria-label="Tools"
-                        ?data-open=${hasBottomTask} ?inert=${!hasBottomTask}
-                        aria-hidden=${hasBottomTask ? "false" : "true"}
-                        @transitionend=${(event: TransitionEvent) => {
-                            if (event.propertyName === "flex-basis") window.dispatchEvent(new Event("resize"));
-                        }}>${this.bottomTask}</section>
-                    <ff-splitter direction="vertical" margin="120" ?hidden=${!editor}
-                        @pointerdown=${() => this.classList.add("sv-workspace-resizing")}
-                        @pointerup=${() => this.classList.remove("sv-workspace-resizing")}
-                        @pointercancel=${() => this.classList.remove("sv-workspace-resizing")}></ff-splitter>
-                    <section class="sv-workspace-region sv-workspace-editor" aria-label="Editor"
-                        ?data-open=${!!editor} ?inert=${!editor}
-                        aria-hidden=${editor ? "false" : "true"}
+                    <section class="sv-workspace-region sv-workspace-bottom" aria-label=${editor ? "Editor" : "Tools"}
+                        ?data-open=${hasBottom} ?inert=${!hasBottom}
+                        aria-hidden=${hasBottom ? "false" : "true"}
                         @transitionend=${(event: TransitionEvent) => {
                             if (event.propertyName === "flex-basis") window.dispatchEvent(new Event("resize"));
                         }}>
-                        <div class="sv-workspace-region" ?hidden=${editor !== "article"}>${this.article}</div>
-                        <div class="sv-workspace-region" ?hidden=${editor !== "tour"}>${this.tour}</div>
-                        <div class="sv-workspace-region" ?hidden=${editor !== "states"}>${this.states}</div>
+                        <div class="sv-workspace-region" ?hidden=${!!editor}>${this.bottomTask}</div>
+                        <div class="sv-workspace-region" ?hidden=${!editor}>
+                            <div class="sv-workspace-region" ?hidden=${editor !== "article"}>${this.article}</div>
+                            <div class="sv-workspace-region" ?hidden=${editor !== "tour"}>${this.tour}</div>
+                            <div class="sv-workspace-region" ?hidden=${editor !== "states"}>${this.states}</div>
+                        </div>
                     </section>
                 </div>
                 <ff-splitter margin="180" ?hidden=${!expert}></ff-splitter>

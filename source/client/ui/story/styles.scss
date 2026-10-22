@@ -93,26 +93,23 @@ sv-story-workspace {
   .sv-workspace-list { flex-basis: 30%; }
   .sv-workspace-task { flex-basis: 65%; }
   .sv-workspace-explorer { flex-basis: 68%; }
-  .sv-workspace-bottom-task, .sv-workspace-editor {
+  .sv-workspace-bottom {
     flex: 0 0 32%;
     opacity: 0;
     pointer-events: none;
     transition: flex-basis 260ms ease, opacity 180ms ease;
   }
-  .sv-workspace-bottom-task:not([data-open]),
-  .sv-workspace-editor:not([data-open]) {
+  .sv-workspace-bottom:not([data-open]) {
     flex-basis: 0% !important; // Override a size left by dragging the splitter.
   }
-  .sv-workspace-bottom-task[data-open],
-  .sv-workspace-editor[data-open] {
+  .sv-workspace-bottom[data-open] {
     opacity: 1;
     pointer-events: auto;
   }
-  &.sv-workspace-resizing .sv-workspace-bottom-task,
-  &.sv-workspace-resizing .sv-workspace-editor { transition: none; }
+  &.sv-workspace-resizing .sv-workspace-bottom { transition: none; }
 
   @media (prefers-reduced-motion: reduce) {
-    .sv-workspace-bottom-task, .sv-workspace-editor { transition: none; }
+    .sv-workspace-bottom { transition: none; }
   }
 
   .sv-workspace-region > .sv-panel,
