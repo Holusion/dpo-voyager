@@ -107,28 +107,6 @@ export default class CVSnapshots extends CTweenMachine
         models.forEach(model => {
             this.updateComponentTarget(model.transform, !!features["models"]);
             this.updateComponentTarget(model, !!features["models"]);
-
-            // Handle properties getting added to annotation views after initial setup
-            model.getComponent(CVAnnotationView).getAnnotations().forEach(anno => {
-                if(anno.data.viewId) {
-                    const props = this.getTargetProperties();
-                    const orbitIdx = props.findIndex((elem) => {return elem.name == "Orbit"});
-                    const offsetIdx = props.findIndex((elem) => {return elem.name == "Offset"});
-
-                    // set non camera properties to null to skip them
-                    const values = this.states[anno.data.viewId]?.values;
-                    if(values) {
-                        values.forEach((v, idx) => {
-                            if(idx != orbitIdx && idx != offsetIdx) {
-                                values[idx] = null;
-                            }
-                        });
-                    }
-                    else {
-                        console.warn("Unknown view state for anno: " + anno.title);
-                    }
-                }
-            });
         });
 
         const lights = this.getGraphComponents(CLight);
@@ -171,6 +149,20 @@ export default class CVSnapshots extends CTweenMachine
         this.ins.tween.set();
 
         this.outs.end.once("value", () => {this.targets.length = 0; this.targets.push(...targetCache);}, this);
+    }
+
+    addTargetProperty(property: Property)
+    {
+        super.addTargetProperty(property);
+
+        // annotation views only set the camera: they skip properties added after them
+        const index = this.targets.length - 1;
+        this.getGraphComponents(CVAnnotationView).forEach(view => view.getAnnotations().forEach(annotation => {
+            const state = annotation.data.viewId ? this.states[annotation.data.viewId] : null;
+            if (state) {
+                state.values[index] = null;
+            }
+        }));
     }
 
     protected onLightComponentEvent = (event: IObjectEvent<CLight>) => {
