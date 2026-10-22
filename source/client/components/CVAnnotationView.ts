@@ -47,6 +47,7 @@ import CVAssetManager from "./CVAssetManager";
 import CVSnapshots from "./CVSnapshots";
 import CVOrbitNavigation from "./CVOrbitNavigation";
 import CPulse from "client/../../libs/ff-graph/source/components/CPulse";
+import { ITweenState } from "@ff/graph/components/CTweenMachine";
 import CVScene from "./CVScene";
 import CVSetup from "./CVSetup";
 
@@ -216,16 +217,7 @@ export default class CVAnnotationView extends CObject3D
                     navigation.ins.isInUse.setValue(true);
                 }
 
-                this.normalizeViewOrbit(annotation.data.viewId);
-                
-                // If activeAnnotation is being tracked, make sure it is set
-                const activeIdx = this.snapshots.getTargetProperties().findIndex(prop => prop.name == "ActiveId");
-                if (activeIdx >= 0) {
-                    viewState.values[activeIdx] = annotation.data.id;
-                }
-
-                const pulse = this.getMainComponent(CPulse);
-                this.snapshots.tweenTo(annotation.data.viewId, pulse.context.secondsElapsed);
+                this.playView(annotation);
                 this._activeView = true;
             }
         }
@@ -648,17 +640,41 @@ export default class CVAnnotationView extends CObject3D
         ins.article.setOptions(names);
     }
 
-    // helper function to bring saved state orbit into alignment with current view orbit
-    protected normalizeViewOrbit(viewId: string) {
+    /**
+     * Tweens to the annotation's view. The view is played as a copy, adjusted to the current camera (see normalizeViewOrbit)
+     * and with the annotation active: the saved view doesn't change.
+     */
+    playView(annotation: Annotation)
+    {
+        const viewState = this.snapshots.getState(annotation.data.viewId);
+        if (!viewState) {
+            return;
+        }
+
+        const view = { ...viewState, values: viewState.values.slice() };
+        this.normalizeViewOrbit(view);
+
+        // If activeAnnotation is being tracked, make sure it is set
+        const activeIdx = this.snapshots.getTargetProperties().findIndex(prop => prop.name == "ActiveId");
+        if (activeIdx >= 0) {
+            view.values[activeIdx] = annotation.data.id;
+        }
+
+        const pulse = this.getMainComponent(CPulse);
+        this.snapshots.tweenToState(view, pulse.context.secondsElapsed);
+    }
+
+    // helper function to bring the view's orbit into alignment with current view orbit
+    protected normalizeViewOrbit(viewState: ITweenState) {
         const orbitIdx = this.snapshots.getTargetProperties().findIndex(prop => prop.name == "Orbit");
-        const viewState = this.snapshots.getState(viewId);
 
         const currentOrbit = this.snapshots.getCurrentValues()[orbitIdx];
         let angleOffset = 0;
-        currentOrbit.forEach((n, i) => {
-            const mult = Math.round((n-viewState.values[orbitIdx][i])/360);
-            viewState.values[orbitIdx][i] += 360*mult;
-            angleOffset += Math.abs(n-viewState.values[orbitIdx][i]);
+        viewState.values[orbitIdx] = viewState.values[orbitIdx].map((v, i) => {
+            const n = currentOrbit[i];
+            const value = v + 360*Math.round((n-v)/360);
+            angleOffset += Math.abs(n-value);
+            return value;
         });
 
         // Factor offset into duration calculation

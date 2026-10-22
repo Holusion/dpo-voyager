@@ -136,7 +136,15 @@ export default class CTweenMachine extends Component
 
     tweenTo(stateId: string, secondsElapsed: number)
     {
-        const state = this.states[stateId];
+        return this.tweenToState(this.states[stateId], secondsElapsed);
+    }
+
+    /**
+     * Tweens to the given state, which the machine doesn't need to hold:
+     * e.g. a copy of one of its states, adjusted before playing it.
+     */
+    tweenToState(state: ITweenState, secondsElapsed: number)
+    {
         const outs = this.outs;
 
         if (state) {
@@ -286,6 +294,9 @@ export default class CTweenMachine extends Component
         if (this._currentValues) {
             this._currentValues.push(property.cloneValue());
         }
+        if (this.isTweeningToCopy()) {
+            this._targetState.values.push(property.cloneValue());
+        }
     }
 
     removeTargetProperty(property: Property)
@@ -393,6 +404,16 @@ export default class CTweenMachine extends Component
         if (this._currentValues) {
             this._currentValues.splice(index, 1);
         }
+        if (this.isTweeningToCopy()) {
+            this._targetState.values.splice(index, 1);
+        }
+    }
+
+    /** Whether the state being tweened to isn't one of the machine's states (see tweenToState). */
+    protected isTweeningToCopy()
+    {
+        const state = this._targetState;
+        return !!state && this.states[state.id] !== state;
     }
 
     protected getTarget(property: Property)
