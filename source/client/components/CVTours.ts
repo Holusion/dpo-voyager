@@ -219,6 +219,10 @@ export default class CVTours extends Component
             else {
                 outs.tourIndex.set();
                 this.snapshots.endTween();
+
+                // what was edited during the tour stays
+                const scene = machine.getState(CVTours.sceneSnapshotId);
+                this.getDocumentValues().forEach((value, index) => scene.values[index] = value);
                 this._stepId = null;
 
                 this.normalizeViewOrbit(CVTours.sceneSnapshotId);
