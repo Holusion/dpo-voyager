@@ -37,7 +37,6 @@ import CVScene from "client/components/CVScene";
 import { ELanguageType, DEFAULT_LANGUAGE } from "client/schema/common";
 import { getMeshTransform } from "client/utils/Helpers";
 import CVSnapshots, { EEasingCurve } from "./CVSnapshots";
-import CPulse from "@ff/graph/components/CPulse";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -186,18 +185,7 @@ export default class CVAnnotationsTask extends CVTask
 
     restoreAnnotationView()
     {
-        const machine = this._machine;
-        const annotation = this._activeAnnotations.activeAnnotation;
-        
-        // If activeAnnotation is being tracked, make sure it is set
-        const activeIdx = machine.getTargetProperties().findIndex(prop => prop.name == "ActiveId");
-        if(activeIdx >= 0) {
-            const viewState = machine.getState(this.selectedState);
-            viewState.values[activeIdx] = annotation.data.id;
-        }
-        
-        const pulse = this.getMainComponent(CPulse);
-        machine.tweenTo(this.selectedState, pulse.context.secondsElapsed);
+        this._activeAnnotations.playView(this._activeAnnotations.activeAnnotation);
     }
 
     deleteAnnotationView()
