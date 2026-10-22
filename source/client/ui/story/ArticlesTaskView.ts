@@ -72,7 +72,7 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         </div>` : null;
 
         return html`<div class="ff-flex-item-stretch ff-flex-row sv-task-columns">
-            <div class="ff-splitter-section sv-task-column" style=${activeArticle ? "flex-basis: 40%" : "flex-basis: 100%"}>
+            <div class="ff-splitter-section sv-task-column" style="flex-basis: 40%">
                 <div class="sv-task-column-header"><ff-icon name=${task.icon}></ff-icon><span>${languageManager.getUILocalizedString("Articles")}</span></div>
                 <div class="sv-commands">
                     <ff-button text="${languageManager.getUILocalizedString("Create")}" icon="create" @click=${this.onClickCreate}></ff-button>
@@ -85,12 +85,12 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
                     <sv-article-list .data=${articles} .selectedItem=${activeArticle} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectArticle} @edit=${this.onEditArticle}></sv-article-list>
                 </div>
             </div>
-            ${activeArticle ? html`<ff-splitter></ff-splitter>
-                <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
-                    <div class="sv-task-column-header">${languageManager.getUILocalizedString("Article Settings")}</div>
-                    <div class="sv-commands"><ff-button text="${languageManager.getUILocalizedString("Edit")}" icon="pen" @click=${this.onClickEdit}></ff-button></div>
-                    ${detailView}
-                </div>` : null}
+            <ff-splitter></ff-splitter>
+            <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
+                <div class="sv-task-column-header">${languageManager.getUILocalizedString("Article Settings")}</div>
+                ${activeArticle ? html`<div class="sv-commands"><ff-button text="${languageManager.getUILocalizedString("Edit")}" icon="pen" @click=${this.onClickEdit}></ff-button></div>
+                    ${detailView}` : html`<div class="sv-task-empty">${languageManager.getUILocalizedString("Select an article")}</div>`}
+            </div>
         </div>`;
     }
 

@@ -98,7 +98,7 @@ export default class ToursTaskView extends TaskView<CVToursTask>
         </div>` : null;
 
         return html`<div class="ff-flex-item-stretch ff-flex-row sv-task-columns">
-            <div class="ff-splitter-section sv-task-column" style=${activeTour ? "flex-basis: 40%" : "flex-basis: 100%"}>
+            <div class="ff-splitter-section sv-task-column" style="flex-basis: 40%">
                 <div class="sv-task-column-header"><ff-icon name=${task.icon}></ff-icon><span>${languageManager.getUILocalizedString("Tours")}</span></div>
                 <div class="sv-commands">
                     <ff-button title="${languageManager.getUILocalizedString("Create Tour")}" icon="create" @click=${this.onClickCreate}></ff-button>
@@ -112,12 +112,12 @@ export default class ToursTaskView extends TaskView<CVToursTask>
                     <sv-tour-list .data=${tourList.slice()} .selectedItem=${activeTour} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectTour}></sv-tour-list>
                 </div>
             </div>
-            ${activeTour ? html`<ff-splitter></ff-splitter>
-                <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
-                    <div class="sv-task-column-header">${languageManager.getUILocalizedString("Tour Settings")}</div>
-                    <div class="sv-commands"><ff-button text="${languageManager.getUILocalizedString("Edit Steps")}" @click=${this.onClickSteps}></ff-button></div>
-                    ${detailView}
-                </div>` : null}
+            <ff-splitter></ff-splitter>
+            <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
+                <div class="sv-task-column-header">${languageManager.getUILocalizedString("Tour Settings")}</div>
+                ${activeTour ? html`<div class="sv-commands"><ff-button text="${languageManager.getUILocalizedString("Edit Steps")}" @click=${this.onClickSteps}></ff-button></div>
+                    ${detailView}` : html`<div class="sv-task-empty">${languageManager.getUILocalizedString("Select a tour")}</div>`}
+            </div>
         </div>`;
     }
 

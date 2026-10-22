@@ -93,7 +93,7 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         const annotation = annotations && annotations.activeAnnotation;
 
         return html`<div class="ff-flex-item-stretch ff-flex-row sv-task-columns">
-            <div class="ff-splitter-section sv-task-column" style=${annotation ? "flex-basis: 40%" : "flex-basis: 100%"}>
+            <div class="ff-splitter-section sv-task-column" style="flex-basis: 40%">
                 <div class="sv-task-column-header"><ff-icon name=${this.task.icon}></ff-icon><span>${languageManager.getUILocalizedString("Annotations")}</span></div>
                 <div class="sv-commands">
                     <ff-button text="${languageManager.getUILocalizedString("Select")}" icon="select" index=${EAnnotationsTaskMode.Off} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
@@ -106,11 +106,11 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
                     <sv-annotation-list .data=${annotationList} .selectedItem=${annotation} .activeLanguage=${activeLanguage} .primarySceneLanguage=${primarySceneLanguage} @select=${this.onSelectAnnotation}></sv-annotation-list>
                 </div>
             </div>
-            ${annotation ? html`<ff-splitter></ff-splitter>
-                <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
-                    <div class="sv-task-column-header">${languageManager.getUILocalizedString("Annotation Settings")}</div>
-                    ${this.renderDetailView(annotations)}
-                </div>` : null}
+            <ff-splitter></ff-splitter>
+            <div class="ff-splitter-section sv-task-column" style="flex-basis: 60%">
+                <div class="sv-task-column-header">${languageManager.getUILocalizedString("Annotation Settings")}</div>
+                ${annotation ? this.renderDetailView(annotations) : html`<div class="sv-task-empty">${languageManager.getUILocalizedString("Select an annotation")}</div>`}
+            </div>
         </div>`;
     }
 

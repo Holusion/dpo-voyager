@@ -656,6 +656,14 @@ $color-component-meta-light: #d9d998;
 
 .sv-task-language-row { flex: 0 0 auto; }
 
+.sv-task-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  color: common.$color-text-dark;
+}
+
 .sv-task-item {
   white-space: nowrap;
   overflow: hidden;
