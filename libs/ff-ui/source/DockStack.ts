@@ -74,6 +74,20 @@ export default class DockStack extends CustomElement
         this.activeHeader.active = true;
     }
 
+    /** Shows the first available panel if the active one isn't available. */
+    activateAvailablePanel()
+    {
+        if (!this.activeHeader || this.activeHeader.panel.available) {
+            return;
+        }
+
+        const headers = Array.from(this.headers.children) as DockPanelHeader[];
+        const header = headers.find(header => header.panel.available);
+        if (header) {
+            this.activatePanel(header.panel);
+        }
+    }
+
     insertPanel(panel: DockPanel, beforePanel?: DockPanel)
     {
         this.init(false);

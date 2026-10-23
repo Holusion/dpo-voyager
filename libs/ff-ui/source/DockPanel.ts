@@ -50,6 +50,10 @@ export default class DockPanel extends CustomElement
     @property({ type: Boolean, reflect: true })
     active: boolean = false;
 
+    /** An unavailable panel hides its tab and stays mounted; its stack shows an available panel instead. */
+    @property({ type: Boolean })
+    available: boolean = true;
+
     header: DockPanelHeader = null;
 
     protected contentId: string;
@@ -168,6 +172,10 @@ export default class DockPanel extends CustomElement
 
         if (changedProperties.has("active")) {
             this.style.display = this.active ? "flex" : "none";
+        }
+
+        if (changedProperties.has("available") && !this.available && this.parentStack) {
+            this.parentStack.activateAvailablePanel();
         }
     }
 

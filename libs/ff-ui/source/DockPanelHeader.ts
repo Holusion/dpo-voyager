@@ -55,6 +55,8 @@ export default class DockPanelHeader extends CustomElement
     {
         super.update(changedProperties);
 
+        this.style.display = this.panel.available ? "block" : "none";
+
         if (this.panel.movable) {
             this.setAttribute("draggable", "true");
         }
@@ -90,7 +92,6 @@ export default class DockPanelHeader extends CustomElement
     {
         this.setStyle({
             flex: "0 0 auto",
-            display: "block",
             userSelect: "none",
             cursor: "pointer"
         });
