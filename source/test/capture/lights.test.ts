@@ -3,7 +3,8 @@ import { expect } from "chai";
 import CLight from "@ff/scene/components/CLight";
 
 import CVModel2 from "client/components/CVModel2";
-import CVSnapshots from "client/components/CVSnapshots";
+import CVSnapshots, { EEasingCurve } from "client/components/CVSnapshots";
+import CVTours from "client/components/CVTours";
 import { IDocument } from "client/schema/document";
 
 import { createDocumentData, createStory, IStory } from "../helpers/story";
@@ -15,6 +16,7 @@ describe("Lights", function() {
     let data: IDocument;
     let story: IStory;
     let machine: CVSnapshots;
+    let tours: CVTours;
     let modelB: CVModel2;
 
     const lights = () => story.system.getComponents(CLight).map(light => [ light.transform.ins.position.cloneValue(), light.transform.ins.scale.cloneValue() ]);
@@ -42,6 +44,7 @@ describe("Lights", function() {
         data.models.forEach(model => model.boundingBox = { min: [-10, -10, -10], max: [10, 10, 10] });
         story = createStory(data);
         machine = story.document.setup.snapshots;
+        tours = story.document.setup.tours;
         modelB = story.document.innerComponents.getArray(CVModel2).find(model => model.node.name === "Model B");
         settle();
     });
@@ -59,4 +62,50 @@ describe("Lights", function() {
         expect(lights()).to.not.deep.equal(before);
     });
 
+    it("are fitted again when leaving a tour during which a model was hidden", function() {
+        modelB.ins.visible.setValue(false);
+        settle();
+        const fitted = lights();
+        modelB.ins.visible.setValue(true);
+        settle();
+
+        tours.fromData([{ title: "Tour", steps: [] } as any]);
+        // as the tour menu does: tours are shown, then one is picked
+        tours.ins.enabled.setValue(true);
+        story.update();
+        tours.ins.tourIndex.setValue(0);
+        settle();
+        modelB.ins.visible.setValue(false);
+        settle();
+        tours.ins.enabled.setValue(false);
+        settle();
+
+        expect(modelB.ins.visible.value).to.equal(false);
+        expect(lights()).to.deep.equal(fitted);
+    });
+
+    it("stay where they are while a tour step hides a model", function() {
+        machine.targetFeatures["models"] = true;
+        machine.updateTargets();
+        modelB.ins.visible.setValue(false);
+        story.update();
+        machine.setState({ id: "s1", values: machine.getCurrentValues(), curve: EEasingCurve.Linear, duration: 1, threshold: 0.5 });
+        modelB.ins.visible.setValue(true);
+        settle();
+        tours.fromData([{ title: "Tour", steps: [{ id: "s1", title: "1" }] } as any]);
+        const before = lights();
+
+        // as the tour menu does: tours are shown, then one is picked
+        tours.ins.enabled.setValue(true);
+        story.update();
+        tours.ins.tourIndex.setValue(0);
+        settle();
+        expect(modelB.ins.visible.value).to.equal(false);
+        expect(lights()).to.deep.equal(before);
+
+        tours.ins.enabled.setValue(false);
+        settle();
+        expect(modelB.ins.visible.value).to.equal(true);
+        expect(lights()).to.deep.equal(before);
+    });
 });
