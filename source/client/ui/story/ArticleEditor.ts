@@ -16,7 +16,7 @@
  */
 
 /* Import TinyMCE */
-import tinymce from 'tinymce';
+import tinymce, { Editor } from 'tinymce';
 
 /* Default icons are required for TinyMCE 5.3 or above */
 import 'tinymce/icons/default';
@@ -64,6 +64,9 @@ export default class ArticleEditor extends SystemView
     private _container: HTMLDivElement = null;
     private _overlay: HTMLElement = null;
     private _assetPath: string = "";
+    private _editor: Editor = null;
+    private _ready: Promise<void>;
+    private _pending: Promise<unknown> = Promise.resolve();
 
     get hasArticle() {
         return !!this._assetPath;
@@ -88,36 +91,52 @@ export default class ArticleEditor extends SystemView
         return this.system.getComponent(CVReader);
     }
 
+    /** Runs editor actions in order, once TinyMCE is ready. */
+    private enqueue(action: () => Promise<unknown>)
+    {
+        const next = this._pending.then(() => this._ready).then(action);
+        this._pending = next.catch(error => {
+            new Notification(`Article editor: ${error.message}`, "error");
+        });
+        return this._pending;
+    }
+
     openArticle(assetPath: string)
     {
-        if (this._assetPath) {
-            return this.closeArticle().then(() => this.readArticle(assetPath));
-        }
-
-        return this.readArticle(assetPath);
+        return this.enqueue(async () => {
+            if (this._assetPath === assetPath) {
+                return;
+            }
+            if (this._assetPath) {
+                await this.confirmCloseArticle();
+            }
+            await this.readArticle(assetPath);
+        });
     }
 
     saveArticle()
     {
-        if (this._assetPath) {
-            this.writeArticle();
-        }
+        return this.enqueue(async () => {
+            if (this._assetPath) {
+                await this.writeArticle();
+            }
+        });
     }
 
     closeArticle()
     {
-        if (tinymce.activeEditor.isDirty() && this._assetPath) {
-            return MessageBox.show("Close Article", "Would you like save your changes?", "warning", "yes-no").then(result => {
-                if (result.ok) {
-                    return this.writeArticle().then(() => this.clearArticle());
-                }
-                else {
-                    return this.clearArticle();
-                }
-            });
-        }
+        return this.enqueue(() => this.confirmCloseArticle());
+    }
 
-        return this.clearArticle();
+    private async confirmCloseArticle()
+    {
+        if (this._editor.isDirty() && this._assetPath) {
+            const result = await MessageBox.show("Close Article", "Would you like to save your changes?", "warning", "yes-no");
+            if (result.ok) {
+                await this.writeArticle();
+            }
+        }
+        await this.clearArticle();
     }
 
     protected readArticle(assetPath: string)
@@ -133,11 +152,10 @@ export default class ArticleEditor extends SystemView
             `;
         })
         .then(content => {
-            //this._editor.root.innerHTML = content;
-            tinymce.activeEditor.setContent(content, {format: "raw"});
+            this._editor.setContent(content, {format: "raw"});
             this._assetPath = assetPath;
         }).then(() => {
-            tinymce.activeEditor.setDirty(false);
+            this._editor.setDirty(false);
             if(this._overlay.parentElement === this) {
                 this.removeChild(this._overlay);
             }
@@ -167,7 +185,7 @@ export default class ArticleEditor extends SystemView
     {
         const basePath = this.assetManager.getAssetBasePath(this._assetPath);
 
-        let content = tinymce.activeEditor.getContent({format: "raw"}); //this._editor.root.innerHTML;
+        let content = this._editor.getContent({format: "raw"});
 
         // transform absolute to article-relative URLs
         content = content.replace(/(src=\")(.*?)(\")/g, (match, pre, assetUrl, post) => {
@@ -182,20 +200,20 @@ export default class ArticleEditor extends SystemView
 
         return this.assetWriter.putText(content, this._assetPath)
             .then(() => {
-                tinymce.activeEditor.setDirty(false);
+                this._editor.setDirty(false);
                 this.articleReader.ins.articleId.set();
                 new Notification(`Article successfully written to '${this._assetPath}'`, "info");
             })
             .catch(error => {
-                new Notification(`Failed to write article to '${this._assetPath}': ${error.message}`, "error");
+                throw new Error(`Failed to write article to '${this._assetPath}': ${error.message}`);
             });
     }
 
     protected clearArticle()
     {
-        tinymce.activeEditor.setContent("");
+        this._editor.setContent("");
         this._assetPath = "";
-        tinymce.activeEditor.setDirty(false);
+        this._editor.setDirty(false);
 
         this.appendChild(this._overlay);
         this.dispatchEvent(new CustomEvent(ArticleEditor.changeEvent, { bubbles: true }));
@@ -212,7 +230,6 @@ export default class ArticleEditor extends SystemView
 
         this._container = this.appendElement("div");
         this._container.classList.add("sv-container");
-        this._container.id = "editor_wrapper"
 
         this._overlay = this.appendElement("div");
         this._overlay.classList.add("sv-overlay");
@@ -224,10 +241,8 @@ export default class ArticleEditor extends SystemView
         this.mediaManager.on<IAssetOpenEvent>("asset-open", this.onOpenAsset, this);
         this.mediaManager.on<IAssetRenameEvent>("asset-rename", this.onRenameAsset, this);
 
-        this._container.id = "editor_wrapper"
-
-        tinymce.init({
-            selector: "#editor_wrapper",
+        this._ready = tinymce.init({
+            target: this._container,
             plugins: "image link lists media",
             toolbar: 'saveButton closeButton | undo redo | link image media | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | styles',
             menubar: false,
@@ -299,7 +314,7 @@ export default class ArticleEditor extends SystemView
                     });
                 });*/
             },
-        });       
+        }).then(editors => { this._editor = editors[0]; });
     }
 
     protected disconnected()
@@ -307,7 +322,7 @@ export default class ArticleEditor extends SystemView
         this.mediaManager.off<IAssetRenameEvent>("asset-rename", this.onRenameAsset, this);
         this.mediaManager.off<IAssetOpenEvent>("asset-open", this.onOpenAsset, this);
 
-        tinymce.activeEditor.remove();
+        this._ready.then(() => this._editor.remove());
         super.disconnected();
     }
 
@@ -315,9 +330,7 @@ export default class ArticleEditor extends SystemView
     {
         // if there is no asset, close any current article
         if(event.asset === null ) {
-            if(this._assetPath) {
-                this.closeArticle();
-            }
+            this.closeArticle();
         }
         // if opened asset is of type text/*, open it in the editor
         else if (event.asset.info.type.startsWith("text/")) {
