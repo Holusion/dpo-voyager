@@ -328,8 +328,11 @@ export default class ArticleEditor extends SystemView
 
     protected onOpenAsset(event: IAssetOpenEvent)
     {
+        if (event.path) {
+            this.openArticle(event.path);
+        }
         // if there is no asset, close any current article
-        if(event.asset === null ) {
+        else if(event.asset === null ) {
             this.closeArticle();
         }
         // if opened asset is of type text/*, open it in the editor

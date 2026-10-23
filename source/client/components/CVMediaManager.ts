@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import CAssetManager, { IAssetOpenEvent, IFileInfo, IAssetTreeChangeEvent, IAssetEntry } from "@ff/scene/components/CAssetManager";
+import CAssetManager, { IAssetOpenEvent as IIndexedAssetOpenEvent, IFileInfo, IAssetTreeChangeEvent, IAssetEntry } from "@ff/scene/components/CAssetManager";
 import Notification from "@ff/ui/Notification";
 import CVStandaloneFileManager from "./CVStandaloneFileManager";
 import CVAssetManager from "./CVAssetManager";
@@ -38,7 +38,10 @@ import CVImagePlane from "./CVImagePlane";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-export { IAssetOpenEvent };
+export interface IAssetOpenEvent extends IIndexedAssetOpenEvent
+{
+    path?: string;
+}
 
 export interface IAssetRenameEvent extends ITypedEvent<"asset-rename">
 {
@@ -277,6 +280,17 @@ export default class CVMediaManager extends CAssetManager
                 });
             });
             return Promise.resolve(); // TODO - improve error handling
+        }
+    }
+
+    /** Known document assets can be opened before the optional media index is loaded. */
+    open(asset: IAssetEntry | string)
+    {
+        if (typeof asset === "string") {
+            this.emit<IAssetOpenEvent>({ type: "asset-open", asset: null, path: asset });
+        }
+        else {
+            super.open(asset);
         }
     }
 

@@ -23,7 +23,7 @@ import { IReader, EReaderPosition } from "client/schema/setup";
 
 import Article from "../models/Article";
 
-//import NVNode from "../nodes/NVNode";
+import type NVNode from "../nodes/NVNode";
 
 import CVMeta, { IArticlesUpdateEvent } from "./CVMeta";
 import CVAssetManager from "./CVAssetManager";
@@ -39,7 +39,7 @@ export { Article, EReaderPosition };
 export interface IArticleEntry
 {
     article: Article;
-    //node: NVNode;
+    node: NVNode;
 }
 
 export default class CVReader extends Component
@@ -230,7 +230,7 @@ export default class CVReader extends Component
 
         metas.forEach(meta => {
             const articles = meta.articles;
-            const node = meta.node;
+            const node = meta.node as NVNode;
 
             articles.items.forEach(article => {
                 masterList[article.id] = { article, node };

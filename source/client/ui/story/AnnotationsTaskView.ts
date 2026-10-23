@@ -81,34 +81,26 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
             return;
         }
 
-        const node = this.activeNode;
-        const annotations = node && node.getComponent(CVAnnotationView, true);
+        const annotations = this.task.activeAnnotations;
         const languageManager = this.activeDocument.setup.language;
         const primarySceneLanguage = ELanguageType[languageManager.ins.primarySceneLanguage.value];
         const activeLanguage = ELanguageType[languageManager.ins.activeLanguage.value];
 
-        if (!annotations) {
-            // set cursor to grab
-            this.sceneview.style.cursor = "grab";
-
-            return html`<div class="sv-placeholder">${languageManager.getUILocalizedString("Please select a model to edit its annotations")}</div>`;
-        }
-
         this.sceneview.style.cursor = this.task.ins.mode.value > 0 ? "default" : "grab";
 
-        const inProps = annotations.ins;
+        const inProps = annotations?.ins;
         const audioProp = this.task.ins.audio;
         const modeProp = this.task.ins.mode;
-        const annotationList = annotations.getAnnotations();
+        const annotationList = this.task.annotationViews.flatMap(view => view.getAnnotations());
 
-        const annotation = annotations.activeAnnotation;
+        const annotation = annotations?.activeAnnotation;
 
-        this._leadLimit = this._leadLimit == 0 ? 0 : (MAX_LEAD_CHARS - (inProps.image.value || inProps.audioId.value ? 50 : 0));
-        this._leadCharCount = inProps.lead.value.length;
+        this._leadLimit = this._leadLimit == 0 ? 0 : (MAX_LEAD_CHARS - (inProps?.image.value || inProps?.audioId.value ? 50 : 0));
+        this._leadCharCount = inProps?.lead.value.length || 0;
         const limitText = this._leadLimit == 0 ? "infinite" : this._leadLimit;
         const overLimit = this._leadCharCount > this._leadLimit && this._leadLimit != 0;
 
-        const imagePropView = inProps.image.value.length > 0 ? html`
+        const imagePropView = inProps?.image.value.length > 0 ? html`
             <div class="sv-indent">
                 <sv-property-view .property=${inProps.imageCredit}></sv-property-view>
                 <sv-property-view .property=${inProps.imageAltText}></sv-property-view>
@@ -248,10 +240,8 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
      */
     protected onSelectAnnotation(event: ISelectAnnotationEvent)
     {
+        this.task.setActiveAnnotation(event.detail.annotation);
         if (this.task.activeAnnotations) {
-            this.task.activeAnnotations.activeAnnotation = event.detail.annotation;
-            this.task.ins.selection.set();
-            
             const ins = this.task.activeAnnotations.ins;
             this._leadCharCount = ins.lead.value.length;
             this._leadLimit = MAX_LEAD_CHARS - (ins.image.value ? 100 : 0) - (ins.image.value || ins.audioId.value ? 50 : 0);

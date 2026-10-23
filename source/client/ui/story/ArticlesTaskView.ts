@@ -63,10 +63,6 @@ export default class ArticlesTaskView extends TaskView<CVArticlesTask>
         const activeLanguage = ELanguageType[languageManager.ins.activeLanguage.value];
         const primarySceneLanguage = ELanguageType[languageManager.ins.primarySceneLanguage.value];
 
-        if (!articles) {
-            return html`<div class="sv-placeholder">${languageManager.getUILocalizedString("Please select a scene or model node to edit its articles.")}</div>`;
-        }
-
         const detailView = activeArticle ? html`<div class="ff-scroll-y ff-flex-column sv-detail-view">
             <sv-property-view .property=${languageManager.ins.activeLanguage}></sv-property-view>
             <div class="sv-label">Title</div>

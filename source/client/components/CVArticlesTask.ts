@@ -20,11 +20,9 @@ import filenamify from "filenamify";
 import { Node, types } from "@ff/graph/Component";
 
 import MessageBox from "@ff/ui/MessageBox";
-import Notification from "@ff/ui/Notification";
 
 import Article from "../models/Article";
 
-import NVNode from "../nodes/NVNode";
 import CVDocument from "./CVDocument";
 import CVReader from "./CVReader";
 import CVMeta from "./CVMeta";
@@ -51,7 +49,6 @@ export default class CVArticlesTask extends CVTask
         create: types.Event("Articles.Create"),
         edit: types.Event("Articles.Edit"),
         delete: types.Event("Articles.Delete"),
-        version: types.Event("Articles.Version"),
         moveArticleUp: types.Event("Articles.MoveUp"),
         moveArticleDown: types.Event("Articles.MoveDown"),
         title: types.String("Article.Title"),
@@ -67,11 +64,14 @@ export default class CVArticlesTask extends CVTask
     ins = this.addInputs<CVTask, typeof CVArticlesTask.ins>(CVArticlesTask.ins);
     outs = this.addOutputs<CVTask, typeof CVArticlesTask.outs>(CVArticlesTask.outs);
 
-    meta: CVMeta = null;
     reader: CVReader = null;
+    private pendingArticles = new Set<string>();
 
-    get articles() {
-        return this.meta && this.meta.articles.items;
+    /**
+     * All articles of the active document, regardless of the node they are attached to.
+     */
+    get articles(): Article[] {
+        return this.reader ? this.reader.articles.map(entry => entry.article) : [];
     }
     get activeArticle() {
         return this.outs.article.value;
@@ -106,7 +106,6 @@ export default class CVArticlesTask extends CVTask
     {
         const ins = this.ins;
         const outs = this.outs;
-        const meta = this.meta;
         const activeArticle = this.activeArticle;
 
         if(!this.activeDocument) {
@@ -114,7 +113,7 @@ export default class CVArticlesTask extends CVTask
         }
         const languageManager = this.activeDocument.setup.language;
 
-        if (meta && ins.create.changed) {
+        if (ins.create.changed) {
             const article = new Article();
             article.language = languageManager.ins.primarySceneLanguage.value;
 
@@ -127,13 +126,13 @@ export default class CVArticlesTask extends CVTask
             }
 
             this.createEditArticle(article);
-            
-            meta.articles.append(article);
-            this.reader.outs.count.setValue(meta.articles.length);
+
+            // new articles are always attached to the scene node
+            this.activeDocument.root.meta.articles.append(article);
+            this.reader.outs.count.setValue(this.articles.length);
+            // Selection follows the completed write, so the editor can read the new file.
+            outs.article.set();
             languageManager.ins.activeLanguage.setValue(languageManager.ins.primarySceneLanguage.value);
-        }
-        else if(activeArticle && ins.version.changed) {
-            this.createEditArticle(activeArticle);
         }
         else {
             if (activeArticle) {
@@ -141,31 +140,15 @@ export default class CVArticlesTask extends CVTask
                     activeArticle.uri = ins.uri.value;
                     this.reader.ins.refresh.set();
 
-                    if(!this.mediaManager.getAssetByPath(activeArticle.uri)) {
-                        new Notification(`Unable to find article: '${activeArticle.uri}'. Check asset name.`, "error", 4000);
-                        this.mediaManager.open(null);
-                        return false;
-                    }
-                    else {
-                        ins.edit.set();
-                    }
+                    ins.edit.set();
                 }
 
-                const activeAsset = this.mediaManager.getAssetByPath(activeArticle.uri);
-
-                if (ins.edit.changed) {
-                    if (activeAsset) {
-                        this.mediaManager.open(activeAsset);
-                    }
-                    else {
-                        new Notification(`Unable to find article: '${activeArticle.uri}'. Check asset name.`, "error", 4000);
-                        this.mediaManager.open(null);
-                        this.reader.ins.refresh.set();
-                    }
+                if (ins.edit.changed && activeArticle.uri && !this.pendingArticles.has(activeArticle.uri)) {
+                    this.mediaManager.open(activeArticle.uri);
                 }
                 if (ins.delete.changed) {
                     this.deleteArticle(activeArticle);
-                    this.reader.outs.count.setValue(meta.articles.length);
+                    this.reader.outs.count.setValue(this.articles.length);
                 }
                 if (ins.title.changed) {
                     activeArticle.title = ins.title.value;
@@ -180,11 +163,11 @@ export default class CVArticlesTask extends CVTask
                     activeArticle.tags = ins.tags.value.split(",").map(tag => tag.trim()).filter(tag => !!tag);
                 }
                 if (ins.moveArticleUp.changed) {
-                    this.meta.articles.moveItem(activeArticle, -1);
+                    this.getArticleMeta(activeArticle)?.articles.moveItem(activeArticle, -1);
                     //return true;
                 }
                 if (ins.moveArticleDown.changed) {
-                    this.meta.articles.moveItem(activeArticle, 1);
+                    this.getArticleMeta(activeArticle)?.articles.moveItem(activeArticle, 1);
                     //return true;
                 }
             }
@@ -205,9 +188,17 @@ export default class CVArticlesTask extends CVTask
         return new ArticlesTaskView(this);
     }
 
+    /**
+     * Returns the meta component the given article is attached to.
+     */
+    protected getArticleMeta(article: Article): CVMeta
+    {
+        return this.reader?.articles.find(entry => entry.article === article)?.node.meta || null;
+    }
+
     protected deleteArticle(article: Article)
     {
-        this.meta.articles.removeItem(article);
+        this.getArticleMeta(article)?.articles.removeItem(article);
 
         // Make sure we delete all language variation assets
         Object.values(ELanguageType).filter((v) => !isNaN(Number(v))).forEach( type => {
@@ -230,20 +221,27 @@ export default class CVArticlesTask extends CVTask
         });
     }
 
-    protected createEditArticle(article: Article)
+    protected createEditArticle(article: Article, uri = article.uri)
     {
-        const uri = article.uri;
+        const language = article.language;
+        const reader = this.reader;
+        this.pendingArticles.add(uri);
 
         this.assetWriter.putText(`<h1>${article.title}</h1>`, uri)
         .then(() => this.mediaManager.refresh())
         .then(() => {
-            const asset = this.mediaManager.getAssetByPath(uri);
-            if (asset) {
-                //this.ins.edit.set();
-                this.reader.ins.articleId.setValue(article.id);
+            // Publish a translated URI only after its file exists, so the viewport reader can load it too.
+            article.data.uris[ELanguageType[language]] = uri;
+            article.update();
+            this.pendingArticles.delete(uri);
+            if (this.isActiveTask && this.reader === reader && article.language === language) {
+                reader.ins.articleId.setValue(article.id);
             }
         })
-        .catch(error => MessageBox.show("Error", `Failed to create article at '${uri}'`, "error"));
+        .catch(error => {
+            this.pendingArticles.delete(uri);
+            MessageBox.show("Error", `Failed to create article at '${uri}'`, "error");
+        });
     }
 
     protected getSafeArticlePath(title: string)
@@ -272,36 +270,21 @@ export default class CVArticlesTask extends CVTask
             this.reader.outs.article.on("value", this.onArticleChange, this);
             this.mediaManager.on<IAssetRenameEvent>("asset-rename", this.onAssetRename, this);
             next.setup.language.outs.activeLanguage.on("value", this.onDocumentLanguageChange, this);
-        }
-    }
 
-    protected onActiveNode(previous: NVNode, next: NVNode)
-    {
-        if (previous) {
-            this.meta = null;
+            // update active article
+            this.onArticleChange();
         }
-        if (next) {
-            if (!next.meta) {
-                next.createComponent(CVMeta);
-            }
-
-            this.meta = next.meta;
-        }
-
-        // update active article
-        this.onArticleChange();
     }
 
     protected onArticleChange()
     {
         const ins = this.ins;
         const outs = this.outs;
-        const meta = this.meta;
         const languageManager = this.activeDocument.setup.language;
-        let article = this.reader.activeArticle;
+        const activeArticle = this.reader.activeArticle;
+        const article = activeArticle && this.articles.find(item => item.id === activeArticle.id);
 
-        if (meta && article && meta.articles.getById(article.id)) {
-            article = meta.articles.getById(article.id);
+        if (article) {
             ins.title.setValue(article.title, true);
             ins.lead.setValue(article.lead, true);
             ins.tags.setValue(article.tags.join(", "), true);
@@ -309,10 +292,12 @@ export default class CVArticlesTask extends CVTask
             // if we don't have a uri for this language, create one so that it is editable
             if(article.uri === undefined) {
                 const defaultFolder = CVMediaManager.articleFolder;
-                article.uri = `${defaultFolder}/new-article-${article.id}-${languageManager.codeString()}.html`;
-                this.ins.version.set();
+                const uri = `${defaultFolder}/new-article-${article.id}-${languageManager.codeString()}.html`;
+                if (!this.pendingArticles.has(uri)) {
+                    this.createEditArticle(article, uri);
+                }
             }
-            else {
+            else if (!this.pendingArticles.has(article.uri)) {
                 this.ins.edit.set();
             }
 
