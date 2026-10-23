@@ -160,6 +160,16 @@ export default class CTweenMachine extends Component
         }
     }
 
+    /** Stops interpolation at its current values without recalling another state. */
+    cancelTween()
+    {
+        this._currentValues = null;
+        this._targetState = null;
+        this._startTime = 0;
+        this._easingFunction = null;
+        this.outs.tweening.setValue(false);
+    }
+
     update(context: IPulseContext)
     {
         const ins = this.ins;

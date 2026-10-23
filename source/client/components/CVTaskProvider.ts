@@ -71,7 +71,9 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
         const languageManager = this.languageManager;
 
         if (ins.mode.changed) {
-            this.scopedComponents.forEach(task => task.dispose());
+            this.activeComponent = null;
+            // Disposal removes entries from the provider's live list.
+            [...this.scopedComponents].forEach(task => task.dispose());
 
             const taskSet = taskSets[ins.mode.getValidatedValue()];
             taskSet.forEach(taskType => this.createComponent(taskType));

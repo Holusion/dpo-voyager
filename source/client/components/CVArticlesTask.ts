@@ -91,19 +91,13 @@ export default class CVArticlesTask extends CVTask
         const configuration = this.configuration;
         configuration.interfaceVisible = true;
         configuration.bracketsVisible = true;
-    }
-
-    activateTask()
-    {
-        this.startObserving();
-        super.activateTask();
+        configuration.readerEnabled = true;
     }
 
     deactivateTask()
     {
-        this.reader.ins.articleId.setValue("");  
+        this.reader?.ins.articleId.setValue("");
         this.mediaManager.open(null); // close any open article
-        this.stopObserving();
         super.deactivateTask();
 
     }
@@ -266,6 +260,7 @@ export default class CVArticlesTask extends CVTask
 
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
+        super.onActiveDocument(previous, next);
         if (previous) {
             previous.setup.language.outs.activeLanguage.off("value", this.onDocumentLanguageChange, this);
             this.mediaManager.off<IAssetRenameEvent>("asset-rename", this.onAssetRename, this);

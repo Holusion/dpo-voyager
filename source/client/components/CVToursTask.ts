@@ -75,18 +75,7 @@ export default class CVToursTask extends CVTask
 
         const configuration = this.configuration;
         configuration.bracketsVisible = false;
-    }
-
-    create()
-    {
-        super.create();
-        this.startObserving();
-    }
-
-    dispose()
-    {
-        this.stopObserving();
-        super.dispose();
+        configuration.toursEnabled = true;
     }
 
     update(context)
@@ -231,31 +220,10 @@ export default class CVToursTask extends CVTask
         return new ToursTaskView(this);
     }
 
-    activateTask()
-    {
-        super.activateTask();
-
-        if (this.tours) {
-            this.tours.ins.enabled.setValue(true);
-        }
-    }
-
-    deactivateTask()
-    {
-        if (this.tours && this.tours.outs.count.value === 0) {
-            this.tours.ins.enabled.setValue(false);
-        }
-
-        super.deactivateTask();
-    }
-
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
+        super.onActiveDocument(previous, next);
         if (previous) {
-            if (this.isActiveTask) {
-                this.tours.ins.enabled.setValue(false);
-            }
-
             this.tours.outs.tourIndex.off("value", this.onTourChange, this);
             this.tours.outs.stepIndex.off("value", this.onStepChange, this);
             previous.setup.language.outs.activeLanguage.off("value", this.onDocumentLanguageChange, this);
@@ -270,10 +238,8 @@ export default class CVToursTask extends CVTask
             this.tours.outs.tourIndex.on("value", this.onTourChange, this);
             this.tours.outs.stepIndex.on("value", this.onStepChange, this);
             next.setup.language.outs.activeLanguage.on("value", this.onDocumentLanguageChange, this);
-
-            if (this.isActiveTask) {
-                this.tours.ins.enabled.setValue(true);
-            }
+            this.onTourChange();
+            this.onStepChange();
         }
 
         this.changed = true;

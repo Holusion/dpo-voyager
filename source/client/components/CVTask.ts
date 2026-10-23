@@ -35,6 +35,10 @@ export interface CVTaskConfiguration{
     interfaceVisible?: boolean,
     gridVisible?: boolean,
     annotationsVisible?: boolean,
+    readerEnabled?: boolean,
+    toursEnabled?: boolean,
+    gridLabelEnabled?: boolean,
+    environmentVisible?: boolean,
     axesVisible?: boolean,
     lodEnabled?: boolean
 }
@@ -66,10 +70,12 @@ export default class CVTask extends CVNodeObserver
         return this.getMainComponent(CPickSelection);
     }
     protected get isActiveTask() {
-        return this._isActiveTask;
+        return this.outs.isActive.value;
     }
 
-    private _isActiveTask = false;
+    private _configuredDocument: CVDocument = null;
+    private _savedActiveTags = "";
+    private _savedReaderArticleId = "";
 
     protected configuration :CVTaskConfiguration = {
         bracketsVisible: undefined,
@@ -89,7 +95,7 @@ export default class CVTask extends CVNodeObserver
 
     dispose()
     {
-        if (this._isActiveTask) {
+        if (this.isActiveTask) {
             this.deactivateTask();
         }
 
@@ -106,15 +112,17 @@ export default class CVTask extends CVNodeObserver
      */
     activateTask()
     {
-        this._isActiveTask = true;
-
+        this.startObserving();
         this.outs.isActive.setValue(true);
         const configuration = this.configuration;
         const savedConfig = this._savedConfig;
+        savedConfig.bracketsVisible = this.selection.ins.viewportBrackets.value;
         if (typeof configuration.bracketsVisible !== "undefined") {
             const prop = this.selection.ins.viewportBrackets;
-            savedConfig.bracketsVisible = prop.value;
             prop.setValue(!!configuration.bracketsVisible);
+        }
+        if (this.activeDocument) {
+            this.applyConfiguration(this.activeDocument);
         }
     }
 
@@ -124,14 +132,14 @@ export default class CVTask extends CVNodeObserver
     deactivateTask()
     {
         const savedConfig = this._savedConfig;
+        this.restoreConfiguration();
 
         if (typeof savedConfig.bracketsVisible !== "undefined") {
             this.selection.ins.viewportBrackets.setValue(savedConfig.bracketsVisible);
         }
 
-        this._isActiveTask = false;
-
         this.outs.isActive.setValue(false);
+        this.stopObserving();
     }
 
     /**
@@ -139,51 +147,72 @@ export default class CVTask extends CVNodeObserver
      */
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
-        const configuration = this.configuration;
-        const savedConfig = this._savedConfig;
-
-        if (previous) {
-            if (savedConfig.gridVisible !== undefined) {
-                previous.setup.grid.ins.visible.setValue(savedConfig.gridVisible);
-            }
-            if (savedConfig.annotationsVisible !== undefined) {
-                previous.setup.viewer.ins.annotationsVisible.setValue(savedConfig.annotationsVisible);
-            }
-            if (savedConfig.interfaceVisible !== undefined) {
-                previous.setup.interface.ins.visible.setValue(savedConfig.interfaceVisible);
-            }
-            if(savedConfig.axesVisible !== undefined) {
-                previous.setup.grid.ins.axesEnabled.setValue(savedConfig.axesVisible);
-            }
-            if(savedConfig.lodEnabled !== undefined) {
-                previous.setup.derivatives.ins.enabled.setValue(savedConfig.lodEnabled);
+        // Initial observation precedes activation; later document switches restore and apply task overrides.
+        if (this.isActiveTask) {
+            this.restoreConfiguration();
+            if (next) {
+                this.applyConfiguration(next);
             }
         }
-        if (next) {
-            if (configuration.gridVisible !== undefined) {
-                const prop = next.setup.grid.ins.visible;
-                savedConfig.gridVisible = prop.value;
-                prop.setValue(!!configuration.gridVisible);
+    }
+
+    private getViewportProperties(document: CVDocument): Record<Exclude<keyof CVTaskConfiguration, "bracketsVisible">, Property<boolean>>
+    {
+        const setup = document.setup;
+        return {
+            gridVisible: setup.grid.ins.visible,
+            annotationsVisible: setup.viewer.ins.annotationsVisible,
+            interfaceVisible: setup.interface.ins.visible,
+            readerEnabled: setup.reader.ins.enabled,
+            toursEnabled: setup.tours.ins.enabled,
+            gridLabelEnabled: setup.grid.ins.labelEnabled,
+            environmentVisible: setup.environment.ins.visible,
+            axesVisible: setup.grid.ins.axesEnabled,
+            lodEnabled: setup.derivatives.ins.enabled,
+        };
+    }
+
+    private applyConfiguration(document: CVDocument)
+    {
+        this._configuredDocument = document;
+        this._savedActiveTags = document.setup.viewer.ins.activeTags.value;
+        this._savedReaderArticleId = document.setup.reader.ins.articleId.value;
+
+        const properties = this.getViewportProperties(document);
+        for (const key of Object.keys(properties) as Array<keyof typeof properties>) {
+            this._savedConfig[key] = properties[key].value;
+            const value = this.configuration[key];
+            if (value !== undefined) {
+                if (key === "toursEnabled") {
+                    document.setup.tours.setEnabled(value, false);
+                }
+                else {
+                    properties[key].setValue(value);
+                }
             }
-            if (configuration.annotationsVisible !== undefined) {
-                const prop = next.setup.viewer.ins.annotationsVisible;
-                savedConfig.annotationsVisible = prop.value;
-                prop.setValue(!!configuration.annotationsVisible);
+        }
+    }
+
+    private restoreConfiguration()
+    {
+        const document = this._configuredDocument;
+        const savedConfig = this._savedConfig;
+        if (!document) {
+            return;
+        }
+        this._configuredDocument = null;
+        // Cancel task previews before restoring flags so a later tick cannot overwrite them.
+        document.setup.snapshots.cancelTween();
+        document.setup.viewer.ins.activeTags.setValue(this._savedActiveTags);
+        document.setup.reader.ins.articleId.setValue(this._savedReaderArticleId);
+
+        const properties = this.getViewportProperties(document);
+        for (const key of Object.keys(properties) as Array<keyof typeof properties>) {
+            if (key === "toursEnabled") {
+                document.setup.tours.setEnabled(savedConfig[key], savedConfig[key]);
             }
-            if (configuration.interfaceVisible !== undefined) {
-                const prop = next.setup.interface.ins.visible;
-                savedConfig.interfaceVisible = prop.value;
-                prop.setValue(!!configuration.interfaceVisible);
-            }
-            if(configuration.axesVisible !== undefined) {
-                const prop = next.setup.grid.ins.axesEnabled;
-                savedConfig.axesVisible = prop.value;
-                prop.setValue(!!configuration.axesVisible);
-            }
-            if(configuration.lodEnabled !== undefined) {
-                const prop = next.setup.derivatives.ins.enabled;
-                savedConfig.lodEnabled = prop.value;
-                prop.setValue(!!configuration.lodEnabled);
+            else {
+                properties[key].setValue(savedConfig[key]);
             }
         }
     }

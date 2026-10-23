@@ -59,6 +59,16 @@ export default class CVTours extends Component
     outs = this.addOutputs(CVTours.outs);
 
     private _tours: ITour[] = [];
+    private _restoreSceneOnDisable = true;
+
+    /** Task cleanup restores visibility without recalling the pre-tour camera or scene. */
+    setEnabled(enabled: boolean, restoreScene = true)
+    {
+        if (this.ins.enabled.value !== enabled) {
+            this._restoreSceneOnDisable = restoreScene;
+            this.ins.enabled.setValue(enabled);
+        }
+    }
 
     protected get analytics() {
         return this.getMainComponent(CVAnalytics);
@@ -194,24 +204,29 @@ export default class CVTours extends Component
                 this.setup.navigation.ins.isInUse.setValue(true); // count tour as interaction
                 this.snapshots.endTween();
 
-                // store pre-tour scene state
-                const state: ITweenState = {
-                    id: CVTours.sceneSnapshotId,
-                    curve: EEasingCurve.EaseOutQuad,
-                    duration: 1,
-                    threshold: 0,
-                    values: machine.getCurrentValues(),
-                };
-                machine.setState(state);
+                // Explorer playback owns a scene snapshot; authoring tasks use CVTask's viewport state.
+                if (this._restoreSceneOnDisable) {
+                    const state: ITweenState = {
+                        id: CVTours.sceneSnapshotId,
+                        curve: EEasingCurve.EaseOutQuad,
+                        duration: 1,
+                        threshold: 0,
+                        values: machine.getCurrentValues(),
+                    };
+                    machine.setState(state);
+                }
             }
             else {
                 outs.tourIndex.set();
                 this.snapshots.endTween();
 
-                this.normalizeViewOrbit(CVTours.sceneSnapshotId);
+                if (this._restoreSceneOnDisable) {
+                    this.normalizeViewOrbit(CVTours.sceneSnapshotId);
 
-                // recall pre-tour scene state
-                machine.tweenTo(CVTours.sceneSnapshotId, context.secondsElapsed);
+                    // recall pre-tour scene state
+                    machine.tweenTo(CVTours.sceneSnapshotId, context.secondsElapsed);
+                }
+                this._restoreSceneOnDisable = true;
                 machine.deleteState(CVTours.sceneSnapshotId);
 
                 srElement.textContent = "";

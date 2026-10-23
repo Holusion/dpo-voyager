@@ -38,7 +38,6 @@ import { TImageQuality, TImageUsage } from "client/schema/meta";
 import CVNodeProvider from "./CVNodeProvider";
 import CVStandaloneFileManager from "./CVStandaloneFileManager";
 import CVDocument from "./CVDocument";
-import CVSetup from "./CVSetup";
 import CVAnnotationView from "./CVAnnotationView";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -125,7 +124,7 @@ export default class CVCaptureTask extends CVTask
         return this.getMainComponent(CVNodeProvider);
     }
     protected get setup() {
-        return this.getSystemComponent(CVSetup);
+        return this.activeDocument.setup;
     }
 
     getImageElement(quality: EDerivativeQuality = EDerivativeQuality.Low)
@@ -143,26 +142,7 @@ export default class CVCaptureTask extends CVTask
         // automatically select scene node
         this.nodeProvider.activeNode = this.nodeProvider.scopedNodes[0];
         
-        this.startObserving();
         super.activateTask();
-    }
-
-    deactivateTask()
-    {
-        this.stopObserving();
-        super.deactivateTask();
-    }
-
-    create()
-    {
-        super.create();
-        this.startObserving();
-    }
-
-    dispose()
-    {
-        this.stopObserving();
-        super.dispose();
     }
 
     update()
@@ -201,23 +181,30 @@ export default class CVCaptureTask extends CVTask
             return;
         }
 
-        // Make sure brackets are not visible
-        this.selection.ins.viewportBrackets.setValue(false);
-        this.selection.update();
-        const annotationsEnabled = this.setup.viewer.ins.annotationsVisible.value;
-        this.getSystemComponents(CVAnnotationView).forEach(view => view.object3D.visible = false);
+        const brackets = this.selection.ins.viewportBrackets;
+        const bracketsVisible = brackets.value;
+        const annotationVisibility = this.getSystemComponents(CVAnnotationView).map(annotations => ({
+            object: annotations.object3D, visible: annotations.object3D.visible,
+        }));
+        try {
+            brackets.setValue(false);
+            this.selection.update();
+            annotationVisibility.forEach(({ object }) => object.visible = false);
 
-        _qualityLevels.forEach(quality => {
-            const dataURI = view.renderImage(_sizePresets[quality][0], _sizePresets[quality][1], type, compressionQuality);
-            this._imageDataURIs[quality] = dataURI;
+            _qualityLevels.forEach(quality => {
+                const dataURI = view.renderImage(_sizePresets[quality][0], _sizePresets[quality][1], type, compressionQuality);
+                this._imageDataURIs[quality] = dataURI;
 
-            const imageElement = this._imageElements[quality] || document.createElement("img");
-            imageElement.src = dataURI;
-            this._imageElements[quality] = imageElement;
-        });
-
-        this.selection.ins.viewportBrackets.setValue(true);
-        this.getSystemComponents(CVAnnotationView).forEach(view => view.object3D.visible = annotationsEnabled);
+                const imageElement = this._imageElements[quality] || document.createElement("img");
+                imageElement.src = dataURI;
+                this._imageElements[quality] = imageElement;
+            });
+        }
+        finally {
+            brackets.setValue(bracketsVisible);
+            this.selection.update();
+            annotationVisibility.forEach(({ object, visible }) => object.visible = visible);
+        }
 
         this.outs.ready.setValue(true);
     }
@@ -306,9 +293,6 @@ export default class CVCaptureTask extends CVTask
     protected getImageAssetPath(quality: EDerivativeQuality, extension: string)
     {
         let assetBaseName = this.activeDocument.assetBaseName;
-
-        if (this.activeNode.model) {
-        }
 
         const qualityName = EDerivativeQuality[quality].toLowerCase();
         return `${assetBaseName}-image-${qualityName}.${extension}`;

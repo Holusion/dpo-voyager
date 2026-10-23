@@ -101,15 +101,13 @@ export default class CVAnnotationsTask extends CVTask
 
     activateTask()
     {
-        this.startObserving();
         super.activateTask();
         this.synchAudioOptions();
     }
 
     deactivateTask()
     {
-        this.stopObserving();
-
+        this.ins.mode.setValue(EAnnotationsTaskMode.Off);
         super.deactivateTask();
     }
 

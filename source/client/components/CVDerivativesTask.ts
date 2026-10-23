@@ -54,12 +54,4 @@ export default class CVDerivativesTask extends CVTask
     {
         return new DerivativesTaskView(this);
     }
-    activateTask(): void {
-        this.startObserving();
-        super.activateTask()
-    }
-    deactivateTask(): void {
-        this.stopObserving();
-        super.deactivateTask();
-    }
 }

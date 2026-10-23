@@ -163,6 +163,12 @@ export default class MainView extends CustomElement
         registry.set("collection", () => new CollectionPanel(system));
 
         this.addEventListener(ArticleEditor.changeEvent, this.updatePanels);
+        this.addEventListener("sv-toggle-tours", event => {
+            if (this.taskProvider.activeComponent instanceof CVToursTask) {
+                event.preventDefault();
+                this.taskProvider.activeComponent = null;
+            }
+        });
     }
 
     protected firstConnected()

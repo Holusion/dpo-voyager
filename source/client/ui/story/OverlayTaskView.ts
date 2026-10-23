@@ -62,8 +62,8 @@ export default class OverlayTaskView extends TaskView<CVOverlayTask>
         const task = this.task;
         const overlays = task.overlays;
 
-        if (!this.activeModel) {
-            return html`<div class="sv-placeholder">Please select a model to edit its overlays.</div>`;
+        if (!this.activeModel?.activeDerivative || !task.material) {
+            return html`<div class="sv-placeholder">Please select a loaded model to edit its overlays.</div>`;
         }
 
         const props = task.ins;

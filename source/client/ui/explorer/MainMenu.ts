@@ -169,6 +169,10 @@ export default class MainMenu extends DocumentView
 
     protected onToggleTours()
     {
+        const event = new CustomEvent("sv-toggle-tours", { bubbles: true, composed: true, cancelable: true });
+        if (!this.dispatchEvent(event)) {
+            return;
+        }
         const tourIns = this.activeDocument.setup.tours.ins;
         const readerIns = this.activeDocument.setup.reader.ins;
 

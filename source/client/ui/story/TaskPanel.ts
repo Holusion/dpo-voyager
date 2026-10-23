@@ -72,10 +72,16 @@ export default class TaskPanel extends SystemView
             <div class="sv-panel-header">
                 <ff-icon name=${task.icon}></ff-icon>
                 <div class="ff-text">${task.text}</div>
+                <ff-button class="sv-end-task" icon="close" title="Close Task" aria-label="Close task" @click=${this.onEndTask}></ff-button>
             </div>
             <div class="sv-panel-content">
                 ${viewElement}
             </div>
         `;
+    }
+
+    protected onEndTask()
+    {
+        this.taskProvider.activeComponent = null;
     }
 }

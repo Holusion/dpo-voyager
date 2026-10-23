@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Vector3, Matrix4, Quaternion, Box3 } from "three";
+import { Vector3, Matrix4, Quaternion, Box3, Camera } from "three";
 
 import { Node, types } from "@ff/graph/Component";
 
@@ -72,7 +72,8 @@ export default class CVPoseTask extends CVTask
     private _deltaY = 0;
     private _90degLock = false;
     private _accumulatedAngle = 0;
-    private _envVisibility = false;
+    private _layouts = new Map<RenderQuadView, EQuadViewLayout>();
+    private _cameraLayers = new Map<Camera, number>();
 
     protected activeModel: CVModel2 = null;
 
@@ -86,6 +87,9 @@ export default class CVPoseTask extends CVTask
         configuration.interfaceVisible = false;
         configuration.bracketsVisible = true;
         configuration.axesVisible = true;
+        configuration.readerEnabled = false;
+        configuration.gridLabelEnabled = false;
+        configuration.environmentVisible = false;
     }
 
     protected get renderer() {
@@ -105,46 +109,35 @@ export default class CVPoseTask extends CVTask
         // switch to quad view layout
         this.renderer.views.forEach(view => {
             if (view instanceof RenderQuadView) {
+                this._layouts.set(view, view.layout);
                 view.layout = EQuadViewLayout.Quad;
                 view.viewports.forEach(viewport => {
                     if(viewport.camera) {
+                        if (!this._cameraLayers.has(viewport.camera)) {
+                            this._cameraLayers.set(viewport.camera, viewport.camera.layers.mask);
+                        }
                         viewport.camera.layers.enable(1);
                     }
                 });
             }
         });
 
-        // start observing active node and active document changes
-        this.startObserving();
-
-        const setup = this.activeDocument.setup;
-        setup.reader.ins.enabled.setValue(false);   // disable reader
-        setup.navigation.ins.zoomExtents.set();     // zoom all viewports
-        setup.grid.ins.labelEnabled.setValue(false);// disable grid label
-
-        this._envVisibility = setup.environment.ins.visible.value;
-        setup.environment.ins.visible.setValue(false); // disable env map visualization
-
         super.activateTask();
+        this.activeDocument?.setup.navigation.ins.zoomExtents.set();
     }
 
     deactivateTask()
     {
-        const setup = this.activeDocument.setup;
-        setup.grid.ins.labelEnabled.setValue(true);// enable grid label
-        setup.environment.ins.visible.setValue(this._envVisibility);
-
+        this.ins.mode.setValue(EPoseManipMode.Off);
+        this._deltaX = this._deltaY = this._accumulatedAngle = 0;
+        this._viewport = null;
         super.deactivateTask();
 
-        // stop observing active node and active document changes
-        this.stopObserving();
-
         // switch back to single view layout
-        this.renderer.views.forEach(view => {
-            if (view instanceof RenderQuadView) {
-                view.layout = EQuadViewLayout.Single;
-            }
-        });
+        this._layouts.forEach((layout, view) => view.layout = layout);
+        this._layouts.clear();
+        this._cameraLayers.forEach((mask, camera) => camera.layers.mask = mask);
+        this._cameraLayers.clear();
 
         // stop listening to pointer events for interactive move/rotate tools
         this.system.off<IPointerEvent>(["pointer-down", "pointer-up", "pointer-move"], this.onPointer, this);
@@ -152,7 +145,7 @@ export default class CVPoseTask extends CVTask
 
     update(context)
     {
-        if (this.ins.modelUpdated && this.activeModel) {
+        if (this.ins.modelUpdated.changed && this.activeModel) {
             _boundingBox.makeEmpty();
             _boundingBox.expandByObject(this.activeModel.object3D);
             _boundingBox.getSize(_size);

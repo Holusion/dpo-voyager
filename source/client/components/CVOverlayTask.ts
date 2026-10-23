@@ -99,6 +99,7 @@ export default class CVOverlayTask extends CVTask
     }
 
     get material() {
+        if (!this.activeModel) return null;
         let mat = null;
         if(this,this.activeModel.object3D.type === "Mesh") {
             const mesh = this.activeModel.object3D as Mesh;
@@ -170,21 +171,20 @@ export default class CVOverlayTask extends CVTask
         this.uv = new Vector2();  
     }
 
-    create()
+    deactivateTask()
     {
-        super.create();
-        this.startObserving();
+        this.isPainting = false;
+        this.ins.paintMode.setValue(EPaintMode.Interact);
+        super.deactivateTask();
     }
 
     dispose()
     {
-        this.stopObserving();
+        super.dispose();
 
         for (let key in this._canvasMap) {
             this._canvasMap[key] = null;
         }
-
-        super.dispose();
     }
 
     update(context)
@@ -328,6 +328,7 @@ export default class CVOverlayTask extends CVTask
             previous.model.outs.overlayMap.off("value", this.onUpdateIdx, this);
         }
 
+        this.activeModel = null;
         if(next && next.model)
         {
             this.ins.activeNode.setValue(next.name); 
@@ -344,7 +345,7 @@ export default class CVOverlayTask extends CVTask
             // load overlays
             const overlayProp = this.activeModel.ins.overlayMap;
             overlayProp.setOptions(["None"]);
-            this.activeModel.activeDerivative.findAssets(EAssetType.Image).filter(image => image.data.mapType === EMapType.Zone).forEach(image => {
+            (this.activeModel.activeDerivative?.findAssets(EAssetType.Image) || []).filter(image => image.data.mapType === EMapType.Zone).forEach(image => {
                 overlayProp.setOptions(overlayProp.schema.options.concat(image.data.uri));
             });
         }
@@ -370,7 +371,9 @@ export default class CVOverlayTask extends CVTask
         }
         
         if(this.material) {
-            this.material.userData.shader.uniforms.zoneMap.value = this.activeTexture;
+            if (this.material.userData.shader?.uniforms.zoneMap) {
+                this.material.userData.shader.uniforms.zoneMap.value = this.activeTexture;
+            }
             this.material.transparent = isShowing;
             this.material.defines["USE_ZONEMAP"] = isShowing;
         }

@@ -102,18 +102,6 @@ export default class CVActionsTask extends CVTask
         return new ActionsTaskView(this);
     }
 
-    activateTask()
-    {   
-        super.activateTask();
-        this.startObserving();
-    }
-
-    deactivateTask()
-    {
-        this.stopObserving();
-        super.deactivateTask();
-    }
-
     update()
     {
         const { ins } = this;
@@ -124,6 +112,7 @@ export default class CVActionsTask extends CVTask
 
             if(ins.activeId.changed) {
                 this.onActionChange();
+                this.updateUI();
                 return true;
             }
 
@@ -144,6 +133,7 @@ export default class CVActionsTask extends CVTask
                 this.onActionChange();
                 this.synchActionOptions();
                 this.actionManager.refreshActions();
+                this.updateUI();
                 return true;
             }
             if (ins.delete.changed) {
@@ -151,10 +141,14 @@ export default class CVActionsTask extends CVTask
                 ins.activeId.setValue("");
                 this.synchActionOptions();
                 this.actionManager.refreshActions();
+                this.updateUI();
                 return true;
             }
 
             const action = meta.actions.get(ins.activeId.value);
+            if (!action) {
+                return true;
+            }
             if (action && (ins.type.changed || ins.trigger.changed || ins.animation.changed || ins.style.changed 
                 || ins.speed.changed || ins.clamp.changed)) {
                 action.type = EActionType[ins.type.value] as TActionType;
@@ -195,7 +189,7 @@ export default class CVActionsTask extends CVTask
                 if(ins.tour.changed) {
                     this.synchTourStepOptions();
                 }
-                action.triggerDetail = this.ins.tour.value > 0 ? this.tours.tours[this.ins.tour.value-1].steps[this.ins.tourStep.value].id : "";
+                action.triggerDetail = this.tours.tours[this.ins.tour.value - 1]?.steps[this.ins.tourStep.value]?.id || "";
             }
             if(ins.action.changed) {
                 action.triggerDetail = ins.action.value > 0 ? this._actionIds[ins.action.value] : undefined;
@@ -257,9 +251,9 @@ export default class CVActionsTask extends CVTask
             }
             else {
                 const tour = this.tours.tours.find((entry) => entry.steps.some(step => step.id === action.triggerDetail));
-                ins.tour.setValue(isTour ? ins.tour.schema.options.indexOf(tour.titles[ELanguageType[this.activeDocument.setup.language.outs.uiLanguage.value]] || tour.title) : 0);
+                ins.tour.setValue(isTour && tour ? ins.tour.schema.options.indexOf(tour.titles[ELanguageType[this.activeDocument.setup.language.outs.uiLanguage.value]] || tour.title) : 0);
                 this.synchTourStepOptions();
-                ins.tourStep.setValue(isTour ? tour.steps.findIndex(step => step.id === action.triggerDetail) : 0);
+                ins.tourStep.setValue(isTour && tour ? tour.steps.findIndex(step => step.id === action.triggerDetail) : 0);
             }
         }
     }
@@ -312,6 +306,7 @@ export default class CVActionsTask extends CVTask
             next.setup.actions.outs.fired.on("value", this.updateUI, this);
 
             this.synchTourOptions();
+            this.synchAudioOptions();
             this.synchActionOptions();
             this.synchStateOptions();
         }
