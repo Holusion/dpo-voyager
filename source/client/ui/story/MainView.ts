@@ -45,6 +45,7 @@ import ConsolePanel from "./ConsolePanel";
 import InspectorPanel from "./InspectorPanel";
 import AssetPanel from "./AssetPanel";
 import CollectionPanel from "./CollectionPanel";
+import SettingsPanel from "./SettingsPanel";
 
 import "./styles.scss";
 import StatePanel from "./StatePanel";
@@ -161,6 +162,7 @@ export default class MainView extends CustomElement
         registry.set("assets", () => new AssetPanel(system));
         registry.set("article-editor", () => new EditorPanel(system));
         registry.set("collection", () => new CollectionPanel(system));
+        registry.set("settings", () => new SettingsPanel(system));
 
         this.addEventListener(ArticleEditor.changeEvent, this.updatePanels);
         this.addEventListener("sv-toggle-tours", event => {
@@ -217,6 +219,7 @@ export default class MainView extends CustomElement
     {
         this.getContent<AssetPanel>("assets")?.requestUpdate();
         this.updatePanels();
+        this.selectContext("settings");
     }
 
     protected onActiveDocument(event: IActiveDocumentEvent)
@@ -230,7 +233,9 @@ export default class MainView extends CustomElement
 
     protected onTask()
     {
+        const task = this.taskProvider.activeComponent;
         this.updatePanels();
+        this.selectContext(task ? "task" : "settings");
     }
 
     /** Shows the panels that apply to the active task, the selection and the mode. */
@@ -241,6 +246,7 @@ export default class MainView extends CustomElement
         }
 
         const tasks = this.taskProvider;
+        this.panels.get("task").available = !!tasks.activeComponent;
 
         const editor = this.getEditor();
         // An editor comes forward when it gets work.
@@ -266,6 +272,13 @@ export default class MainView extends CustomElement
             return "tour-editor";
         }
         return this.getContent<EditorPanel>("article-editor").editor.hasArticle ? "article-editor" : null;
+    }
+
+    protected selectContext(id: "settings" | "task")
+    {
+        if (this.layoutReady) {
+            this.panels.get(id).activatePanel();
+        }
     }
 
     protected getContent<T extends Element>(id: string): T
@@ -306,6 +319,9 @@ export default class MainView extends CustomElement
                 size: 0.7,
                 activePanelIndex: 0,
                 panels: [{
+                    contentId: "settings",
+                    text: "Settings"
+                }, {
                     contentId: "task",
                     text: "Task"
                 }]

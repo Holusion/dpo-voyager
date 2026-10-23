@@ -17,21 +17,29 @@
 
 import Node from "@ff/graph/Node";
 import Property from "@ff/graph/Property";
+import System from "@ff/graph/System";
 
 import "@ff/scene/ui/PropertyView";
 
 import { customElement, html, property } from "@ff/ui/CustomElement";
 import Tree from "@ff/ui/Tree";
+import { classMap } from "lit-html/directives/class-map";
 
-import CVSettingsTask from "../../components/CVSettingsTask";
-import { TaskView } from "../../components/CVTask";
 import NVNode from "../../nodes/NVNode";
+import NodeView from "../explorer/NodeView";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@customElement("sv-settings-task-view")
-export default class SettingsTaskView extends TaskView<CVSettingsTask>
+/** Properties of the selected node, available independently of the active task. */
+@customElement("sv-settings-panel")
+export default class SettingsPanel extends NodeView
 {
+    constructor(system: System)
+    {
+        super(system);
+        this.classList.add("sv-task-view");
+    }
+
     protected render()
     {
         if(!this.activeDocument) {
@@ -40,12 +48,27 @@ export default class SettingsTaskView extends TaskView<CVSettingsTask>
         const languageManager = this.activeDocument.setup.language;
         const node = this.activeNode;
         if (!node) {
-            return html`<div class="sv-placeholder">${languageManager.getUILocalizedString("Please select a node to display its properties.")}</div>`;
+            return html`<div class="sv-panel-header sv-settings-title"><div class="ff-text">${languageManager.getUILocalizedString("Please select a node to display its properties.")}</div></div>`;
         }
 
-        return html`<div class="ff-flex-item-stretch ff-scroll-y">
-            <sv-settings-tree .node=${node}></sv-settings-tree>
-        </div>`;
+        return html`<div class="sv-panel-header sv-settings-title">${this.renderTypeIcon(node)}
+                <div class="ff-text ff-ellipsis">${node.displayName}</div></div>
+            <div class="ff-flex-item-stretch"><div class="ff-scroll-y">
+                <sv-settings-tree .node=${node}></sv-settings-tree>
+            </div></div>`;
+    }
+
+    /** The icon the node tree shows for the node's main component; plain nodes show a folder. */
+    protected renderTypeIcon(node: NVNode)
+    {
+        const [icon, className] = node.scene ? [node.scene.icon, "sv-icon-scene"] :
+            node.model ? [node.model.icon, "sv-icon-model"] :
+            node.light ? [node.light.icon, "sv-icon-light"] :
+            node.camera ? [node.camera.icon, "sv-icon-camera"] :
+            node.meta ? [node.meta.icon, "sv-icon-meta"] : ["folder", ""];
+        // The header keeps one icon element across nodes: a plain class binding would replace the
+        // "ff-icon" class the element adds to itself, while classMap only toggles its own classes.
+        return html`<ff-icon class=${classMap(className ? { [className]: true } : {})} name=${icon}></ff-icon>`;
     }
 
     protected onActiveNode(previous: NVNode, next: NVNode)

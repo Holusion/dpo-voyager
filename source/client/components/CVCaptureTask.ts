@@ -307,18 +307,17 @@ export default class CVCaptureTask extends CVTask
     {
         super.onActiveDocument(previous, next);
 
-        if(previous) {
-            //
-        }
-        if (next) {
-            if(this.isActiveTask) {
-                this.onActiveNode(this.activeNode, this.activeNode); // refresh task data
-            }
-        }
+        this.onActiveNode(previous?.root, next?.root);
     }
 
     protected onActiveNode(previous: NVNode, next: NVNode)
     {
+        // Capture belongs to the scene, even when Settings selects another node.
+        next = this.activeDocument?.root || null;
+        if (this.activeMeta === (next?.meta || null)) {
+            return;
+        }
+        previous = this.activeMeta?.node as NVNode;
         if (previous && previous.meta) {
             this.outs.ready.setValue(false);
             this._imageElements = {};
