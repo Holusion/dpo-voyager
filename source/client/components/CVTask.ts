@@ -17,6 +17,7 @@
 
 import { types } from "@ff/graph/Component";
 import CPickSelection from "@ff/scene/components/CPickSelection";
+import Subscriber from "@ff/core/Subscriber";
 
 import CVNodeObserver from "./CVNodeObserver";
 import CVDocument from "./CVDocument";
@@ -195,6 +196,8 @@ export default class CVTask extends CVNodeObserver
  */
 export class TaskView<T extends CVTask = CVTask> extends NodeView
 {
+    private documentSubscriber = new Subscriber("value", this.onUpdate, this);
+
     @property({ attribute: false })
     task: T = null;
 
@@ -203,16 +206,18 @@ export class TaskView<T extends CVTask = CVTask> extends NodeView
         super(task.system);
         this.task = task;
     }
-    protected connected()
+    protected get documentProperties(): Property[]
     {
-        super.connected();
-        this.activeDocument.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
+        return [this.activeDocument.setup.language.outs.uiLanguage];
     }
 
-    protected disconnected()
+    protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
-        this.activeDocument.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
-        super.disconnected();
+        this.documentSubscriber.off();
+        if (next) {
+            this.documentSubscriber.on(...this.documentProperties);
+        }
+        this.requestUpdate();
     }
 
     protected firstConnected()

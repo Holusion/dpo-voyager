@@ -21,8 +21,6 @@ import List from "@ff/ui/List";
 import CVOverlayTask, { EPaintMode } from "../../components/CVOverlayTask";
 import { TaskView, customElement, property, html } from "../../components/CVTask";
 
-import CVDocument from "../../components/CVDocument";
-
 import NVNode from "../../nodes/NVNode";
 import CVModel2, { IOverlay } from "../../components/CVModel2";
 import { EDerivativeQuality } from "client/schema/model";
@@ -125,11 +123,6 @@ export default class OverlayTaskView extends TaskView<CVOverlayTask>
             this.task.ins.activeIndex.setValue(event.detail.index);
             this.requestUpdate();
         }
-    }
-
-    protected onActiveDocument(previous: CVDocument, next: CVDocument)
-    {
-        this.requestUpdate();
     }
 
     protected onActiveNode(previous: NVNode, next: NVNode)

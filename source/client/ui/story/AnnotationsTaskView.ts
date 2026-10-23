@@ -48,6 +48,11 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
     private _leadCharCount = 0;
 
     protected sceneview : HTMLElement = null;
+
+    protected get documentProperties() {
+        const language = this.activeDocument.setup.language;
+        return [...super.documentProperties, language.ins.activeLanguage, language.ins.primarySceneLanguage];
+    }
     
     protected connected()
     {
@@ -58,14 +63,10 @@ export default class AnnotationsTaskView extends TaskView<CVAnnotationsTask>
         this.sceneview = explorer.shadowRoot.querySelector(".sv-scene-view") as HTMLElement;
         
         this.task.on("update", this.onUpdate, this);
-        this.activeDocument.setup.language.ins.activeLanguage.on("value", this.onUpdate, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
     }
 
     protected disconnected()
     {
-        this.activeDocument.setup.language.ins.activeLanguage.off("value", this.onUpdate, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
         this.task.off("update", this.onUpdate, this);
 
         // set cursor to grab when leaving

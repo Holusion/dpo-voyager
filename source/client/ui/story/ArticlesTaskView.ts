@@ -34,17 +34,19 @@ import { DEFAULT_LANGUAGE, ELanguageType } from "client/schema/common";
 @customElement("sv-articles-task-view")
 export default class ArticlesTaskView extends TaskView<CVArticlesTask>
 {
+    protected get documentProperties() {
+        return [...super.documentProperties, this.activeDocument.setup.language.ins.primarySceneLanguage];
+    }
+
     protected connected()
     {
         super.connected();
         this.task.outs.article.on("value", this.onArticleChange, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.on("value", this.onUpdate, this);
     }
 
     protected disconnected()
     {
         this.task.outs.article.off("value", this.onArticleChange, this);
-        this.activeDocument.setup.language.ins.primarySceneLanguage.off("value", this.onUpdate, this);
         super.disconnected();
     }
 

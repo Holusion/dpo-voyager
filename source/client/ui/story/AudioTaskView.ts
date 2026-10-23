@@ -37,11 +37,14 @@ export default class AudioTaskView extends TaskView<CVAudioTask>
     protected selectedIndex = -1;
     protected optionText = ["No", "Yes"];
 
+    protected get documentProperties() {
+        return [...super.documentProperties, this.activeDocument.setup.audio.outs.narrationPlaying];
+    }
+
     protected connected()
     {
         super.connected();
         this.task.on("update", this.onUpdate, this);
-        this.activeDocument.setup.audio.outs.narrationPlaying.on("value", this.onUpdate, this);
 
         //this.addEventListener("drop", this.onDropFile);
     }
@@ -50,7 +53,6 @@ export default class AudioTaskView extends TaskView<CVAudioTask>
     {
         //this.removeEventListener("drop", this.onDropFile);
 
-        this.activeDocument.setup.audio.outs.narrationPlaying.off("value", this.onUpdate, this);
         this.task.off("update", this.onUpdate, this);
         super.disconnected();
     }

@@ -25,7 +25,6 @@ import CVToursTask from "../../components/CVToursTask";
 import { TaskView, customElement, property, html } from "../../components/CVTask";
 import { ILineEditChangeEvent } from "@ff/ui/LineEdit";
 
-import CVDocument from "../../components/CVDocument";
 import { IButtonClickEvent } from "@ff/ui/Button";
 import { ELanguageType } from "client/schema/common";
 
@@ -36,6 +35,10 @@ import { ELanguageType } from "client/schema/common";
 export default class ToursTaskView extends TaskView<CVToursTask>
 {
     protected featureConfigMode = false;
+
+    protected get documentProperties() {
+        return [...super.documentProperties, this.activeDocument.setup.tours.outs.tourIndex];
+    }
 
     protected get snapshots() {
         return this.activeDocument.setup.snapshots;
@@ -195,18 +198,6 @@ export default class ToursTaskView extends TaskView<CVToursTask>
                 }
             ));
         }
-    }
-
-    protected onActiveDocument(previous: CVDocument, next: CVDocument)
-    {
-        if (previous) {
-            previous.setup.tours.outs.tourIndex.off("value", this.onUpdate, this);
-        }
-        if (next) {
-            next.setup.tours.outs.tourIndex.on("value", this.onUpdate, this);
-        }
-
-        this.requestUpdate();
     }
 }
 
