@@ -36,9 +36,11 @@ import { INote } from "client/schema/meta";
 import NodeView, { customElement, html } from "../explorer/NodeView";
 import NVNode from "../../nodes/NVNode";
 import CVMeta from "../../components/CVMeta";
+import CVDocument from "../../components/CVDocument";
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/** Process notes of the selected scene or model; other selections fall back to the scene. */
 @customElement("sv-notes-panel")
 export default class NotesPanel extends NodeView
 {
@@ -71,19 +73,12 @@ export default class NotesPanel extends NodeView
         this.classList.add("sv-scrollable", "sv-panel", "sv-notes-panel");
     }
 
+    protected get targetNode(): NVNode
+    {
+        const node = this.activeNode;
+        return node && (node.scene || node.model) ? node : this.activeDocument?.root;
+    }
 
-    protected connected()
-    {
-        super.connected();
-        this.activeDocument.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
-    }
-    
-    protected disconnected()
-    {
-        this.activeDocument.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
-        super.disconnected();
-    }
-    
     protected renderNote(note: INote)
     {
         const languageManager = this.activeDocument.setup.language;
@@ -110,13 +105,7 @@ export default class NotesPanel extends NodeView
             return;
         }
         const languageManager = this.activeDocument.setup.language;
-        const node = this.activeNode;
-
-        if (!node || !(node.scene || node.model)) {
-            return html`<div class="ff-placeholder">
-                <div>${languageManager.getUILocalizedString("Please select a scene or model to display its notes.")}</div>
-            </div>`;
-        }
+        const node = this.targetNode;
 
         this.getNotes();
 
@@ -127,6 +116,8 @@ export default class NotesPanel extends NodeView
         noteTable.requestUpdate();
 
         return html`<div class="sv-panel-header">
+            <ff-icon name="comment"></ff-icon>
+            <div class="ff-text">${languageManager.getUILocalizedString("Notes")}: ${node.displayName}</div>
             <ff-button text="${languageManager.getUILocalizedString("Add Note")}" icon="create" @click=${this.onClickCreate}></ff-button>
             <ff-button text="${languageManager.getUILocalizedString("Delete Note")}" icon="trash" ?disabled=${!activeNote} @click=${this.onClickDelete}></ff-button>
         </div>
@@ -184,6 +175,19 @@ export default class NotesPanel extends NodeView
         this.requestUpdate();
     }
 
+    protected onActiveDocument(previous: CVDocument, next: CVDocument)
+    {
+        if (previous) {
+            previous.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
+        }
+        if (next) {
+            next.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
+        }
+        this.notes = null;
+        this.activeNote = null;
+        this.requestUpdate();
+    }
+
     protected onActiveNode(previous: NVNode, next: NVNode)
     {
         this.notes = null;
@@ -194,7 +198,7 @@ export default class NotesPanel extends NodeView
 
     protected getNotes()
     {
-        const node = this.activeNode;
+        const node = this.targetNode;
         if (!node) {
             return;
         }
@@ -214,7 +218,7 @@ export default class NotesPanel extends NodeView
         this.notes = null;
         this.activeNote = null;
 
-        const node = this.activeNode;
+        const node = this.targetNode;
         if (!node) {
             return;
         }

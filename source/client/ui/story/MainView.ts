@@ -32,6 +32,7 @@ import HierarchyTreeView from "@ff/scene/ui/HierarchyTreeView";
 import NavigatorPanel from "./NavigatorPanel";
 import CVTaskProvider from "../../components/CVTaskProvider";
 import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDocumentProvider";
+import CVCollectionTask from "../../components/CVCollectionTask";
 import CVToursTask from "../../components/CVToursTask";
 
 import TaskBar from "./TaskBar";
@@ -44,7 +45,6 @@ import NotesPanel from "./NotesPanel";
 import ConsolePanel from "./ConsolePanel";
 import InspectorPanel from "./InspectorPanel";
 import AssetPanel from "./AssetPanel";
-import CollectionPanel from "./CollectionPanel";
 import SettingsPanel from "./SettingsPanel";
 
 import "./styles.scss";
@@ -97,6 +97,7 @@ export default class MainView extends CustomElement
     private layoutReady = false;
     private editor: EditorId = null;
     private documentSubscriber = new Subscriber("value", this.updatePanels, this);
+    private taskSubscriber = new Subscriber("value", this.updatePanels, this);
 
     protected get taskProvider() {
         return this.application.system.getMainComponent(CVTaskProvider);
@@ -161,7 +162,6 @@ export default class MainView extends CustomElement
         registry.set("inspector", () => new InspectorPanel(system));
         registry.set("assets", () => new AssetPanel(system));
         registry.set("article-editor", () => new EditorPanel(system));
-        registry.set("collection", () => new CollectionPanel(system));
         registry.set("settings", () => new SettingsPanel(system));
 
         this.addEventListener(ArticleEditor.changeEvent, this.updatePanels);
@@ -213,6 +213,7 @@ export default class MainView extends CustomElement
         this.documentProvider.off<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
         this.taskProvider.off("active-component", this.onTask, this);
         this.documentSubscriber.off();
+        this.taskSubscriber.off();
     }
 
     protected onTaskMode()
@@ -234,6 +235,10 @@ export default class MainView extends CustomElement
     protected onTask()
     {
         const task = this.taskProvider.activeComponent;
+        this.taskSubscriber.off();
+        if (task instanceof CVCollectionTask) {
+            this.taskSubscriber.on(task.ins.showNotes);
+        }
         this.updatePanels();
         this.selectContext(task ? "task" : "settings");
     }
@@ -270,6 +275,9 @@ export default class MainView extends CustomElement
         const tours = this.documentProvider.activeComponent?.setup.tours;
         if (task instanceof CVToursTask && tours?.ins.enabled.value && tours.activeTour) {
             return "tour-editor";
+        }
+        if (task instanceof CVCollectionTask && task.ins.showNotes.value) {
+            return "notes";
         }
         return this.getContent<EditorPanel>("article-editor").editor.hasArticle ? "article-editor" : null;
     }
@@ -310,9 +318,6 @@ export default class MainView extends CustomElement
                 }, {
                     contentId: "assets",
                     text: "Media"
-                }, {
-                    contentId: "collection",
-                    text: "Collection"
                 }]
             }, {
                 type: "stack",

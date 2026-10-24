@@ -24,6 +24,7 @@ import CVToursTask from "../components/CVToursTask";
 import CVOverlayTask from "../components/CVOverlayTask";
 import CVAudioTask from "../components/CVAudioTask";
 import CVActionsTask from "client/components/CVActionsTask";
+import CVCollectionTask from "../components/CVCollectionTask";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -31,6 +32,7 @@ export enum ETaskMode { QC, Authoring, Edit, Expert, Standalone }
 
 export default {
     [ETaskMode.Edit]: [
+        CVCollectionTask,
         CVPoseTask,
         CVCaptureTask,
         CVDerivativesTask,
@@ -42,11 +44,13 @@ export default {
         CVActionsTask,
     ],
     [ETaskMode.QC]: [
+        CVCollectionTask,
         CVPoseTask,
         CVCaptureTask,
         CVDerivativesTask,
     ],
     [ETaskMode.Authoring]: [
+        CVCollectionTask,
         CVAnnotationsTask,
         CVArticlesTask,
         CVToursTask,
@@ -54,6 +58,7 @@ export default {
         CVActionsTask,
     ],
     [ETaskMode.Expert]: [
+        CVCollectionTask,
         CVPoseTask,
         CVCaptureTask,
         CVDerivativesTask,
@@ -65,6 +70,7 @@ export default {
         CVActionsTask,
     ],
     [ETaskMode.Standalone]: [
+        CVCollectionTask,
         CVPoseTask,
         CVCaptureTask,
         CVDerivativesTask,

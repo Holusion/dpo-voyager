@@ -15,29 +15,47 @@
  * limitations under the License.
  */
 
-import CVTaskProvider from "../../components/CVTaskProvider";
 import sanitizeHtml from 'sanitize-html';
 
-import DocumentView, { customElement, html } from "../explorer/DocumentView";
-import CVDocument from "client/components/CVDocument";
-import { ILineEditChangeEvent } from "client/../../libs/ff-ui/source/LineEdit";
+import { ILineEditChangeEvent } from "@ff/ui/LineEdit";
+
+import CVCollectionTask from "../../components/CVCollectionTask";
+import { TaskView, customElement, html } from "../../components/CVTask";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@customElement("sv-collection-panel")
-export default class CollectionPanel extends DocumentView
+@customElement("sv-collection-task-view")
+export default class CollectionTaskView extends TaskView<CVCollectionTask>
 {
-    protected get taskProvider() {
-        return this.system.getMainComponent(CVTaskProvider);
+    protected connected()
+    {
+        super.connected();
+        this.task.ins.showNotes.on("value", this.onUpdate, this);
     }
 
-    protected firstConnected()
+    protected disconnected()
     {
-        this.classList.add("sv-panel", "sv-collection-panel");
+        this.task.ins.showNotes.off("value", this.onUpdate, this);
+        super.disconnected();
+    }
+
+    protected get documentProperties()
+    {
+        const document = this.activeDocument;
+        return [
+            ...super.documentProperties,
+            document.setup.language.outs.activeLanguage,
+            document.outs.title,
+            document.outs.intro,
+            document.ins.copyright,
+        ];
     }
 
     protected render()
     {
+        if (!this.activeDocument) {
+            return;
+        }
         const languageManager = this.activeDocument.setup.language;
 
         const meta = this.activeDocument.meta;
@@ -51,22 +69,30 @@ export default class CollectionPanel extends DocumentView
             })
         }
 
-        return html`<div class="ff-scroll-y ff-flex-column" style="padding-bottom: 5px">
-            <div class="sv-panel-header">
-                <ff-icon name="document"></ff-icon>
-                <div class="ff-text">Collection</div>
+        const showNotes = this.task.ins.showNotes.value;
+
+        return html`<div class="sv-commands">
+                <ff-button text="${languageManager.getUILocalizedString(showNotes ? "Hide Notes" : "Show Notes")}" icon="comment"
+                    ?selected=${showNotes} @click=${this.onClickNotes}></ff-button>
             </div>
-            <sv-property-view .property=${languageManager.ins.activeLanguage}></sv-property-view>
-            <div class="sv-indent">
-                <div class="sv-label">Title</div>
-                <ff-line-edit name="title" text=${this.activeDocument.ins.title.value || "Missing Title"} @change=${this.onTextEdit}></ff-line-edit>
-                <div class="sv-label">Intro</div>
-                <ff-text-edit name="intro" text=${this.activeDocument.ins.intro.value} @change=${this.onTextEdit}></ff-text-edit>
-            </div>
-            <div class="sv-label">Copyright</div>
-            <ff-line-edit name="copyright" text=${this.activeDocument.ins.copyright.value} @change=${this.onTextEdit}></ff-line-edit>
-            ${customMetas}
-        </div>`;
+            <div class="ff-flex-item-stretch"><div class="ff-scroll-y ff-flex-column sv-detail-view">
+                <sv-property-view .property=${languageManager.ins.activeLanguage}></sv-property-view>
+                <div class="sv-indent">
+                    <div class="sv-label">Title</div>
+                    <ff-line-edit name="title" text=${this.activeDocument.ins.title.value || "Missing Title"} @change=${this.onTextEdit}></ff-line-edit>
+                    <div class="sv-label">Intro</div>
+                    <ff-text-edit name="intro" text=${this.activeDocument.ins.intro.value} @change=${this.onTextEdit}></ff-text-edit>
+                </div>
+                <div class="sv-label">Copyright</div>
+                <ff-line-edit name="copyright" text=${this.activeDocument.ins.copyright.value} @change=${this.onTextEdit}></ff-line-edit>
+                ${customMetas}
+            </div></div>`;
+    }
+
+    protected onClickNotes()
+    {
+        const showNotes = this.task.ins.showNotes;
+        showNotes.setValue(!showNotes.value);
     }
 
     protected onTextEdit(event: ILineEditChangeEvent)
@@ -103,20 +129,6 @@ export default class CollectionPanel extends DocumentView
                 // assign value from custom field
                 this.activeDocument.meta.collection.insert(text,target.name);
             }
-        }
-    }
-
-    protected onActiveDocument(previous: CVDocument, next: CVDocument)
-    {
-        if (previous) {
-            previous.setup.language.outs.activeLanguage.off("value", this.onUpdate, this);
-            previous.outs.title.off("value", this.onUpdate, this);
-            previous.outs.intro.off("value", this.onUpdate, this);
-        }
-        if (next) {
-            next.outs.title.on("value", this.onUpdate, this);
-            next.outs.intro.on("value", this.onUpdate, this);
-            next.setup.language.outs.activeLanguage.on("value", this.onUpdate, this);
         }
     }
 }

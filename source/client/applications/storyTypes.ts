@@ -31,6 +31,7 @@ import CVStandaloneFileManager from "../components/CVStandaloneFileManager";
 import CVOverlayTask from "../components/CVOverlayTask";
 import CVAudioTask from "../components/CVAudioTask";
 import CVActionsTask from "client/components/CVActionsTask";
+import CVCollectionTask from "../components/CVCollectionTask";
 
 import NVVoyagerStory from "../nodes/NVoyagerStory";
 import NVTasks from "../nodes/NVTasks";
@@ -56,6 +57,7 @@ const types = [
     CVOverlayTask,
     CVAudioTask,
     CVActionsTask,
+    CVCollectionTask,
 
     NVVoyagerStory,
     NVTasks,
