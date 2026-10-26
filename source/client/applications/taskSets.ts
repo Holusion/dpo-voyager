@@ -51,6 +51,7 @@ export default {
     ],
     [ETaskMode.Authoring]: [
         CVCollectionTask,
+        CVDerivativesTask,
         CVAnnotationsTask,
         CVArticlesTask,
         CVToursTask,

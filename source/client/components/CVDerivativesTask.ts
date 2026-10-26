@@ -30,6 +30,8 @@ export default class CVDerivativesTask extends CVTask
 
     static readonly text: string = "Derivatives";
     static readonly icon: string = "hierarchy";
+    /** Shown in the Assets tab the Story workspace offers for models. */
+    static readonly inTaskBar = false;
 
     protected static readonly ins = {
         //mode: types.Enum("Mode", EDerivativesTaskMode, EDerivativesTaskMode.Off),
@@ -43,10 +45,6 @@ export default class CVDerivativesTask extends CVTask
         super(node, id);
 
         const configuration = this.configuration;
-        configuration.interfaceVisible = false;
-        configuration.bracketsVisible = false;
-        configuration.gridVisible = false;
-        configuration.annotationsVisible = false;
         configuration.lodEnabled = false;
     }
 

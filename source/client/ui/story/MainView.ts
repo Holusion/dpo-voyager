@@ -32,10 +32,12 @@ import HierarchyTreeView from "@ff/scene/ui/HierarchyTreeView";
 import NavigatorPanel from "./NavigatorPanel";
 import CVTaskProvider from "../../components/CVTaskProvider";
 import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDocumentProvider";
+import CVNodeProvider, { IActiveNodeEvent } from "../../components/CVNodeProvider";
 import CVActionsTask from "../../components/CVActionsTask";
 import CVCaptureTask from "../../components/CVCaptureTask";
 import CVCollectionTask from "../../components/CVCollectionTask";
 import CVToursTask from "../../components/CVToursTask";
+import { TaskView } from "../../components/CVTask";
 
 import TaskBar from "./TaskBar";
 import ArticleEditor from "./ArticleEditor";
@@ -101,11 +103,15 @@ export default class MainView extends CustomElement
     private layoutReady = false;
     private slideEditors = false;
     private editor: EditorId = null;
+    private assetsView: TaskView = null;
     private documentSubscriber = new Subscriber("value", this.updatePanels, this);
     private taskSubscriber = new Subscriber("value", this.updatePanels, this);
 
     protected get taskProvider() {
         return this.application.system.getMainComponent(CVTaskProvider);
+    }
+    protected get nodeProvider() {
+        return this.application.system.getMainComponent(CVNodeProvider);
     }
     protected get documentProvider() {
         return this.application.system.getMainComponent(CVDocumentProvider);
@@ -168,7 +174,9 @@ export default class MainView extends CustomElement
         registry.set("assets", () => new AssetPanel(system));
         registry.set("article-editor", () => new EditorPanel(system));
         registry.set("settings", () => new SettingsPanel(system));
+        registry.set("derivatives", () => this.createElement("div"));
 
+        this.addEventListener(DockView.changeEvent, this.updateContext);
         this.addEventListener(ArticleEditor.changeEvent, this.updatePanels);
         this.addEventListener("sv-toggle-tours", event => {
             if (this.taskProvider.activeComponent instanceof CVToursTask) {
@@ -192,6 +200,7 @@ export default class MainView extends CustomElement
 
         const panels = Array.from(this.dockView.getElementsByTagName(DockPanel.tagName)) as DockPanel[];
         panels.forEach(panel => this.panels.set(panel.getLayout().contentId, panel));
+        this.getContent<HTMLElement>("derivatives").classList.add("sv-panel", "sv-panel-content");
 
         // The explorer takes the space the side columns and the editors leave.
         this.getColumn("navigator").style.flexGrow = "0";
@@ -219,13 +228,18 @@ export default class MainView extends CustomElement
         const document = this.documentProvider.activeComponent;
         this.onActiveDocument({ previous: null, next: document } as IActiveDocumentEvent);
         this.documentProvider.on<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
+        this.nodeProvider.on<IActiveNodeEvent>("active-node", this.onActiveNode, this);
         this.taskProvider.on("active-component", this.onTask, this);
+        this.taskProvider.on("scoped-components", this.updatePanels, this);
     }
 
     protected disconnected()
     {
         this.documentProvider.off<IActiveDocumentEvent>("active-component", this.onActiveDocument, this);
+        this.nodeProvider.off<IActiveNodeEvent>("active-node", this.onActiveNode, this);
         this.taskProvider.off("active-component", this.onTask, this);
+        this.taskProvider.off("scoped-components", this.updatePanels, this);
+        this.taskProvider.assetsPanelActive = false;
         this.documentSubscriber.off();
         this.taskSubscriber.off();
     }
@@ -246,11 +260,17 @@ export default class MainView extends CustomElement
         this.updatePanels();
     }
 
+    protected onActiveNode(event: IActiveNodeEvent)
+    {
+        this.updatePanels();
+        if (!event.next?.model && this.panels.get("derivatives")?.header.active) {
+            this.selectContext(this.taskProvider.activeComponent ? "task" : "settings");
+        }
+    }
+
     protected onTask()
     {
         const task = this.taskProvider.activeComponent;
-        // Capture overlays the thumbnail crop box on the viewport; see styles.scss.
-        this.classList.toggle("sv-capture-active", task instanceof CVCaptureTask);
         this.taskSubscriber.off();
         if (task instanceof CVCollectionTask) {
             this.taskSubscriber.on(task.ins.showNotes);
@@ -270,6 +290,16 @@ export default class MainView extends CustomElement
         }
 
         const tasks = this.taskProvider;
+        const assetsTask = tasks.assetsTask;
+        if (this.assetsView?.task !== assetsTask) {
+            this.assetsView = assetsTask ? assetsTask.createView() : null;
+            const content = this.getContent<HTMLElement>("derivatives");
+            content.textContent = "";
+            if (this.assetsView) {
+                content.appendChild(this.assetsView);
+            }
+        }
+        this.panels.get("derivatives").available = !!assetsTask && !!this.nodeProvider.activeNode?.model;
         this.panels.get("task").available = !!tasks.activeComponent;
 
         const editor = this.getEditor();
@@ -322,11 +352,21 @@ export default class MainView extends CustomElement
         window.dispatchEvent(new Event("resize"));
     }
 
-    protected selectContext(id: "settings" | "task")
+    protected selectContext(id: "settings" | "derivatives" | "task")
     {
         if (this.layoutReady) {
             this.panels.get(id).activatePanel();
+            this.updateContext();
         }
+    }
+
+    /** The Assets tab runs the Assets task while it shows. */
+    protected updateContext()
+    {
+        const assets = !!this.panels.get("derivatives")?.header.active;
+        this.taskProvider.assetsPanelActive = assets;
+        // Capture overlays the thumbnail crop box on the viewport; see styles.scss.
+        this.classList.toggle("sv-capture-active", !assets && this.taskProvider.activeComponent instanceof CVCaptureTask);
     }
 
     protected getContent<T extends Element>(id: string): T
@@ -366,6 +406,9 @@ export default class MainView extends CustomElement
                 panels: [{
                     contentId: "settings",
                     text: "Settings"
+                }, {
+                    contentId: "derivatives",
+                    text: "Assets"
                 }, {
                     contentId: "task",
                     text: "Task"

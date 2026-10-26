@@ -55,6 +55,8 @@ export default class CVTask extends CVNodeObserver
 
     static readonly text: string = "Task";
     static readonly icon: string = "fa fa-tasks";
+    /** Tasks without a task bar button are started from the panel that offers them. */
+    static readonly inTaskBar: boolean = true;
 
     protected static readonly taskIns = {
     };
@@ -68,6 +70,9 @@ export default class CVTask extends CVNodeObserver
 
     protected get selection() {
         return this.getMainComponent(CPickSelection);
+    }
+    get inTaskBar() {
+        return (this.constructor as typeof CVTask).inTaskBar;
     }
     protected get isActiveTask() {
         return this.outs.isActive.value;

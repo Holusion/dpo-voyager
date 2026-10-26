@@ -24,6 +24,7 @@ import CComponentProvider, {
 } from "@ff/graph/components/CComponentProvider";
 
 import CVTask from "./CVTask";
+import CVDerivativesTask from "./CVDerivativesTask";
 import taskSets, { ETaskMode } from "../applications/taskSets";
 import { DEFAULT_LANGUAGE, ELanguageStringType, ELanguageType } from "client/schema/common";
 import CVLanguageManager from "./CVLanguageManager";
@@ -51,6 +52,41 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
 
     ins = this.addInputs(CVTaskProvider.ins);
 
+    private _assetsPanelActive = false;
+    private _runningTask: CVTask = null;
+
+    get activeComponent() {
+        return super.activeComponent;
+    }
+    set activeComponent(task: CVTask) {
+        if (task === super.activeComponent) {
+            return;
+        }
+        if (task && !this.isComponentInScope(task)) {
+            throw new Error("can't activate, component out of scope");
+        }
+        this.run(task);
+        this._assetsPanelActive = false;
+        super.activeComponent = task;
+    }
+
+    get assetsTask() {
+        return this.scopedComponents.find(task => task instanceof CVDerivativesTask) as CVDerivativesTask;
+    }
+
+    get assetsPanelActive() {
+        return this._assetsPanelActive;
+    }
+    set assetsPanelActive(active: boolean) {
+        if (active === this._assetsPanelActive || !this.assetsTask) {
+            return;
+        }
+        // Keep the current task selected while the Assets tab temporarily owns the viewport,
+        // and resume it on leaving the tab.
+        this.run(active ? this.assetsTask : this.activeComponent);
+        this._assetsPanelActive = active;
+    }
+
     constructor(node: Node, id: string)
     {
         super(node, id);
@@ -72,6 +108,7 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
 
         if (ins.mode.changed) {
             this.activeComponent = null;
+            this.assetsPanelActive = false;
             // Disposal removes entries from the provider's live list.
             [...this.scopedComponents].forEach(task => task.dispose());
 
@@ -82,17 +119,30 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
         return true;
     }
 
-    protected activateComponent(task: CVTask)
-    {
-        task.activateTask();
-    }
-
-    protected deactivateComponent(task: CVTask)
-    {
-        task.deactivateTask();
-    }
-
     protected onActiveComponent(previous: CVTask, next: CVTask)
     {
+    }
+
+    dispose()
+    {
+        this.activeComponent = null;
+        this.assetsPanelActive = false;
+        super.dispose();
+    }
+
+    /**
+     * Tasks start and stop here only, so that at most one task runs: the active task,
+     * or the Assets task while the Assets tab is shown.
+     */
+    private run(task: CVTask)
+    {
+        const running = this._runningTask;
+        if (task === running) {
+            return;
+        }
+        this._runningTask = null;
+        running?.deactivateTask();
+        task?.activateTask();
+        this._runningTask = task;
     }
 }

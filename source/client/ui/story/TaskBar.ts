@@ -77,7 +77,7 @@ export default class TaskBar extends SystemView
 
     protected render()
     {
-        const tasks = this.taskProvider.scopedComponents;
+        const tasks = this.taskProvider.scopedComponents.filter(task => task.inTaskBar);
         const activeTask = this.taskProvider.activeComponent;
         const taskMode = this.taskProvider.ins.mode.value;
         const taskModeText = this.taskProvider.ins.mode.getOptionText();
