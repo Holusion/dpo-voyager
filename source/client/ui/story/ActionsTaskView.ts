@@ -25,7 +25,6 @@ import { TaskView, customElement, html, property } from "../../components/CVTask
 import List from "client/../../libs/ff-ui/source/List";
 import { EActionPlayStyle, EActionTrigger, EActionType, IAction, IAudioClip, TActionType } from "client/schema/meta";
 //import Notification from "@ff/ui/Notification";
-import CVAnnotationView from "client/components/CVAnnotationView";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -53,10 +52,10 @@ export default class ActionsTaskView extends TaskView<CVActionsTask>
         const ins = this.task.ins;
 
         const node = this.activeNode;
-        const actionList = node && node.hasComponent(CVAnnotationView) && this.task.actions;
+        const actionList = node && this.task.actions;
 
         if (!actionList) {
-            return html`<div class="sv-placeholder">Please select a model node to edit its actions.</div>`;
+            return html`<div class="sv-placeholder">Please select a node with actions to edit.</div>`;
         }
 
         const accessibilityNotice = ins.type.value === EActionType.PlayAudio && 

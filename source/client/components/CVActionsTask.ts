@@ -226,6 +226,7 @@ export default class CVActionsTask extends CVTask
         const ins = this.ins;
         const action = this.meta && this.meta.actions.get(ins.activeId.value);
         const audioManager = this.activeDocument.setup.audio;
+        const annotations = this.meta?.getComponent(CVAnnotationView, true)?.getAnnotations() || [];
 
         if(action) {
             ins.name.setValue(action.name);
@@ -233,8 +234,8 @@ export default class CVActionsTask extends CVTask
             ins.trigger.setValue(EActionTrigger[action.trigger], true);
             ins.animation.setValue(action.animation ? ins.animation.schema.options.indexOf(action.animation) : 0);
             ins.audio.setValue(action.audioId ? audioManager.getAudioList().findIndex(clip => clip.id == action.audioId) + 1 : 0);
-            ins.annotation.setValue(action.annotationId ? this.meta.getComponent(CVAnnotationView).getAnnotations().findIndex(anno => anno.id == action.annotationId) + 1 : null);
-            ins.actionAnnotation.setValue(action.actionAnnoId ? action.actionAnnoId.split("\x1F").map(id => this.meta.getComponent(CVAnnotationView).getAnnotations().find(anno => anno.id == id).title).join("\x1F") : null);
+            ins.annotation.setValue(action.annotationId ? annotations.findIndex(anno => anno.id == action.annotationId) + 1 : null);
+            ins.actionAnnotation.setValue(action.actionAnnoId ? action.actionAnnoId.split("\x1F").map(id => annotations.find(anno => anno.id == id)?.title).filter(Boolean).join("\x1F") : null);
             ins.state.setValue(action.stateId ? this.activeDocument.setup.snapshots.deltaStates.findIndex(state => state.id == action.stateId) + 1 : null);
             ins.style.setValue(action.style ? EActionPlayStyle[action.style] : EActionPlayStyle.Single);
             ins.speed.setValue(action.speed);
@@ -268,16 +269,14 @@ export default class CVActionsTask extends CVTask
     {
         const model = next ? next.getComponent(CVModel2, true) : null;
 
-        if (previous) {
-            this.meta = null;
-        }
+        this.meta = null;
+        const animOptions = ["None"];
         if (model) {
             if (!next.meta) {
                 next.createComponent(CVMeta);
             }
 
             // Load animation options
-            const animOptions = ["None"];
             model.object3D.traverse(object => {
                 if (object.animations.length > 0) {
                     object.animations.forEach((anim) => {
@@ -285,14 +284,12 @@ export default class CVActionsTask extends CVTask
                     })
                 }
             });
-            this.ins.animation.setOptions(animOptions);
-            this.ins.syncWith.setOptions(animOptions);
-
-            this.synchAnnotationOptions(model);
-            this.ins.activeId.setValue("");
-
-            this.meta = next.meta;
         }
+        this.ins.animation.setOptions(animOptions);
+        this.ins.syncWith.setOptions(animOptions);
+        this.synchAnnotationOptions(model);
+        this.ins.activeId.setValue("");
+        this.meta = next ? next.meta : null;
     }
 
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
@@ -333,7 +330,8 @@ export default class CVActionsTask extends CVTask
     protected synchAnnotationOptions(model: CVModel2) {
         const annoOptions = ["None"];
         const actionAnnoOptions = [];
-        model.getComponent(CVAnnotationView).getAnnotations().forEach((anno) => {
+        const annotations = model?.getComponent(CVAnnotationView, true)?.getAnnotations() || [];
+        annotations.forEach((anno) => {
             annoOptions.push(anno.title);
             actionAnnoOptions.push(anno.title);
         });

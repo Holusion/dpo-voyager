@@ -351,7 +351,8 @@ export default class CVActionManager extends Component
                 if(actions.length > 0) {
                     actions.forEach((action) => {
                         if(action.type !== EActionType[EActionType.PlayAudio] as TActionType) {
-                            const model = meta.node.getComponent(CVModel2);
+                            // Scene-level state and action changes do not have a model owner.
+                            const model = meta.node.getComponent<CVModel2>("CVModel2", true);
                             this._actionQueue.push({model: model, action: action}); // queue actions to play when tour transition ends
                         }
                         /*else if(action.type == EActionType[EActionType.PlayAudio] as TActionType) {
@@ -399,6 +400,11 @@ export default class CVActionManager extends Component
     {
         // Don't play disabled actions
         if(!action.enabled) {
+            return;
+        }
+
+        if (!model && (action.type === "PlayAnimation" || action.type === "ShowAnnotation" ||
+            action.type === "HideAnnotation" || action.type === "ToggleAnnotation")) {
             return;
         }
 
