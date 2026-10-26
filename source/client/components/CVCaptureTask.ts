@@ -33,7 +33,7 @@ import CVMeta from "./CVMeta";
 import CVModel2 from "./CVModel2";
 import CVAssetManager from "./CVAssetManager";
 import CVAssetWriter from "./CVAssetWriter";
-import CVStoryApplication from "./CVStoryApplication";
+import CVStoryApplication, { ISaveContext } from "./CVStoryApplication";
 import CVTaskProvider, { ETaskMode } from "./CVTaskProvider";
 import CVTask from "./CVTask";
 
@@ -121,7 +121,6 @@ export default class CVCaptureTask extends CVTask
     private _imageElements: Dictionary<HTMLImageElement> = {};
     private _mimeType: string = "";
     private _extension: string = "";
-    private _savingSceneState = false;
 
     constructor(node: Node, id: string)
     {
@@ -204,42 +203,47 @@ export default class CVCaptureTask extends CVTask
     }
 
     /**
-     * Caches the current setup as the scene state, adds a thumbnail if the scene has none, and saves the document.
-     * Reports a single outcome, so a failure at any step is reported as an unsaved scene.
+     * Saves the scene state as one save of the story application, which reports its outcome.
+     * Once saved, the task is done and closes.
      */
     protected async saveSceneState()
     {
-        if (this._savingSceneState) {
+        let captured = false;
+        const notification = await this.storyApplication.save(context => {
+            captured = true;
+            return this.saveSceneStateOperation(context);
+        });
+
+        // Not run: another save was running.
+        if (!captured) {
             return;
         }
-        this._savingSceneState = true;
-
-        let message = "";
-        try {
-            this.setup.cacheSetupState();
-            this.emitFeedback(() => ({ type: "scene-state-capture", ...this.takeSnapshot() }));
-
-            const root = this.activeDocument.root;
-            const hasThumbnail = !!root.meta?.images.items.some(image => image.usage === "Render");
-            if (!hasThumbnail) {
-                this.activeMeta = root.meta || root.createComponent(CVMeta);
-                this.takeConfiguredPictures();
-                await this.savePictures();
-            }
-
-            await this.storyApplication.saveDocument();
-            message = hasThumbnail ? "Scene state saved." : "Scene state and thumbnail saved.";
-        }
-        catch (e) {
-            new Notification(`Scene NOT saved: ${e.message}. Save again before leaving.`, "error", 0);
-        }
-        finally {
-            this._savingSceneState = false;
-        }
-
         // Reported once the outcome is settled, so feedback can't turn a save into a failure.
-        const notification = message ? new Notification(message, "success", 4000) : null;
         this.emitFeedback(() => ({ type: "scene-state-save", notification }));
+        if (notification && this.isActiveTask) {
+            this.getMainComponent(CVTaskProvider).activeComponent = null;
+        }
+    }
+
+    /**
+     * Caches the current setup as the scene state, adds a thumbnail if the scene has none, and saves the document.
+     * A failure at any step leaves the scene unsaved.
+     */
+    protected async saveSceneStateOperation(context: ISaveContext): Promise<string>
+    {
+        this.setup.cacheSetupState();
+        this.emitFeedback(() => ({ type: "scene-state-capture", ...this.takeSnapshot() }));
+
+        const root = this.activeDocument.root;
+        const hasThumbnail = !!root.meta?.images.items.some(image => image.usage === "Render");
+        if (!hasThumbnail) {
+            this.activeMeta = root.meta || root.createComponent(CVMeta);
+            this.takeConfiguredPictures();
+            await this.savePictures(context.signal);
+        }
+
+        await this.storyApplication.saveDocument(context);
+        return hasThumbnail ? "Scene state saved." : "Scene state and thumbnail saved.";
     }
 
     /** Feedback is decoration: its failures are logged, never allowed to change the save. */
@@ -319,7 +323,7 @@ export default class CVCaptureTask extends CVTask
     }
 
     /** Uploads every image quality, and records them in the scene's meta only once all have been stored. */
-    protected async savePictures()
+    protected async savePictures(signal?: AbortSignal)
     {
         if (!this.outs.ready.value) {
             throw new Error("no picture taken");
@@ -328,7 +332,10 @@ export default class CVCaptureTask extends CVTask
         const mimeType = this._mimeType;
         const filePaths = _qualityLevels.map(quality => this.getImageAssetPath(quality, this._extension));
         await Promise.all(_qualityLevels.map((quality, index) =>
-            this.assetWriter.put(convert.dataURItoBlob(this._imageDataURIs[quality]), mimeType, filePaths[index])));
+            this.assetWriter.put(convert.dataURItoBlob(this._imageDataURIs[quality]), mimeType, filePaths[index], {signal})));
+        if (signal?.aborted) {
+            throw new DOMException("The save was cancelled.", "AbortError");
+        }
 
         _qualityLevels.forEach((quality, index) => this.updateImageMeta(quality, mimeType, filePaths[index]));
     }

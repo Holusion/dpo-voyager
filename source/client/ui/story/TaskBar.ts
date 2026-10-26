@@ -20,8 +20,9 @@ import System from "@ff/graph/System";
 import "@ff/ui/Button";
 
 import SystemView, { customElement, html } from "@ff/scene/ui/SystemView";
+import { classMap } from "lit-html/directives/class-map";
 
-import CVStoryApplication from "../../components/CVStoryApplication";
+import CVStoryApplication, { ESaveState } from "../../components/CVStoryApplication";
 import CVCaptureTask from "../../components/CVCaptureTask";
 import CVTask from "../../components/CVTask";
 import CVTaskProvider, { ETaskMode, IActiveTaskEvent, ITaskSetEvent } from "../../components/CVTaskProvider";
@@ -66,10 +67,12 @@ export default class TaskBar extends SystemView
         this.taskProvider.on<ITaskSetEvent>("scoped-components", this.onUpdate, this);
         this.taskProvider.on<IActiveTaskEvent>("active-component", this.onUpdate, this);
         this.language.outs.uiLanguage.on("value", this.onUpdate, this);
+        this.story.outs.saveState.on("value", this.onUpdate, this);
     }
 
     protected disconnected()
     {
+        this.story.outs.saveState.off("value", this.onUpdate, this);
         this.taskProvider.off<ITaskSetEvent>("scoped-components", this.onUpdate, this);
         this.taskProvider.off<IActiveTaskEvent>("active-component", this.onUpdate, this);
         this.language.outs.uiLanguage.on("value", this.onUpdate, this);
@@ -85,6 +88,21 @@ export default class TaskBar extends SystemView
         const exitButtonVisible = taskMode !== ETaskMode.Standalone;
         const languageManager = this.language;
         const saveName = languageManager.getUILocalizedString(taskMode !== ETaskMode.Standalone ? "Save" : "Download");
+        // The Save button shows the outcome of the last save for a moment, by its icon and color only:
+        // its text stays, so the task bar keeps its layout.
+        const saveState = this.story.outs.saveState.value;
+        const standalone = taskMode === ETaskMode.Standalone;
+        const [saveIcon, saveTitle] =
+            saveState === ESaveState.Saved ? ["check", standalone ? "Downloaded" : "Saved"] :
+            saveState === ESaveState.Failed ? ["error", standalone ? "Not downloaded" : "Not saved"] :
+            saveState === ESaveState.Unconfirmed ? ["warning", "Save not confirmed"] : ["save", null];
+        // classMap leaves the classes the button gives itself in place.
+        const saveClasses = classMap({
+            "sv-save-button": true,
+            "sv-save-saved": saveState === ESaveState.Saved,
+            "sv-save-failed": saveState === ESaveState.Failed,
+            "sv-save-unconfirmed": saveState === ESaveState.Unconfirmed,
+        });
         // Capture saves the scene, so it sits with the save commands.
         const capture = tasks.find(task => task instanceof CVCaptureTask);
         const renderTask = (task: CVTask) => html`<ff-button text=${languageManager.getUILocalizedString(task.text)} icon=${task.icon}
@@ -102,7 +120,8 @@ export default class TaskBar extends SystemView
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group">
                 ${capture ? renderTask(capture) : null}
-                <ff-button text=${saveName} icon="save" @click=${this.onClickSave}></ff-button>
+                <ff-button class=${saveClasses} text=${saveName} icon=${saveIcon}
+                    title=${saveTitle ? languageManager.getUILocalizedString(saveTitle) : saveName} @click=${this.onClickSave}></ff-button>
                 ${downloadButtonVisible ? html`<ff-button text="${languageManager.getUILocalizedString("Download")}" icon="download" @click=${this.onClickDownload}></ff-button>` : null}
                 ${exitButtonVisible ? html`<ff-button text="${languageManager.getUILocalizedString("Exit")}" icon="exit" @click=${this.onClickExit}></ff-button>` : null}
             </div>

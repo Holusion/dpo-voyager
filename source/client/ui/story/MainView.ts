@@ -40,6 +40,7 @@ import CVToursTask from "../../components/CVToursTask";
 import { TaskView } from "../../components/CVTask";
 
 import TaskBar from "./TaskBar";
+import SaveOverlay from "./SaveOverlay";
 import CaptureFeedback from "./CaptureFeedback";
 import ArticleEditor from "./ArticleEditor";
 
@@ -215,6 +216,8 @@ export default class MainView extends CustomElement
                 window.dispatchEvent(new Event("resize"));
             }
         });
+
+        this.appendElement(new SaveOverlay(this.application.system));
 
         // Strips set their sizes from their first layout: everything must be visible until then.
         const strips = Array.from(this.dockView.getElementsByTagName(DockStrip.tagName)) as DockStrip[];

@@ -216,6 +216,25 @@ ff-tab-header, ff-dock-panel-header {
         fill: common.$color-text-light;
       }
     }
+
+    // Outcome of the last save, shown on the Save button for a moment. Its icons differ in width:
+    // a fixed box keeps the button's size.
+    &.sv-save-button .ff-icon {
+      width: 22px;
+    }
+    // Only the icon pulses: a transform still counts as overflow, and a pulsing button would make the
+    // scrolling task bar show a scrollbar.
+    &.sv-save-saved, &.sv-save-failed, &.sv-save-unconfirmed {
+      color: common.$color-background-dark;
+
+      .ff-icon {
+        fill: common.$color-background-dark;
+        animation: sv-save-result 0.4s ease-out;
+      }
+    }
+    &.sv-save-saved { background-color: common.$color-success; }
+    &.sv-save-failed { background-color: common.$color-error; }
+    &.sv-save-unconfirmed { background-color: common.$color-warning; }
   }
 
   .sv-property-view .sv-property {
@@ -648,6 +667,86 @@ $color-component-meta-light: #d9d998;
   text-overflow: ellipsis;
   padding-left: 3px;
   flex-basis: 50%;
+}
+
+@keyframes sv-save-result {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.1); }
+  100% { transform: none; }
+}
+
+// Holds the whole interface while a save runs; see SaveOverlay. It shows after the Capture flash has peaked:
+// a save that ends sooner shows nothing.
+$save-overlay-delay: 0.15s;
+
+.sv-save-overlay {
+  display: none;
+
+  &.sv-active {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: progress;
+    animation: sv-save-backdrop 0.25s $save-overlay-delay both;
+  }
+
+  .sv-save-dialog {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    min-width: 220px;
+    padding: 20px 28px;
+    background: common.$color-background-light;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    outline: none;
+    cursor: default;
+    animation: sv-save-appear 0s $save-overlay-delay both;
+  }
+
+  .sv-save-spinner {
+    width: 32px;
+    height: 32px;
+    box-sizing: border-box;
+    border: 3px solid rgba(common.$color-text, 0.2);
+    border-top-color: common.$color-primary;
+    border-radius: 50%;
+    animation: sv-save-spin 0.9s linear infinite;
+  }
+
+  .ff-text { font-size: 15px; }
+
+  .sv-save-cancel {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    padding: 4px;
+    background: transparent;
+
+    .ff-icon { height: 14px; }
+  }
+}
+
+@keyframes sv-save-appear {
+  from { opacity: 0; }
+}
+
+@keyframes sv-save-backdrop {
+  from { background-color: transparent; }
+  to { background-color: rgba(0, 0, 0, 0.5); }
+}
+
+@keyframes sv-save-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sv-save-overlay .sv-save-spinner { animation-duration: 3s; }
+  .sv-task-bar .ff-button .ff-icon { animation: none !important; }
 }
 
 // The captured picture flying into the save confirmation; see CaptureFeedback.
