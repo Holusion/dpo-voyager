@@ -20,6 +20,8 @@ import System from "@ff/graph/System";
 import SystemView, { customElement, html } from "@ff/scene/ui/SystemView";
 
 import CVTaskProvider, { IActiveTaskEvent } from "../../components/CVTaskProvider";
+import CVNodeProvider, { IActiveNodeEvent } from "../../components/CVNodeProvider";
+import { TaskView } from "../../components/CVTask";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -30,6 +32,7 @@ import CVTaskProvider, { IActiveTaskEvent } from "../../components/CVTaskProvide
 export default class TaskPanel extends SystemView
 {
     protected taskProvider: CVTaskProvider = null;
+    private view: TaskView = null;
 
     constructor(system?: System)
     {
@@ -51,11 +54,14 @@ export default class TaskPanel extends SystemView
     {
         super.connected();
         this.taskProvider.on<IActiveTaskEvent>("active-component", this.onUpdate, this);
+        // The title names the task's subject, which follows the selection.
+        this.system.getMainComponent(CVNodeProvider).on<IActiveNodeEvent>("active-node", this.onUpdate, this);
     }
 
     protected disconnected()
     {
         this.taskProvider.off<IActiveTaskEvent>("active-component", this.onUpdate, this);
+        this.system.getMainComponent(CVNodeProvider).off<IActiveNodeEvent>("active-node", this.onUpdate, this);
         super.disconnected();
     }
 
@@ -63,19 +69,26 @@ export default class TaskPanel extends SystemView
     {
         const task = this.taskProvider.activeComponent;
         if (!task) {
+            this.view = null;
             return html``;
         }
 
-        const viewElement = task.createView();
+        // Each activation gets a fresh view, kept across title updates.
+        if (this.view?.task !== task) {
+            this.view = task.createView();
+        }
+        const subject = task.subject;
 
         return html`
             <div class="sv-panel-header">
                 <ff-icon name=${task.icon}></ff-icon>
                 <div class="ff-text">${task.text}</div>
+                ${subject ? html`<div class="sv-task-subject">${subject.model ? html`<ff-icon class="sv-icon-model" name=${subject.model.icon}></ff-icon>` : null}
+                    <div class="ff-text ff-ellipsis">${subject.displayName}</div></div>` : null}
                 <ff-button class="sv-end-task" icon="close" title="Close Task" aria-label="Close task" @click=${this.onEndTask}></ff-button>
             </div>
             <div class="sv-panel-content">
-                ${viewElement}
+                ${this.view}
             </div>
         `;
     }

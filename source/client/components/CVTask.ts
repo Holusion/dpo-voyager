@@ -21,6 +21,7 @@ import Subscriber from "@ff/core/Subscriber";
 
 import CVNodeObserver from "./CVNodeObserver";
 import CVDocument from "./CVDocument";
+import NVNode from "../nodes/NVNode";
 
 import NodeView, { customElement, property, html } from "../ui/explorer/NodeView";
 import Property from "@ff/graph/Property";
@@ -73,6 +74,10 @@ export default class CVTask extends CVNodeObserver
     }
     get inTaskBar() {
         return (this.constructor as typeof CVTask).inTaskBar;
+    }
+    /** The node the task works on, named in the task panel's title. */
+    get subject(): NVNode {
+        return null;
     }
     protected get isActiveTask() {
         return this.outs.isActive.value;

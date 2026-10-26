@@ -55,9 +55,11 @@ export default class CVPoseTask extends CVTask
 
     static readonly text: string = "Pose";
     static readonly icon: string = "move";
+    static readonly inTaskBar = false;
 
     protected static readonly ins = {
         mode: types.Enum("Pose.Mode", EPoseManipMode, EPoseManipMode.Off),
+        reset: types.Event("Pose.Reset"),
         modelUpdated: types.Event("Model.Updated"),
     };
     protected static readonly outs = {
@@ -74,6 +76,8 @@ export default class CVPoseTask extends CVTask
     private _accumulatedAngle = 0;
     private _layouts = new Map<RenderQuadView, EQuadViewLayout>();
     private _cameraLayers = new Map<Camera, number>();
+    /** Pose of each model when the task started, restored by the reset event. */
+    private _initialPoses = new Map<CVModel2, { position: number[], rotation: number[] }>();
 
     protected activeModel: CVModel2 = null;
 
@@ -90,6 +94,10 @@ export default class CVPoseTask extends CVTask
         configuration.readerEnabled = false;
         configuration.gridLabelEnabled = false;
         configuration.environmentVisible = false;
+    }
+
+    get subject() {
+        return this.activeModel ? this.activeNode : null;
     }
 
     protected get renderer() {
@@ -123,6 +131,7 @@ export default class CVPoseTask extends CVTask
         });
 
         super.activateTask();
+        this.recordInitialPose();
         this.activeDocument?.setup.navigation.ins.zoomExtents.set();
     }
 
@@ -131,6 +140,7 @@ export default class CVPoseTask extends CVTask
         this.ins.mode.setValue(EPoseManipMode.Off);
         this._deltaX = this._deltaY = this._accumulatedAngle = 0;
         this._viewport = null;
+        this._initialPoses.clear();
         super.deactivateTask();
 
         // switch back to single view layout
@@ -145,6 +155,14 @@ export default class CVPoseTask extends CVTask
 
     update(context)
     {
+        if (this.ins.reset.changed && this.activeModel) {
+            const pose = this._initialPoses.get(this.activeModel);
+            if (pose) {
+                this.activeModel.ins.position.setValue(pose.position.slice());
+                this.activeModel.ins.rotation.setValue(pose.rotation.slice());
+            }
+        }
+
         if (this.ins.modelUpdated.changed && this.activeModel) {
             _boundingBox.makeEmpty();
             _boundingBox.expandByObject(this.activeModel.object3D);
@@ -240,6 +258,19 @@ export default class CVPoseTask extends CVTask
             this.ins.modelUpdated.set();
 
             this.selection.selectComponent(this.activeModel);
+            this.recordInitialPose();
+        }
+    }
+
+    /** Records the active model's pose the first time it is selected while the task is active. */
+    protected recordInitialPose()
+    {
+        const model = this.activeModel;
+        if (this.isActiveTask && model && !this._initialPoses.has(model)) {
+            this._initialPoses.set(model, {
+                position: model.ins.position.value.slice(),
+                rotation: model.ins.rotation.value.slice(),
+            });
         }
     }
 

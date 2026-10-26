@@ -20,11 +20,14 @@ import Property from "@ff/graph/Property";
 import System from "@ff/graph/System";
 
 import "@ff/scene/ui/PropertyView";
+import "@ff/ui/Button";
 
 import { customElement, html, property } from "@ff/ui/CustomElement";
 import Tree from "@ff/ui/Tree";
 import { classMap } from "lit-html/directives/class-map";
 
+import CVPoseTask from "../../components/CVPoseTask";
+import CVTaskProvider from "../../components/CVTaskProvider";
 import NVNode from "../../nodes/NVNode";
 import NodeView from "../explorer/NodeView";
 
@@ -40,6 +43,24 @@ export default class SettingsPanel extends NodeView
         this.classList.add("sv-task-view");
     }
 
+    protected get tasks() {
+        return this.system.getMainComponent(CVTaskProvider);
+    }
+
+    protected connected()
+    {
+        super.connected();
+        this.tasks.on("active-component", this.onUpdate, this);
+        this.tasks.on("scoped-components", this.onUpdate, this);
+    }
+
+    protected disconnected()
+    {
+        this.tasks.off("active-component", this.onUpdate, this);
+        this.tasks.off("scoped-components", this.onUpdate, this);
+        super.disconnected();
+    }
+
     protected render()
     {
         if(!this.activeDocument) {
@@ -52,7 +73,7 @@ export default class SettingsPanel extends NodeView
         }
 
         return html`<div class="sv-panel-header sv-settings-title">${this.renderTypeIcon(node)}
-                <div class="ff-text ff-ellipsis">${node.displayName}</div></div>
+                <div class="ff-text ff-ellipsis">${node.displayName}</div>${node.model ? this.renderPoseButton() : null}</div>
             <div class="ff-flex-item-stretch"><div class="ff-scroll-y">
                 <sv-settings-tree .node=${node}></sv-settings-tree>
             </div></div>`;
@@ -69,6 +90,20 @@ export default class SettingsPanel extends NodeView
         // The header keeps one icon element across nodes: a plain class binding would replace the
         // "ff-icon" class the element adds to itself, while classMap only toggles its own classes.
         return html`<ff-icon class=${classMap(className ? { [className]: true } : {})} name=${icon}></ff-icon>`;
+    }
+
+    /** The Pose task has no task bar button: it is started here, for the selected model. */
+    protected renderPoseButton()
+    {
+        const tasks = this.tasks;
+        const pose = tasks.scopedComponents.find(task => task instanceof CVPoseTask);
+        if (!pose) {
+            return null;
+        }
+        const active = tasks.activeComponent === pose;
+        return html`<ff-button class="sv-pose-button" icon=${pose.icon}
+            text=${this.activeDocument.setup.language.getUILocalizedString(pose.text)} ?selected=${active}
+            @click=${() => tasks.activeComponent = active ? null : pose}></ff-button>`;
     }
 
     protected onActiveNode(previous: NVNode, next: NVNode)

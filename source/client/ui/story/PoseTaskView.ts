@@ -32,8 +32,8 @@ import { EUnitType } from "client/schema/model";
 /**
  * View component for [[CVPoseTask]].
  *
- * Allows selecting the pose edit mode (select, rotate, move) and provides commands for centering the model
- * and zoom/center the view to the extents of the scene.
+ * Toggles the pose tools (rotate, move; neither means select) and provides commands for resetting and
+ * centering the model and zoom/center the view to the extents of the scene.
  */
 @customElement("sv-pose-task-view")
 export default class PoseTaskView extends TaskView<CVPoseTask>
@@ -77,7 +77,7 @@ export default class PoseTaskView extends TaskView<CVPoseTask>
 
         return html`
             <div class="sv-commands">
-                <ff-button icon="select" text="${languageManager.getUILocalizedString("Select")}" index=${EPoseManipMode.Off} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
+                <ff-button icon="undo" text="${languageManager.getUILocalizedString("Reset")}" title="${languageManager.getUILocalizedString("Restore the pose the model had when the Pose task started")}" @click=${this.onClickReset}></ff-button>
                 <ff-button icon="rotate" text="${languageManager.getUILocalizedString("Rotate")}" index=${EPoseManipMode.Rotate} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
                 <ff-button icon="move" text="${languageManager.getUILocalizedString("Move")}" index=${EPoseManipMode.Translate} selectedIndex=${modeProp.value} @click=${this.onClickMode}></ff-button>
                 <ff-button icon="compress" text="${languageManager.getUILocalizedString("Center")}" @click=${this.onClickCenter}></ff-button>
@@ -92,9 +92,16 @@ export default class PoseTaskView extends TaskView<CVPoseTask>
             </div></div>`;
     }
 
+    // Tools toggle: with none active, clicks select as usual.
     protected onClickMode(event: IButtonClickEvent)
     {
-        this.task.ins.mode.setValue(event.target.index);
+        const mode = this.task.ins.mode;
+        mode.setValue(mode.value === event.target.index ? EPoseManipMode.Off : event.target.index);
+    }
+
+    protected onClickReset()
+    {
+        this.task.ins.reset.set();
     }
 
     protected onClickCenter()
