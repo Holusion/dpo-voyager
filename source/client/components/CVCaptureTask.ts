@@ -16,6 +16,7 @@
  */
 
 import { Dictionary } from "@ff/core/types";
+import { ITypedEvent } from "@ff/core/Publisher";
 
 import download from "@ff/browser/download";
 import convert from "@ff/browser/convert";
@@ -70,6 +71,22 @@ const _typeExtensions = {
     [EFileType.PNG]: "png"
 };
 
+
+/** Emitted when Save captures the scene state, before it is saved. */
+export interface ISceneStateCaptureEvent extends ITypedEvent<"scene-state-capture">
+{
+    /** A copy of what the viewport showed, or null if it couldn't be copied. */
+    snapshot: HTMLCanvasElement;
+    /** Where the viewport's canvas was, in client coordinates. */
+    rect: DOMRect;
+}
+
+/** Emitted once for every capture, when the save ends. */
+export interface ISceneStateSaveEvent extends ITypedEvent<"scene-state-save">
+{
+    /** The confirmation shown, or null if the scene was not saved. */
+    notification: Notification;
+}
 
 export default class CVCaptureTask extends CVTask
 {
@@ -197,8 +214,10 @@ export default class CVCaptureTask extends CVTask
         }
         this._savingSceneState = true;
 
+        let message = "";
         try {
             this.setup.cacheSetupState();
+            this.emitFeedback(() => ({ type: "scene-state-capture", ...this.takeSnapshot() }));
 
             const root = this.activeDocument.root;
             const hasThumbnail = !!root.meta?.images.items.some(image => image.usage === "Render");
@@ -209,7 +228,7 @@ export default class CVCaptureTask extends CVTask
             }
 
             await this.storyApplication.saveDocument();
-            new Notification(hasThumbnail ? "Scene state saved." : "Scene state and thumbnail saved.", "success", 4000);
+            message = hasThumbnail ? "Scene state saved." : "Scene state and thumbnail saved.";
         }
         catch (e) {
             new Notification(`Scene NOT saved: ${e.message}. Save again before leaving.`, "error", 0);
@@ -217,6 +236,41 @@ export default class CVCaptureTask extends CVTask
         finally {
             this._savingSceneState = false;
         }
+
+        // Reported once the outcome is settled, so feedback can't turn a save into a failure.
+        const notification = message ? new Notification(message, "success", 4000) : null;
+        this.emitFeedback(() => ({ type: "scene-state-save", notification }));
+    }
+
+    /** Feedback is decoration: its failures are logged, never allowed to change the save. */
+    protected emitFeedback(event: () => ISceneStateCaptureEvent | ISceneStateSaveEvent)
+    {
+        try {
+            this.emit(event());
+        }
+        catch (e) {
+            console.error("CVCaptureTask - save feedback failed", e);
+        }
+    }
+
+    /** Copies what the viewport shows, at most maxSize pixels wide. */
+    protected takeSnapshot(maxSize = 640): { snapshot: HTMLCanvasElement, rect: DOMRect }
+    {
+        const view = this.renderer.views[0];
+        if (!view) {
+            return { snapshot: null, rect: null };
+        }
+
+        const source = view.canvas;
+        const scale = Math.min(1, maxSize / Math.max(source.width, source.height, 1));
+        const snapshot = document.createElement("canvas");
+        snapshot.width = Math.max(1, Math.round(source.width * scale));
+        snapshot.height = Math.max(1, Math.round(source.height * scale));
+
+        // A WebGL canvas keeps its pixels only until the frame is composited: render, then copy right away.
+        view.render();
+        snapshot.getContext("2d").drawImage(source, 0, 0, snapshot.width, snapshot.height);
+        return { snapshot, rect: source.getBoundingClientRect() };
     }
 
     protected takeConfiguredPictures()

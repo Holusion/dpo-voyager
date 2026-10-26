@@ -40,6 +40,7 @@ import CVToursTask from "../../components/CVToursTask";
 import { TaskView } from "../../components/CVTask";
 
 import TaskBar from "./TaskBar";
+import CaptureFeedback from "./CaptureFeedback";
 import ArticleEditor from "./ArticleEditor";
 
 import EditorPanel from "./EditorPanel";
@@ -104,6 +105,7 @@ export default class MainView extends CustomElement
     private slideEditors = false;
     private editor: EditorId = null;
     private assetsView: TaskView = null;
+    private captureFeedback = new CaptureFeedback(() => this.getContent<ExplorerPanel>("explorer").viewport);
     private documentSubscriber = new Subscriber("value", this.updatePanels, this);
     private taskSubscriber = new Subscriber("value", this.updatePanels, this);
 
@@ -240,6 +242,7 @@ export default class MainView extends CustomElement
         this.taskProvider.off("active-component", this.onTask, this);
         this.taskProvider.off("scoped-components", this.updatePanels, this);
         this.taskProvider.assetsPanelActive = false;
+        this.captureFeedback.attach(null);
         this.documentSubscriber.off();
         this.taskSubscriber.off();
     }
@@ -271,6 +274,7 @@ export default class MainView extends CustomElement
     protected onTask()
     {
         const task = this.taskProvider.activeComponent;
+        this.captureFeedback.attach(task instanceof CVCaptureTask ? task : null);
         this.taskSubscriber.off();
         if (task instanceof CVCollectionTask) {
             this.taskSubscriber.on(task.ins.showNotes);

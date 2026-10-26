@@ -87,6 +87,16 @@ voyager-story {
     z-index: 1;
   }
 
+  // Flashes when Save captures the scene state; see CaptureFeedback.
+  .sv-capture-flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+
   .sv-task-panel > .sv-panel-header > .sv-task-subject {
     display: flex;
     align-items: center;
@@ -638,6 +648,15 @@ $color-component-meta-light: #d9d998;
   text-overflow: ellipsis;
   padding-left: 3px;
   flex-basis: 50%;
+}
+
+// The captured picture flying into the save confirmation; see CaptureFeedback.
+.sv-capture-snapshot {
+  position: fixed;
+  z-index: 10000;
+  transform-origin: 0 0;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
 }
 
 .sv-task-item-full {

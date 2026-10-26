@@ -34,6 +34,9 @@ export default class ExplorerPanel extends CustomElement
     @property({ attribute: false })
     application: ExplorerApplication;
 
+    /** The element framing the 3D view, available once connected. */
+    viewport: HTMLElement = null;
+
     constructor(application?: ExplorerApplication)
     {
         super();
@@ -66,6 +69,7 @@ export default class ExplorerPanel extends CustomElement
 
         const lockableContainer = this.createElement("div", {position: "relative", flex: "1 1 auto", display: "flex", flexDirection: "row", marginLeft: "auto", marginRight: "auto", width: "100%"});
         lockableContainer.classList.add("sv-explorer-viewport");
+        this.viewport = lockableContainer;
         
         this.appendElement(new ExplorerLockToolbar(lockableContainer));
         this.appendElement(lockableContainer);
