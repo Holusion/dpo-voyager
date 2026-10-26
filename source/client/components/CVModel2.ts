@@ -142,8 +142,6 @@ export default class CVModel2 extends CObject3D
         return [
             this.ins.name,
             this.ins.visible,
-            this.ins.quality,
-            this.ins.localUnits,
             this.ins.tags,
             this.ins.renderOrder,
             this.ins.shadowSide,
