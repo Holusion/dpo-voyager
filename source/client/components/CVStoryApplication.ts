@@ -104,45 +104,18 @@ export default class CVStoryApplication extends Component
         const cvDocument = this.documentProvider.activeComponent;
 
         if (cvDocument) {
-            const storyMode = this.taskProvider.ins.mode.getValidatedValue();
-            let components: INodeComponents = null;
-            if (storyMode === ETaskMode.QC && (ins.save.changed || ins.download.changed)) {
-                components = { model: true };
-                Notification.show("Running in QC Mode: Saving model only, but no scene data.", "warning", 5000);
-            }
-
             if (ins.save.changed) {
-                const data = cvDocument.deflateDocument(components);
-                const json = JSON.stringify(data, (key, value) =>
-                    typeof value === "number" ? parseFloat(value.toFixed(7)) : value);
-
-                if(storyMode !== ETaskMode.Standalone) {
-                    this.assetWriter.putJSON(json, cvDocument.assetPath)
-                    .then(() => new Notification(`Successfully uploaded file to '${cvDocument.assetPath}'`, "info", 4000))
-                    .catch(e => new Notification(`Failed to upload file to '${cvDocument.assetPath}'`, "error", 8000));
-                }
-                else {
-                    // Standalone save
-                    const fileManager : CVStandaloneFileManager = this.standaloneFileManager;
-                    const saveFiles = [];
-
-                    const fileName = this.assetManager.getAssetName(cvDocument.assetPath);
-                    saveFiles.push({ name: fileName, lastModified: new Date(), input: json });
-
-                    const files = fileManager.getFiles().filter(file => file != null && !file.name.endsWith(".json"));
-                    files.forEach(file => {
-                        saveFiles.push({ name: fileManager.getFilePath(file.name)+file.name, lastModified: new Date(), input: file });
-                    });
-               
-                    downloadZip(saveFiles).blob().then(blob => { // await for async
-                        const bloburl = URL.createObjectURL(blob);
-                        download.url(bloburl, "voyager-scene.zip");
-                    });
-                }
+                this.saveDocument()
+                .then(() => {
+                    if (this.taskProvider.ins.mode.getValidatedValue() !== ETaskMode.Standalone) {
+                        new Notification(`Successfully uploaded file to '${cvDocument.assetPath}'`, "info", 4000);
+                    }
+                })
+                .catch(e => new Notification(`Failed to upload file to '${cvDocument.assetPath}'`, "error", 8000));
             }
 
             if (ins.download.changed) {
-                const data = cvDocument.deflateDocument(components);
+                const data = cvDocument.deflateDocument(this.getSavedComponents());
                 const json = JSON.stringify(data, null, 2);
 
                 const fileName = this.assetManager.getAssetName(cvDocument.assetPath);
@@ -152,6 +125,51 @@ export default class CVStoryApplication extends Component
 
 
         return false;
+    }
+
+    /**
+     * Saves the active document, or downloads the scene package in standalone mode.
+     * Rejects if the document could not be saved.
+     */
+    async saveDocument(): Promise<void>
+    {
+        const cvDocument = this.documentProvider.activeComponent;
+        if (!cvDocument) {
+            throw new Error("no active document");
+        }
+
+        const data = cvDocument.deflateDocument(this.getSavedComponents());
+        const json = JSON.stringify(data, (key, value) =>
+            typeof value === "number" ? parseFloat(value.toFixed(7)) : value);
+
+        if (this.taskProvider.ins.mode.getValidatedValue() !== ETaskMode.Standalone) {
+            return this.assetWriter.putJSON(json, cvDocument.assetPath);
+        }
+
+        // Standalone save
+        const fileManager : CVStandaloneFileManager = this.standaloneFileManager;
+        const saveFiles = [];
+
+        const fileName = this.assetManager.getAssetName(cvDocument.assetPath);
+        saveFiles.push({ name: fileName, lastModified: new Date(), input: json });
+
+        const files = fileManager.getFiles().filter(file => file != null && !file.name.endsWith(".json"));
+        files.forEach(file => {
+            saveFiles.push({ name: fileManager.getFilePath(file.name)+file.name, lastModified: new Date(), input: file });
+        });
+
+        const blob = await downloadZip(saveFiles).blob();
+        download.url(URL.createObjectURL(blob), "voyager-scene.zip");
+    }
+
+    // QC mode saves the model only.
+    protected getSavedComponents(): INodeComponents
+    {
+        if (this.taskProvider.ins.mode.getValidatedValue() !== ETaskMode.QC) {
+            return null;
+        }
+        Notification.show("Running in QC Mode: Saving model only, but no scene data.", "warning", 5000);
+        return { model: true };
     }
 
     /**

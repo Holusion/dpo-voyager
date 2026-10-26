@@ -61,13 +61,9 @@ export default class CaptureTaskView extends TaskView<CVCaptureTask>
         const image = imageElement ? html`<div class="sv-label">Preview</div>
             <div class="sv-image">${imageElement}</div>` : null;
 
-        return html`<div class="sv-label">${languageManager.getUILocalizedString("Scene State")}</div>
+        return html`<div class="sv-label">${languageManager.getUILocalizedString("Thumbnail Images")}</div>
             <div class="sv-commands">
-                <ff-button text="${languageManager.getUILocalizedString("Capture")}" icon="camera" @click=${this.onClickTake}></ff-button>
-                <ff-button text="${languageManager.getUILocalizedString("View")}" icon="document" @click=${this.onClickRestore}></ff-button>
-            </div>
-            <div class="sv-label">${languageManager.getUILocalizedString("Thumbnail Images")}</div>
-            <div class="sv-commands">
+                <ff-button text="${languageManager.getUILocalizedString("Take Screenshot")}" icon="camera" @click=${this.onClickTake}></ff-button>
                 <ff-button text="${languageManager.getUILocalizedString("Save")}" icon="save" ?disabled=${!ready} @click=${this.onClickSave}></ff-button>
                 <ff-button text="${languageManager.getUILocalizedString("Download")}" icon="download" ?disabled=${!ready} @click=${this.onClickDownload}></ff-button>
             </div>
@@ -91,11 +87,6 @@ export default class CaptureTaskView extends TaskView<CVCaptureTask>
     protected onClickDownload()
     {
         this.task.ins.download.set();
-    }
-
-    protected onClickRestore()
-    {
-        this.task.ins.restore.set();
     }
 
     protected onPictureTaken()

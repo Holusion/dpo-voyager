@@ -194,7 +194,7 @@ export default class CVSetup extends Component
     }
 
     // Caches current setup state for future saving.
-    protected cacheSetupState()
+    cacheSetupState()
     {
         const features = CVSetup.featureMap;
 

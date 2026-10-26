@@ -18,11 +18,12 @@
 import System from "@ff/graph/System";
 
 import "@ff/ui/Button";
-import Button, { IButtonClickEvent } from "@ff/ui/Button";
 
 import SystemView, { customElement, html } from "@ff/scene/ui/SystemView";
 
 import CVStoryApplication from "../../components/CVStoryApplication";
+import CVCaptureTask from "../../components/CVCaptureTask";
+import CVTask from "../../components/CVTask";
 import CVTaskProvider, { ETaskMode, IActiveTaskEvent, ITaskSetEvent } from "../../components/CVTaskProvider";
 import CVAssetReader from "../../components/CVAssetReader";
 import CVLanguageManager from "client/components/CVLanguageManager";
@@ -84,18 +85,23 @@ export default class TaskBar extends SystemView
         const exitButtonVisible = taskMode !== ETaskMode.Standalone;
         const languageManager = this.language;
         const saveName = languageManager.getUILocalizedString(taskMode !== ETaskMode.Standalone ? "Save" : "Download");
+        // Capture saves the scene, so it sits with the save commands.
+        const capture = tasks.find(task => task instanceof CVCaptureTask);
+        const renderTask = (task: CVTask) => html`<ff-button text=${languageManager.getUILocalizedString(task.text)} icon=${task.icon}
+            ?selected=${task === activeTask} @click=${() => this.toggleTask(task)}></ff-button>`;
         return html`
             <img class="sv-story-logo" src=${this.assetReader.getSystemAssetUrl("images/voyager-75grey.svg")} alt="Logo"/>
             <div class="sv-mode ff-text">${taskModeText}</div>
             <div class="sv-spacer"></div>
             <div class="sv-divider"></div>
-            <div class="ff-flex-row ff-group" @click=${this.onClickTask}>
-                ${tasks.map((task, index) => html`<ff-button text=${languageManager.getUILocalizedString(task.text)} icon=${task.icon} index=${index} ?selected=${task === activeTask}></ff-button>`)}
+            <div class="ff-flex-row ff-group">
+                ${tasks.filter(task => task !== capture).map(renderTask)}
             </div>
             <div class="sv-divider"></div>
             <div class="sv-spacer"></div>
             <div class="sv-divider"></div>
             <div class="ff-flex-row ff-group">
+                ${capture ? renderTask(capture) : null}
                 <ff-button text=${saveName} icon="save" @click=${this.onClickSave}></ff-button>
                 ${downloadButtonVisible ? html`<ff-button text="${languageManager.getUILocalizedString("Download")}" icon="download" @click=${this.onClickDownload}></ff-button>` : null}
                 ${exitButtonVisible ? html`<ff-button text="${languageManager.getUILocalizedString("Exit")}" icon="exit" @click=${this.onClickExit}></ff-button>` : null}
@@ -103,18 +109,20 @@ export default class TaskBar extends SystemView
         `;
     }
 
-    protected onClickTask(event: IButtonClickEvent)
+    protected toggleTask(task: CVTask)
     {
-        if (event.target instanceof Button) {
-            const tasks = this.taskProvider.scopedComponents;
-            const task = tasks[event.target.index];
-            this.taskProvider.activeComponent = this.taskProvider.activeComponent === task ? null : task;
-        }
+        this.taskProvider.activeComponent = this.taskProvider.activeComponent === task ? null : task;
     }
 
     protected onClickSave()
     {
-        this.story.ins.save.set();
+        const task = this.taskProvider.activeComponent;
+        if (task instanceof CVCaptureTask && task.savesSceneState) {
+            task.ins.saveSceneState.set();
+        }
+        else {
+            this.story.ins.save.set();
+        }
     }
 
     protected onClickDownload()

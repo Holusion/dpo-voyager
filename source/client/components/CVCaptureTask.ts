@@ -31,12 +31,14 @@ import NVNode from "../nodes/NVNode";
 import CVMeta from "./CVMeta";
 import CVModel2 from "./CVModel2";
 import CVAssetManager from "./CVAssetManager";
+import CVAssetWriter from "./CVAssetWriter";
+import CVStoryApplication from "./CVStoryApplication";
+import CVTaskProvider, { ETaskMode } from "./CVTaskProvider";
 import CVTask from "./CVTask";
 
 import CaptureTaskView from "../ui/story/CaptureTaskView";
 import { TImageQuality, TImageUsage } from "client/schema/meta";
 import CVNodeProvider from "./CVNodeProvider";
-import CVStandaloneFileManager from "./CVStandaloneFileManager";
 import CVDocument from "./CVDocument";
 import CVAnnotationView from "./CVAnnotationView";
 
@@ -83,7 +85,7 @@ export default class CVCaptureTask extends CVTask
         remove: types.Event("Picture.Remove"),
         type: types.Enum("Picture.Type", EFileType),
         quality: types.Percent("Picture.Quality", 0.85),
-        restore: types.Event("State.Restore"),
+        saveSceneState: types.Event("State.Save"),
     };
 
     protected static readonly outs = {
@@ -102,6 +104,7 @@ export default class CVCaptureTask extends CVTask
     private _imageElements: Dictionary<HTMLImageElement> = {};
     private _mimeType: string = "";
     private _extension: string = "";
+    private _savingSceneState = false;
 
     constructor(node: Node, id: string)
     {
@@ -110,7 +113,7 @@ export default class CVCaptureTask extends CVTask
         const configuration = this.configuration;
         //configuration.interfaceVisible = false;
         //configuration.annotationsVisible = false;
-        configuration.bracketsVisible = true;
+        configuration.bracketsVisible = false;
         //configuration.gridVisible = false;
     }
 
@@ -120,11 +123,24 @@ export default class CVCaptureTask extends CVTask
     protected get assetManager() {
         return this.getMainComponent(CVAssetManager);
     }
+    protected get assetWriter() {
+        return this.getMainComponent(CVAssetWriter);
+    }
+    protected get storyApplication() {
+        return this.getMainComponent(CVStoryApplication);
+    }
     protected get nodeProvider() {
         return this.getMainComponent(CVNodeProvider);
     }
     protected get setup() {
         return this.activeDocument.setup;
+    }
+
+    /** QC saves the model only and Standalone downloads a package, so neither saves the scene state. */
+    get savesSceneState()
+    {
+        const mode = this.getMainComponent(CVTaskProvider).ins.mode.getValidatedValue();
+        return mode !== ETaskMode.QC && mode !== ETaskMode.Standalone;
     }
 
     getImageElement(quality: EDerivativeQuality = EDerivativeQuality.Low)
@@ -150,12 +166,15 @@ export default class CVCaptureTask extends CVTask
         const ins = this.ins;
 
         if (ins.take.changed) {
-            const typeIndex = ins.type.getValidatedValue();
-            this.takePictures(ins.quality.value, _mimeTypes[typeIndex], _typeExtensions[typeIndex]);
-            this.setup.ins.saveState.set();
+            this.takeConfiguredPictures();
         }
         if (ins.save.changed) {
-            this.savePictures();
+            this.savePictures()
+            .then(() => new Notification("Saved thumbnail images.", "info", 4000))
+            .catch(e => new Notification(`Failed to save thumbnail images: ${e.message}`, "error", 8000));
+        }
+        if (ins.saveSceneState.changed) {
+            this.saveSceneState();
         }
         if (ins.download.changed) {
             this.downloadPicture();
@@ -163,11 +182,47 @@ export default class CVCaptureTask extends CVTask
         if (ins.remove.changed) {
             this.removePictures();
         }
-        if (ins.restore.changed) {
-            this.restoreState();
-        }
 
         return true;
+    }
+
+    /**
+     * Caches the current setup as the scene state, adds a thumbnail if the scene has none, and saves the document.
+     * Reports a single outcome, so a failure at any step is reported as an unsaved scene.
+     */
+    protected async saveSceneState()
+    {
+        if (this._savingSceneState) {
+            return;
+        }
+        this._savingSceneState = true;
+
+        try {
+            this.setup.cacheSetupState();
+
+            const root = this.activeDocument.root;
+            const hasThumbnail = !!root.meta?.images.items.some(image => image.usage === "Render");
+            if (!hasThumbnail) {
+                this.activeMeta = root.meta || root.createComponent(CVMeta);
+                this.takeConfiguredPictures();
+                await this.savePictures();
+            }
+
+            await this.storyApplication.saveDocument();
+            new Notification(hasThumbnail ? "Scene state saved." : "Scene state and thumbnail saved.", "success", 4000);
+        }
+        catch (e) {
+            new Notification(`Scene NOT saved: ${e.message}. Save again before leaving.`, "error", 0);
+        }
+        finally {
+            this._savingSceneState = false;
+        }
+    }
+
+    protected takeConfiguredPictures()
+    {
+        const typeIndex = this.ins.type.getValidatedValue();
+        this.takePictures(this.ins.quality.value, _mimeTypes[typeIndex], _typeExtensions[typeIndex]);
     }
 
     protected takePictures(compressionQuality: number, type: string, extension: string)
@@ -209,40 +264,19 @@ export default class CVCaptureTask extends CVTask
         this.outs.ready.setValue(true);
     }
 
-    protected savePictures()
+    /** Uploads every image quality, and records them in the scene's meta only once all have been stored. */
+    protected async savePictures()
     {
         if (!this.outs.ready.value) {
-            return;
+            throw new Error("no picture taken");
         }
 
-        _qualityLevels.forEach(quality => {
-            const dataURI = this._imageDataURIs[quality];
-            const filePath = this.getImageAssetPath(quality, this._extension);
-            const fileURL = this.assetManager.getAssetUrl(filePath);
-            const fileName = this.assetManager.getAssetName(filePath);
-            const blob = convert.dataURItoBlob(dataURI);
-            const standaloneFM = this.graph.getMainComponent(CVStandaloneFileManager, true);
+        const mimeType = this._mimeType;
+        const filePaths = _qualityLevels.map(quality => this.getImageAssetPath(quality, this._extension));
+        await Promise.all(_qualityLevels.map((quality, index) =>
+            this.assetWriter.put(convert.dataURItoBlob(this._imageDataURIs[quality]), mimeType, filePaths[index])));
 
-            if(standaloneFM) {
-                standaloneFM.addFile(filePath, [blob]);
-                this.updateImageMeta(quality, this._mimeType, filePath);
-                new Notification(`Saved ${fileName} to scene package.`, "info", 4000);    
-            }
-            else {
-                const file = new File([blob], fileName);
-                fetch(fileURL, {
-                    method:"PUT",
-                    body: file,
-                })
-                .then(() => {
-                    this.updateImageMeta(quality, this._mimeType, filePath);
-                    new Notification(`Successfully uploaded image to '${fileURL}'`, "info", 4000);
-                })
-                .catch(e => {
-                    new Notification(`Failed to upload image to '${fileURL}'`, "error", 8000);
-                });
-            }
-        });
+        _qualityLevels.forEach((quality, index) => this.updateImageMeta(quality, mimeType, filePaths[index]));
     }
 
     protected downloadPicture()
@@ -354,10 +388,5 @@ export default class CVCaptureTask extends CVTask
                 }
             });
         }
-    }
-
-    protected restoreState()
-    {
-        this.setup.ins.restoreState.set();
     }
 }

@@ -33,6 +33,7 @@ import NavigatorPanel from "./NavigatorPanel";
 import CVTaskProvider from "../../components/CVTaskProvider";
 import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDocumentProvider";
 import CVActionsTask from "../../components/CVActionsTask";
+import CVCaptureTask from "../../components/CVCaptureTask";
 import CVCollectionTask from "../../components/CVCollectionTask";
 import CVToursTask from "../../components/CVToursTask";
 
@@ -248,6 +249,8 @@ export default class MainView extends CustomElement
     protected onTask()
     {
         const task = this.taskProvider.activeComponent;
+        // Capture overlays the thumbnail crop box on the viewport; see styles.scss.
+        this.classList.toggle("sv-capture-active", task instanceof CVCaptureTask);
         this.taskSubscriber.off();
         if (task instanceof CVCollectionTask) {
             this.taskSubscriber.on(task.ins.showNotes);
