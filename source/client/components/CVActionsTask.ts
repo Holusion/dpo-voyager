@@ -67,6 +67,8 @@ export default class CVActionsTask extends CVTask
     };
 
     protected static readonly outs = {
+        /** True while the selected action is a state change, which the Story workspace edits in the states panel. */
+        editsState: types.Boolean("Action.EditsState"),
     };
 
     ins = this.addInputs<CVTask, typeof CVActionsTask.ins>(CVActionsTask.ins);
@@ -205,6 +207,7 @@ export default class CVActionsTask extends CVTask
                 else {
                     ins.animation.setValue(null , true, true);
                 }
+                this.updateEditsState();
             }
 
             if(action) {
@@ -221,6 +224,7 @@ export default class CVActionsTask extends CVTask
         const action = this.meta && this.meta.actions.get(ins.activeId.value);
         const audioManager = this.activeDocument.setup.audio;
 
+        this.updateEditsState();
         if(action) {
             ins.name.setValue(action.name);
             ins.type.setValue(EActionType[action.type], true);
@@ -287,6 +291,13 @@ export default class CVActionsTask extends CVTask
 
             this.meta = next.meta;
         }
+        this.updateEditsState();
+    }
+
+    protected updateEditsState()
+    {
+        const action = this.meta && this.meta.actions.get(this.ins.activeId.value);
+        this.outs.editsState.setValue(!!action && EActionType[action.type] === EActionType.StateChange);
     }
 
     protected onActiveDocument(previous: CVDocument, next: CVDocument)

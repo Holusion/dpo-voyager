@@ -74,20 +74,6 @@ export default class StatePanel extends DocumentView
         this.subscriber = new Subscriber("value", this.onUpdate, this);
     }
 
-    protected connected()
-    {
-        super.connected();
-
-        this.activeDocument.setup.language.outs.uiLanguage.on("value", this.onUpdate, this);
-    }
-
-    protected disconnected()
-    {
-       
-        this.activeDocument.setup.language.outs.uiLanguage.off("value", this.onUpdate, this);
-        super.disconnected();
-    }
-
     protected render()
     {
         if(!this.activeDocument) {
@@ -252,10 +238,13 @@ export default class StatePanel extends DocumentView
         }
         if (next) {
             this.subscriber.on(
-                this.snapshots.outs.update
+                this.snapshots.outs.update,
+                next.setup.language.outs.uiLanguage
             );
         }
 
+        this.activeState = null;
+        this._activeIndex = null;
         this.requestUpdate();
     }
 

@@ -82,8 +82,22 @@ ff-dock-view {
   flex: 1 1 auto;
   font-size: 0.85em;
 
+  // The editors slide in below the explorer with an editor to show, and away without one; see MainView.
+  .sv-dock-sliding {
+    transition: flex-basis 260ms ease, opacity 180ms ease;
+  }
+  .sv-dock-collapsed {
+    flex-basis: 0% !important;
+    border-width: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
   .sv-dock-hidden {
     display: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sv-dock-sliding { transition: none; }
   }
 }
 

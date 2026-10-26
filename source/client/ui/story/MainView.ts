@@ -32,6 +32,7 @@ import HierarchyTreeView from "@ff/scene/ui/HierarchyTreeView";
 import NavigatorPanel from "./NavigatorPanel";
 import CVTaskProvider from "../../components/CVTaskProvider";
 import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDocumentProvider";
+import CVActionsTask from "../../components/CVActionsTask";
 import CVCollectionTask from "../../components/CVCollectionTask";
 import CVToursTask from "../../components/CVToursTask";
 
@@ -88,6 +89,8 @@ type EditorId = "article-editor" | "tour-editor" | "state-editor" | "notes";
 @customElement("voyager-story")
 export default class MainView extends CustomElement
 {
+    protected static readonly editors: EditorId[] = [ "article-editor", "tour-editor", "state-editor", "notes" ];
+
     protected application: StoryApplication;
     protected dockView: DockView;
 
@@ -95,6 +98,7 @@ export default class MainView extends CustomElement
     protected panels = new Map<string, DockPanel>();
 
     private layoutReady = false;
+    private slideEditors = false;
     private editor: EditorId = null;
     private documentSubscriber = new Subscriber("value", this.updatePanels, this);
     private taskSubscriber = new Subscriber("value", this.updatePanels, this);
@@ -188,15 +192,24 @@ export default class MainView extends CustomElement
         const panels = Array.from(this.dockView.getElementsByTagName(DockPanel.tagName)) as DockPanel[];
         panels.forEach(panel => this.panels.set(panel.getLayout().contentId, panel));
 
-        // The explorer takes the space the side columns leave.
+        // The explorer takes the space the side columns and the editors leave.
         this.getColumn("navigator").style.flexGrow = "0";
         this.getColumn("hierarchy").style.flexGrow = "0";
+        const editors = this.panels.get("article-editor").parentStack;
+        editors.style.flexGrow = "0";
+        editors.addEventListener("transitionend", event => {
+            if (event.target === editors && event.propertyName === "flex-basis") {
+                editors.classList.remove("sv-dock-sliding");
+                window.dispatchEvent(new Event("resize"));
+            }
+        });
 
         // Strips set their sizes from their first layout: everything must be visible until then.
         const strips = Array.from(this.dockView.getElementsByTagName(DockStrip.tagName)) as DockStrip[];
         Promise.all(strips.map(strip => strip.updateComplete)).then(() => {
             this.layoutReady = true;
             this.updatePanels();
+            this.slideEditors = true;
         });
     }
 
@@ -239,6 +252,9 @@ export default class MainView extends CustomElement
         if (task instanceof CVCollectionTask) {
             this.taskSubscriber.on(task.ins.showNotes);
         }
+        else if (task instanceof CVActionsTask) {
+            this.taskSubscriber.on(task.outs.editsState);
+        }
         this.updatePanels();
         this.selectContext(task ? "task" : "settings");
     }
@@ -254,11 +270,13 @@ export default class MainView extends CustomElement
         this.panels.get("task").available = !!tasks.activeComponent;
 
         const editor = this.getEditor();
+        MainView.editors.forEach(id => this.panels.get(id).available = id === editor);
         // An editor comes forward when it gets work.
         if (editor && editor !== this.editor) {
             this.panels.get(editor).activatePanel();
         }
         this.editor = editor;
+        this.showEditors(!!editor);
 
         const inspection = this.getColumn("hierarchy");
         if (inspection.classList.contains("sv-dock-hidden") === tasks.expertMode) {
@@ -279,7 +297,26 @@ export default class MainView extends CustomElement
         if (task instanceof CVCollectionTask && task.ins.showNotes.value) {
             return "notes";
         }
+        if (task instanceof CVActionsTask && task.outs.editsState.value) {
+            return "state-editor";
+        }
         return this.getContent<EditorPanel>("article-editor").editor.hasArticle ? "article-editor" : null;
+    }
+
+    /** The editors slide in below the explorer when there is one to show, and away when there is none. */
+    protected showEditors(show: boolean)
+    {
+        const editors = this.panels.get("article-editor").parentStack;
+        if (editors.classList.contains("sv-dock-collapsed") !== show) {
+            return;
+        }
+        if (this.slideEditors) {
+            editors.classList.add("sv-dock-sliding");
+        }
+        editors.classList.toggle("sv-dock-collapsed", !show);
+        editors.toggleAttribute("inert", !show);
+        editors.previousElementSibling.classList.toggle("sv-dock-hidden", !show);
+        window.dispatchEvent(new Event("resize"));
     }
 
     protected selectContext(id: "settings" | "task")
