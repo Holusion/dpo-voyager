@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Node, types } from "@ff/graph/Component";
+import { IComponentEvent, Node, types } from "@ff/graph/Component";
 
 import CComponentProvider, {
     EComponentScope,
@@ -54,6 +54,7 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
 
     private _assetsPanelActive = false;
     private _runningTask: CVTask = null;
+    private _switching = false;
 
     get activeComponent() {
         return super.activeComponent;
@@ -123,6 +124,19 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
     {
     }
 
+    protected onComponent(event: IComponentEvent)
+    {
+        // A task disposed while running has stopped itself (see CVTask.dispose).
+        if (event.remove && event.object === this._runningTask) {
+            this._runningTask = null;
+            if (this._assetsPanelActive) {
+                this._assetsPanelActive = false;
+                this.run(this.activeComponent);
+            }
+        }
+        super.onComponent(event);
+    }
+
     dispose()
     {
         this.activeComponent = null;
@@ -133,16 +147,41 @@ export default class CVTaskProvider extends CComponentProvider<CVTask>
     /**
      * Tasks start and stop here only, so that at most one task runs: the active task,
      * or the Assets task while the Assets tab is shown.
+     * Starting or stopping a task can't switch tasks itself. If a task fails to start or stop,
+     * no task is left running or selected, and the error is rethrown.
      */
     private run(task: CVTask)
     {
+        if (this._switching) {
+            throw new Error("can't switch tasks while a task starts or stops");
+        }
         const running = this._runningTask;
         if (task === running) {
             return;
         }
+
+        this._switching = true;
         this._runningTask = null;
-        running?.deactivateTask();
-        task?.activateTask();
-        this._runningTask = task;
+        let starting: CVTask = null;
+        try {
+            running?.deactivateTask();
+            starting = task;
+            task?.activateTask();
+            this._runningTask = task;
+        }
+        catch (error) {
+            // Stopping undoes what a task set up before it failed to start.
+            try {
+                starting?.deactivateTask();
+            }
+            catch (stopError) {
+                console.error(stopError);
+            }
+            this._switching = false;
+            this._assetsPanelActive = false;
+            super.activeComponent = null;
+            throw error;
+        }
+        this._switching = false;
     }
 }
