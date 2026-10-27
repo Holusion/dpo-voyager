@@ -217,6 +217,9 @@ export default class MainView extends CustomElement
         this.getColumn("hierarchy").style.flexGrow = "0";
         const editors = this.panels.get("article-editor").parentStack;
         editors.style.flexGrow = "0";
+        // The explorer and the editors have their own headers; the task picks the editor.
+        editors.classList.add("sv-dock-untabbed");
+        this.panels.get("explorer").parentStack.classList.add("sv-dock-untabbed");
         editors.addEventListener("transitionend", event => {
             if (event.target === editors && event.propertyName === "flex-basis") {
                 editors.classList.remove("sv-dock-sliding");

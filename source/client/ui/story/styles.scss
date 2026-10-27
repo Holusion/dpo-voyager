@@ -136,7 +136,7 @@ ff-dock-view {
     opacity: 0;
     pointer-events: none;
   }
-  .sv-dock-hidden {
+  .sv-dock-hidden, .sv-dock-untabbed > header {
     display: none !important;
   }
 
