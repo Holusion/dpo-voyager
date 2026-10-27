@@ -220,6 +220,7 @@ export default class CVSetup extends Component
             }
         }
 
+        this.tours.ins.enabled.reset();
         this.slicer.ins.color.set();  
         this.reader.ins.enabled.set();
         this.reader.ins.position.set();

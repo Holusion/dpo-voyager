@@ -322,7 +322,7 @@ export default class CVTours extends Component
             });
         });
 
-        this.ins.tourIndex.setValue(-1);
+        this.ins.tourIndex.reset();
         this.outs.count.setValue(this._tours.length);
     }
 

@@ -257,7 +257,7 @@ export default class CVReader extends Component
         this.ins.setValues({
             enabled: !!data.enabled,
             position: EReaderPosition[data.position] || EReaderPosition.Overlay,
-            //articleId: data.articleId || "",
+            articleId: null
         });
     }
 

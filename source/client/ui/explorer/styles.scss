@@ -1396,7 +1396,6 @@ $tour-entry-indent: 12px;
 
 .sv-tool-bar {
   color: common.$color-text;
-  pointer-events: auto;
   
   .sv-tool-buttons {
     flex: 1 1 auto;
@@ -1434,6 +1433,7 @@ $tour-entry-indent: 12px;
   position: relative;
   bottom: 0px;
   width: 100%;
+  pointer-events: none;
 }
 
 .sv-tool-controls {
