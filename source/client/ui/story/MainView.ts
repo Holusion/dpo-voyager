@@ -101,6 +101,8 @@ export default class MainView extends CustomElement
 
     protected registry: DockContentRegistry;
     protected panels = new Map<string, DockPanel>();
+    /** The tab texts of the layout, in English. */
+    protected tabTexts = new Map<string, string>();
 
     private layoutReady = false;
     private slideEditors = false;
@@ -109,6 +111,7 @@ export default class MainView extends CustomElement
     private captureFeedback = new CaptureFeedback(() => this.getContent<ExplorerPanel>("explorer").viewport);
     private documentSubscriber = new Subscriber("value", this.updatePanels, this);
     private taskSubscriber = new Subscriber("value", this.updatePanels, this);
+    private languageSubscriber = new Subscriber("value", this.translateTabs, this);
 
     protected get taskProvider() {
         return this.application.system.getMainComponent(CVTaskProvider);
@@ -202,7 +205,11 @@ export default class MainView extends CustomElement
         this.dockView.setLayout(MainView.layout, this.registry);
 
         const panels = Array.from(this.dockView.getElementsByTagName(DockPanel.tagName)) as DockPanel[];
-        panels.forEach(panel => this.panels.set(panel.getLayout().contentId, panel));
+        panels.forEach(panel => {
+            const { contentId, text } = panel.getLayout();
+            this.panels.set(contentId, panel);
+            this.tabTexts.set(contentId, text);
+        });
         this.getContent<HTMLElement>("derivatives").classList.add("sv-panel", "sv-panel-content");
 
         // The explorer takes the space the side columns and the editors leave.
@@ -248,6 +255,7 @@ export default class MainView extends CustomElement
         this.captureFeedback.attach(null);
         this.documentSubscriber.off();
         this.taskSubscriber.off();
+        this.languageSubscriber.off();
     }
 
     protected onTaskMode()
@@ -260,10 +268,22 @@ export default class MainView extends CustomElement
     protected onActiveDocument(event: IActiveDocumentEvent)
     {
         this.documentSubscriber.off();
+        this.languageSubscriber.off();
         if (event.next) {
             this.documentSubscriber.on(event.next.setup.tours.ins.enabled, event.next.setup.tours.outs.tourIndex);
+            this.languageSubscriber.on(event.next.setup.language.outs.uiLanguage);
         }
         this.updatePanels();
+        this.translateTabs();
+    }
+
+    /** Tabs follow the interface language. */
+    protected translateTabs()
+    {
+        const language = this.documentProvider.activeComponent?.setup.language;
+        this.tabTexts.forEach((text, id) => {
+            this.panels.get(id).text = language ? language.getUILocalizedString(text) : text;
+        });
     }
 
     protected onActiveNode(event: IActiveNodeEvent)
