@@ -307,7 +307,9 @@ export default class MainView extends CustomElement
             }
         }
         this.panels.get("derivatives").available = !!assetsTask && !!this.nodeProvider.activeNode?.model;
-        this.panels.get("task").available = !!tasks.activeComponent;
+        const task = tasks.activeComponent;
+        this.panels.get("task").available = !!task;
+        this.panels.get("task").icon = task ? task.icon : "";
 
         const editor = this.getEditor();
         MainView.editors.forEach(id => this.panels.get(id).available = id === editor);
@@ -412,10 +414,12 @@ export default class MainView extends CustomElement
                 activePanelIndex: 0,
                 panels: [{
                     contentId: "settings",
-                    text: "Settings"
+                    text: "Settings",
+                    icon: "eye"
                 }, {
                     contentId: "derivatives",
-                    text: "Assets"
+                    text: "Assets",
+                    icon: "hierarchy"
                 }, {
                     contentId: "task",
                     text: "Task"
