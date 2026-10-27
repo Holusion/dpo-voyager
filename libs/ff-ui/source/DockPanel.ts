@@ -23,6 +23,7 @@ export interface IDockPanelLayout
 {
     contentId: string;
     text?: string;
+    icon?: string;
     closable?: boolean;
     movable?: boolean;
 }
@@ -40,6 +41,10 @@ export default class DockPanel extends CustomElement
 
     @property({ type: String })
     text: string = "Panel";
+
+    /** Name of the icon shown before the text in the panel's tab, if any. */
+    @property({ type: String })
+    icon: string = "";
 
     @property({ type: Boolean })
     closable: boolean = true;
@@ -84,6 +89,7 @@ export default class DockPanel extends CustomElement
     setLayout(layout: IDockPanelLayout, registry: DockContentRegistry)
     {
         this.text = layout.text || "";
+        this.icon = layout.icon || "";
         this.closable = layout.closable || false;
         this.movable = layout.movable || false;
         this.contentId = layout.contentId;
@@ -104,6 +110,7 @@ export default class DockPanel extends CustomElement
         return {
             contentId: this.contentId,
             text: this.text,
+            icon: this.icon,
             closable: this.closable,
             movable: this.movable
         };

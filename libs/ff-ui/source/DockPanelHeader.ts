@@ -83,6 +83,7 @@ export default class DockPanelHeader extends CustomElement
             : (movable ? html`<ff-icon name="grip"></ff-icon>` : null);
 
         return html`
+            ${this.panel.icon ? html`<ff-icon class="ff-dock-panel-icon" name=${this.panel.icon}></ff-icon>` : null}
             <label class="ff-text">${text}</label>
             ${icon}
         `;
