@@ -541,10 +541,8 @@ export default class CVModel2 extends CObject3D
             });
         }
         
-        if (data.shader) {
-            console.log("fromSavedDocument - shader", data.shader);
-            ins.shader.setValue(data.shader);
-        }
+
+        ins.shader.setValue(data.shader?? ins.shader.schema.preset);
 
         ins.slicerEnabled.setValue(typeof data.slicerEnabled != "boolean" || data.slicerEnabled);
 

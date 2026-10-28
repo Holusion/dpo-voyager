@@ -73,7 +73,7 @@ export default class CVViewer extends Component
         activeTags: types.Tags("Tags.Active"),
         sortedTags: types.Tags("Tags.Sorted"),
         radioTags: types.Boolean("Tags.Radio"),
-        shader: types.Enum("Renderer.Shader", EShaderMode),
+        shader: types.Option("Renderer.Shader", [...Object.keys(EShaderMode).filter(key => isNaN(Number(key))), "None"], Object.keys(EShaderMode).filter(key => isNaN(Number(key))).length),
         variant: types.Option("Renderer.Variant", [], 0),
         toneMapping: types.Boolean("Renderer.ToneMapping", false),
         exposure: types.Number("Renderer.Exposure", 1),
@@ -162,12 +162,23 @@ export default class CVViewer extends Component
         this.graph.components.on(Component, this.onAnyComponent, this);
         this.outs.tagCloud.on("value", this.onTagCloudUpdate, this);
 
+        const models = this.getGraphComponents(CVModel2);
+        models.forEach(model => {
+            model.ins.shader.on("value", this.updateViewerShader, this);
+        });
+
         this.ar.ins.wallMount.linkFrom(this.ins.isWallMountAR);
         this.ar.ins.arScale.linkFrom(this.ins.arScale);
     }
 
     dispose()
     {
+
+        const models = this.getGraphComponents(CVModel2);
+        models.forEach(model => {
+            model.ins.shader.off("value", this.updateViewerShader, this);
+        });
+
         this.outs.tagCloud.off("value", this.onTagCloudUpdate, this);
         this.graph.components.off(CVModel2, this.onModelComponent, this);
         this.graph.components.off(CLight, this.onLightComponent, this);
@@ -188,7 +199,7 @@ export default class CVViewer extends Component
             });
             ins.shader.setValue(EShaderMode.Default);
         }
-        if (ins.shader.changed) {
+        if (ins.shader.changed && ins.shader.value < ins.shader.schema.options?.length -1 ) {
             const shader = ins.shader.getValidatedValue();
             this.getGraphComponents(CVModel2).forEach(model => model.ins.shader.setValue(shader));
         }
@@ -258,6 +269,22 @@ export default class CVViewer extends Component
         }
 
         return true;
+    }
+
+    updateViewerShader(shaderValue){
+        if (shaderValue == this.ins.shader.value){
+            return;
+        }
+
+        const models = this.getGraphComponents(CVModel2);
+        if (models.length > 0) {
+            const firstModelShader = models[0].ins.shader.value;
+            if (models.some(model => model.ins.shader.value != firstModelShader)) {
+                this.ins.shader.setValue(this.ins.shader.schema.preset ,false);
+            } else {
+                this.ins.shader.setValue(firstModelShader, false);
+            }
+        }
     }
 
     // preRender(context)
@@ -438,8 +465,10 @@ export default class CVViewer extends Component
             component.on<ITagUpdateEvent>("tag-update", this.refreshTagCloud, this);
             component.on<IModelLoadEvent>("model-load", this.onModelLoad, this);
             component.on<IModelErrorEvent>("model-error", this.onModelError, this);
+            component.ins.shader.on('value', this.updateViewerShader, this);
         }
         else if (event.remove) {
+            component.ins.shader.off('value', this.updateViewerShader, this);
             component.off<ITagUpdateEvent>("tag-update", this.refreshTagCloud, this);
             component.off<IModelLoadEvent>("model-load", this.onModelLoad, this);
             component.off<IModelErrorEvent>("model-error", this.onModelError, this);
