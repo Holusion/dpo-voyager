@@ -51,11 +51,7 @@ import CVAnnotations from "../components/CVAnnotations";
 import CVAnnotationView from "../components/CVAnnotationView";
 import CVStaticAnnotationView from "client/components/CVStaticAnnotationView";
 import CVCamera from "../components/CVCamera";
-import CVDirectionalLight from "../components/lights/CVDirectionalLight";
-import CVSunLight from "../components/lights/CVSunLight";
-import CVPointLight from "../components/lights/CVPointLight";
-import CVSpotLight from "../components/lights/CVSpotLight";
-import CVEnvironmentLight from "../components/lights/CVEnvironmentLight";
+import { lightTypes } from "../components/lights/lightTypes";
 
 import CVInterface from "../components/CVInterface";
 import CVViewer from "../components/CVViewer";
@@ -81,25 +77,13 @@ import NVDocuments from "../nodes/NVDocuments";
 import NVScene from "../nodes/NVScene";
 import NVNode from "../nodes/NVNode";
 
-import CVAmbientLight from "client/components/lights/CVAmbientLight";
-import CVHemisphereLight from "client/components/lights/CVHemisphereLight";
-import CVRectLight from "client/components/lights/CVRectLight";
 import CVDerivativesController from "client/components/CVDerivativesController";
 import CVImagePlane from "client/components/CVImagePlane";
 
 
 ////////////////////////////////////////////////////////////////////////////////
 
-export const lightTypes = [
-    CVDirectionalLight,
-    CVPointLight,
-    CVSpotLight,
-    CVAmbientLight,
-    CVHemisphereLight,
-    CVRectLight,
-    CVEnvironmentLight,
-    CVSunLight,
-] as const;
+export { lightTypes };
 
 const types = [
     CGraph,

@@ -58,23 +58,27 @@ export default class CVSetup extends Component
 
     ins = this.addInputs(CVSetup.ins);
 
-    protected static readonly featureMap = {
-        "interface": CVInterface,
-        "reader": CVReader,
-        "viewer": CVViewer,
-        "navigation": CVOrbitNavigation,
-        "derivatives": CVDerivativesController, 
-        "background": CVBackground,
-        "environment": CVEnvironment,
-        "language": CVLanguageManager,
-        "floor": CVFloor,
-        "grid": CVGrid,
-        "tape": CVTape,
-        "slicer": CVSlicer,
-        "tours": CVTours,
-        "audio": CVAudioManager,
-        "actions": CVActionManager
-    };
+    // A getter rather than a static field: the feature components import CVSetup back
+    // (directly or through CVModel2), so they may not be initialized yet when this class is.
+    protected static get featureMap() {
+        return {
+            "interface": CVInterface,
+            "reader": CVReader,
+            "viewer": CVViewer,
+            "navigation": CVOrbitNavigation,
+            "derivatives": CVDerivativesController,
+            "background": CVBackground,
+            "environment": CVEnvironment,
+            "language": CVLanguageManager,
+            "floor": CVFloor,
+            "grid": CVGrid,
+            "tape": CVTape,
+            "slicer": CVSlicer,
+            "tours": CVTours,
+            "audio": CVAudioManager,
+            "actions": CVActionManager
+        };
+    }
 
     get featureMap() {
         return (this.constructor as typeof CVSetup).featureMap;

@@ -20,7 +20,7 @@ import System from "@ff/graph/System";
 import Tree, { customElement, property, PropertyValues, html } from "@ff/ui/Tree";
 
 import { IComponentEvent, INodeChangeEvent } from "@ff/graph/Node";
-import { lightTypes } from "../../applications/coreTypes";
+import { lightTypes } from "../../components/lights/lightTypes";
 import CVDocumentProvider, { IActiveDocumentEvent } from "../../components/CVDocumentProvider";
 import CVLanguageManager from "../../components/CVLanguageManager";
 import CVNodeProvider, { IActiveNodeEvent, INodesEvent } from "../../components/CVNodeProvider";

@@ -28,7 +28,7 @@ import { ICVLight, CLight } from "../components/lights/CVLight";
 import CVMeta from "../components/CVMeta";
 import CVModel2 from "../components/CVModel2";
 import CVScene from "../components/CVScene";
-import { lightTypes } from "client/applications/coreTypes";
+import { lightTypes } from "../components/lights/lightTypes";
 import CVImagePlane from "client/components/CVImagePlane";
 
 ////////////////////////////////////////////////////////////////////////////////
