@@ -30,6 +30,7 @@ import { ENavigationType, TNavigationType, INavigation } from "client/schema/set
 import CVScene from "./CVScene";
 import CVAssetManager from "./CVAssetManager";
 import CVARManager from "./CVARManager";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -67,24 +68,24 @@ export default class CVOrbitNavigation extends CObject3D
     static readonly icon: string = "";
 
     protected static readonly ins = {
-        enabled: types.Boolean("Settings.Enabled", true),
+        enabled: types.Boolean("Settings.Enabled", { preset: true, persist: "always" }),
         pointerEnabled: types.Boolean("Settings.PointerEnabled", true),
         promptEnabled: types.Boolean("Settings.PromptEnabled", true),
         isInUse: types.Boolean("Camera.IsInUse", false),
         preset: types.Enum("Camera.ViewPreset", EViewPreset, EViewPreset.None),
         projection: types.Enum("Camera.Projection", EProjection, EProjection.Perspective),
-        lightsFollowCamera: types.Boolean("Navigation.LightsFollowCam", true),
-        autoRotation: types.Boolean("Navigation.AutoRotation", false),
+        lightsFollowCamera: types.Boolean("Navigation.LightsFollowCam", { preset: true, persist: "capture" }),
+        autoRotation: types.Boolean("Navigation.AutoRotation", { preset: false, persist: "always" }),
         autoRotationSpeed: types.Number("Navigation.AutoRotationSpeed", 10),
-        mode: types.Enum("Navigation.Mode", ENavigationType, ENavigationType.Orbit),
+        mode: types.Enum("Navigation.Mode", ENavigationType, { preset: ENavigationType.Orbit, persist: "capture" }),
         zoomExtents: types.Event("Settings.ZoomExtents"),
-        autoZoom: types.Boolean("Settings.AutoZoom", true),
-        orbit: types.Vector3("Current.Orbit", [ -25, -25, 0 ]),
-        offset: types.Vector3("Current.Offset", [ 0, 0, 100 ]),
-        minOrbit: types.Vector3("Limits.Min.Orbit", [ -90, -Infinity, -Infinity ]),
-        minOffset: types.Vector3("Limits.Min.Offset", [ -Infinity, -Infinity, 0.1 ]),
-        maxOrbit: types.Vector3("Limits.Max.Orbit", [ 90, Infinity, Infinity ]),
-        maxOffset: types.Vector3("Limits.Max.Offset", [ Infinity, Infinity, Infinity ]),
+        autoZoom: types.Boolean("Settings.AutoZoom", { preset: true, persist: "always" }),
+        orbit: types.Vector3("Current.Orbit", { preset: [ -25, -25, 0 ], persist: "capture" }),
+        offset: types.Vector3("Current.Offset", { preset: [ 0, 0, 100 ], persist: "capture" }),
+        minOrbit: types.Vector3("Limits.Min.Orbit", { preset: [ -90, -Infinity, -Infinity ], persist: "always" }),
+        minOffset: types.Vector3("Limits.Min.Offset", { preset: [ -Infinity, -Infinity, 0.1 ], persist: "always" }),
+        maxOrbit: types.Vector3("Limits.Max.Orbit", { preset: [ 90, Infinity, Infinity ], persist: "always" }),
+        maxOffset: types.Vector3("Limits.Max.Offset", { preset: [ Infinity, Infinity, Infinity ], persist: "always" }),
         keyNavActive: types.Enum("Navigation.KeyNavActive", EKeyNavMode),
         promptActive: types.Boolean("Navigation.PromptActive", false)
     };
@@ -402,28 +403,15 @@ export default class CVOrbitNavigation extends CObject3D
         });
     }
 
-    toData(): INavigation
+    toData(values: TPersistedValues = serializeInputs(this)): INavigation
     {
-        const ins = this.ins;
-        const data: Partial<INavigation> = {};
+        const { mode, orbit, offset, minOrbit, maxOrbit, minOffset, maxOffset, ...data } = values;
 
-        data.enabled = ins.enabled.value;
-        data.autoZoom = ins.autoZoom.value;
-        data.autoRotation = ins.autoRotation.value;
-        data.lightsFollowCamera = ins.lightsFollowCamera.value;
-
-        data.type = ENavigationType[ins.mode.value] as TNavigationType;
-
-        data.orbit = {
-            orbit: ins.orbit.cloneValue(),
-            offset: ins.offset.cloneValue(),
-            minOrbit: ins.minOrbit.cloneValue(),
-            maxOrbit: ins.maxOrbit.cloneValue(),
-            minOffset: ins.minOffset.cloneValue(),
-            maxOffset: ins.maxOffset.cloneValue(),
-        };
-
-        return data as INavigation;
+        return {
+            ...data,
+            type: mode,
+            orbit: { orbit, offset, minOrbit, maxOrbit, minOffset, maxOffset },
+        } as INavigation;
     }
 
     protected getLightTransform()

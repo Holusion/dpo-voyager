@@ -310,7 +310,7 @@ export default class CVAudioManager extends Component
     {
         let data: IAudio = null;
 
-        if(this._narrationId !== null) {
+        if(this._narrationId) {
             data = {
                 narrationId: this._narrationId
             };

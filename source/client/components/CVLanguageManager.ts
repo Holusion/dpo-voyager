@@ -21,6 +21,7 @@ import { ELanguageType, TLanguageType, ELanguageStringType, DEFAULT_LANGUAGE } f
 import CVAssetReader from "./CVAssetReader";
 import { ITagUpdateEvent } from "./CVModel2";
 import { enumToArray } from "@ff/core/types";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -64,6 +65,7 @@ export default class CVLanguageManager extends Component
         }),
         activeLanguage: types.Enum("Interface.Language", ELanguageType, {
             preset: ELanguageType[DEFAULT_LANGUAGE],
+            persist: "capture",
             enum: ELanguageType,
             options: enumToArray(ELanguageStringType).map(key => ELanguageStringType[key])
         }),
@@ -149,13 +151,9 @@ export default class CVLanguageManager extends Component
         ins.activeLanguage.setValue(language);
     }
 
-    toData(): ILanguage
+    toData(values: TPersistedValues = serializeInputs(this)): ILanguage
     {
-        const ins = this.ins;
-
-        return {
-            language: ELanguageType[ins.activeLanguage.getValidatedValue()] as TLanguageType,
-        };
+        return { language: values.activeLanguage } as ILanguage;
     }
 
     addLanguage(language: ELanguageType) {

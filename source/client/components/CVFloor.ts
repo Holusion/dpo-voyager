@@ -23,6 +23,8 @@ import { types } from "@ff/graph/Component";
 import { IFloor } from "client/schema/setup";
 import CVScene from "./CVScene";
 import { Vector3 } from "three";
+import { Dictionary } from "@ff/core/types";
+import { serializeInputs, TPersistedValues, TPersistMode } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -32,11 +34,20 @@ export default class CVFloor extends CFloor
 {
     static readonly typeName: string = "CVFloor";
 
+    static readonly persist: Dictionary<TPersistMode> = {
+        visible: "capture",
+        color: "capture",
+        position: "always",
+        radius: "always",
+        opacity: "always",
+        receiveShadow: "always",
+    };
+
     static readonly text: string = "Floor";
     static readonly icon: string = "";
 
     protected static readonly floorAddIns = {
-        autoSize: types.Boolean("Floor.AutoSize", true),
+        autoSize: types.Boolean("Floor.AutoSize", { preset: true, persist: "always" }),
     };
 
     addIns = this.addInputs(CVFloor.floorAddIns);
@@ -130,18 +141,9 @@ export default class CVFloor extends CFloor
         });
     }
 
-    toData(): IFloor
+    toData(values: TPersistedValues = serializeInputs(this)): IFloor
     {
-        const ins = this.ins;
-
-        return {
-            visible: ins.visible.value,
-            position: ins.position.cloneValue(),
-            size: ins.radius.value,
-            color: ins.color.cloneValue(),
-            opacity: ins.opacity.value,
-            receiveShadow: ins.receiveShadow.value,
-            autoSize: this.addIns.autoSize.value
-        };
+        const { radius, ...data } = values;
+        return { ...data, size: radius } as IFloor;
     }
 }

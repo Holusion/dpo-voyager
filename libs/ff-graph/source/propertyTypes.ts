@@ -38,7 +38,15 @@ export interface IPropertySchema<T = any>
     event?: boolean;
     static?: boolean; // not linkable if true
     semantic?: string;
+    persist?: TPersistMode; // how the value is saved, undefined means "never"
 }
+
+/**
+ * - always: saved from the live value
+ * - capture: saved from the last captured value (view state that changes while using the viewer)
+ * - never: not saved (derived, runtime or transient state)
+ */
+export type TPersistMode = "always" | "capture" | "never";
 
 export type SchemaProps<T> = Partial<IPropertySchema<T>> | T;
 

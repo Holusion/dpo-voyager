@@ -31,6 +31,7 @@ import CVAssetReader from "./CVAssetReader";
 import CVAnalytics from "./CVAnalytics";
 
 import CVLanguageManager from "./CVLanguageManager";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -50,11 +51,11 @@ export default class CVReader extends Component
     static readonly icon: string = "";
 
     protected static readonly ins = {
-        enabled: types.Boolean("Reader.Enabled"),
+        enabled: types.Boolean("Reader.Enabled", { persist: "capture" }),
         visible: types.Boolean("Reader.Visible", true), // TODO: Swap enabled and visible
         closed: types.Event("Reader.Closed"),
         refresh: types.Event("Reader.Refresh"),
-        position: types.Enum("Reader.Position", EReaderPosition),
+        position: types.Enum("Reader.Position", EReaderPosition, { persist: "always" }),
         articleId: types.String("Article.ID"),
         focus: types.Boolean("Reader.Focus"),
     };
@@ -261,19 +262,8 @@ export default class CVReader extends Component
         });
     }
 
-    toData(): IReader
+    toData(values: TPersistedValues = serializeInputs(this)): IReader
     {
-        const ins = this.ins;
-
-        const data: Partial<IReader> = {
-            enabled: ins.enabled.value,
-            position: EReaderPosition[ins.position.value] || "Overlay",
-        };
-
-        /*if (ins.articleId.value) {
-            data.articleId = ins.articleId.value;
-        }*/
-
-        return data as IReader;
+        return values as IReader;
     }
 }

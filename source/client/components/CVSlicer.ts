@@ -24,6 +24,7 @@ import { ISlicer, ESliceAxis, TSliceAxis } from "client/schema/setup";
 import CVScene from "./CVScene";
 import CVModel2, { IModelLoadEvent } from "./CVModel2";
 import CRenderer from "@ff/scene/components/CRenderer";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -53,11 +54,11 @@ export default class CVSlicer extends Component
     static readonly icon: string = "";
 
     protected static ins = {
-        enabled: types.Boolean("Slice.Enabled"),
-        axis: types.Enum("Slice.Axis", ESliceAxis),
-        position: types.Number("Slice.Position", { min: 0, max: 1, preset: 0.5 }),
-        inverted: types.Boolean("Slice.Inverted"),
-        color: types.ColorRGB("Slice.Color", [ 0, 0.61, 0.87 ]), // SI blue
+        enabled: types.Boolean("Slice.Enabled", { persist: "capture" }),
+        axis: types.Enum("Slice.Axis", ESliceAxis, { persist: "capture" }),
+        position: types.Number("Slice.Position", { min: 0, max: 1, preset: 0.5, persist: "capture" }),
+        inverted: types.Boolean("Slice.Inverted", { persist: "always" }),
+        color: types.ColorRGB("Slice.Color", { preset: [ 0, 0.61, 0.87 ], persist: "always" }), // SI blue
         boundingBox: types.Object("Scene.BoundingBox", Box3),
     };
 
@@ -167,17 +168,9 @@ export default class CVSlicer extends Component
         });
     }
 
-    toData(): ISlicer
+    toData(values: TPersistedValues = serializeInputs(this)): ISlicer
     {
-        const ins = this.ins;
-
-        return {
-            enabled: ins.enabled.value,
-            axis: ESliceAxis[ins.axis.getValidatedValue()] as TSliceAxis,
-            position: ins.position.value,
-            inverted: ins.inverted.value,
-            color: ins.color.value
-        };
+        return values as ISlicer;
     }
 
     private updateMaterial(model: CVModel2, material: Material)

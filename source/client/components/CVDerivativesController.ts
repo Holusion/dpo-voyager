@@ -11,6 +11,7 @@ import CTransform from "@ff/scene/components/CTransform";
 import CVNode from "./CVNode";
 import * as helpers from "@ff/three/helpers";
 import { IS_MOBILE } from "client/constants";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 interface ILOD{
   enabled?:boolean;
@@ -155,7 +156,7 @@ export default class CVDerivativesController extends Component{
   }
 
   protected static readonly ins = {
-    enabled: types.Boolean("LOD.Enabled", false),
+    enabled: types.Boolean("LOD.Enabled", { preset: false, persist: "always" }),
   }
 
 
@@ -573,14 +574,9 @@ export default class CVDerivativesController extends Component{
         });
     }
 
-    toData(): ILOD
+    toData(values: TPersistedValues = serializeInputs(this)): ILOD
     {
-        const ins = this.ins;
-        const data: Partial<ILOD> = {};
-
-        data.enabled = ins.enabled.value;
-        
-        return data as ILOD;
+        return values as ILOD;
     }
 
 

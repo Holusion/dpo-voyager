@@ -30,6 +30,7 @@ import NVNode from "client/nodes/NVNode";
 import CVEnvironmentLight from "./lights/CVEnvironmentLight";
 import CVModel2, { IModelLoadEvent } from "./CVModel2";
 import { TImageQuality, TImageUsage } from "client/schema/meta";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 
 const images = ["studio_small_08_1k.hdr", "capture_tent_mockup-v2-1k.hdr", "spruit_sunrise_1k_HDR.hdr"];
@@ -44,11 +45,11 @@ export default class CVEnvironment extends Component
     static readonly text: string = "Environment";
 
     protected static readonly envIns = {
-        imageIndex: types.Integer("Environment.MapIndex", { preset: 0, options: images.map( function(item, index) {return index.toString();}) }),
+        imageIndex: types.Integer("Environment.MapIndex", { preset: 0, persist: "capture", options: images.map( function(item, index) {return index.toString();}) }),
         initialize: types.Event("Environment.Init"),
         intensity: types.Number("Environment.Intensity", {preset:1, min: 0,}),
-        rotation: types.Vector3("Environment.Rotation"),
-        visible: types.Boolean("Environment.Visible", false),
+        rotation: types.Vector3("Environment.Rotation", { persist: "always" }),
+        visible: types.Boolean("Environment.Visible", { preset: false, persist: "always" }),
         enabled: types.Boolean("Environment.Enabled", true)
     };
 
@@ -197,15 +198,10 @@ export default class CVEnvironment extends Component
         }
     }
 
-    toData(): IEnvironment
+    toData(values: TPersistedValues = serializeInputs(this)): IEnvironment
     {
-        const ins = this.ins;
-
-        return {
-            index: ins.imageIndex.value,
-            visible: ins.visible.value,
-            rotation: ins.rotation.cloneValue()
-        };
+        const { imageIndex, ...data } = values;
+        return { ...data, index: imageIndex } as IEnvironment;
     }
 
     protected loadEnvironmentMap() {

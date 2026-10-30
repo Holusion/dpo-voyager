@@ -80,10 +80,6 @@ export default class CVTask extends CVNodeObserver
 
     private _savedConfig :CVTaskConfiguration = {
         bracketsVisible: undefined,
-        interfaceVisible: undefined,
-        gridVisible: undefined,
-        annotationsVisible: undefined,
-        lodEnabled: undefined,
     };
 
     dispose()
@@ -138,53 +134,35 @@ export default class CVTask extends CVNodeObserver
      */
     protected onActiveDocument(previous: CVDocument, next: CVDocument)
     {
-        const configuration = this.configuration;
-        const savedConfig = this._savedConfig;
-
+        // Overrides go through the setup, so that the original values are the ones captured and saved.
         if (previous) {
-            if (savedConfig.gridVisible !== undefined) {
-                previous.setup.grid.ins.visible.setValue(savedConfig.gridVisible);
-            }
-            if (savedConfig.annotationsVisible !== undefined) {
-                previous.setup.viewer.ins.annotationsVisible.setValue(savedConfig.annotationsVisible);
-            }
-            if (savedConfig.interfaceVisible !== undefined) {
-                previous.setup.interface.ins.visible.setValue(savedConfig.interfaceVisible);
-            }
-            if(savedConfig.axesVisible !== undefined) {
-                previous.setup.grid.ins.axesEnabled.setValue(savedConfig.axesVisible);
-            }
-            if(savedConfig.lodEnabled !== undefined) {
-                previous.setup.derivatives.ins.enabled.setValue(savedConfig.lodEnabled);
+            const properties = this.getConfigurableProperties(previous);
+            for (const key in properties) {
+                if (this.configuration[key] !== undefined) {
+                    previous.setup.restoreValue(properties[key]);
+                }
             }
         }
         if (next) {
-            if (configuration.gridVisible !== undefined) {
-                const prop = next.setup.grid.ins.visible;
-                savedConfig.gridVisible = prop.value;
-                prop.setValue(!!configuration.gridVisible);
-            }
-            if (configuration.annotationsVisible !== undefined) {
-                const prop = next.setup.viewer.ins.annotationsVisible;
-                savedConfig.annotationsVisible = prop.value;
-                prop.setValue(!!configuration.annotationsVisible);
-            }
-            if (configuration.interfaceVisible !== undefined) {
-                const prop = next.setup.interface.ins.visible;
-                savedConfig.interfaceVisible = prop.value;
-                prop.setValue(!!configuration.interfaceVisible);
-            }
-            if(configuration.axesVisible !== undefined) {
-                const prop = next.setup.grid.ins.axesEnabled;
-                savedConfig.axesVisible = prop.value;
-                prop.setValue(!!configuration.axesVisible);
-            }
-            if(configuration.lodEnabled !== undefined) {
-                const prop = next.setup.derivatives.ins.enabled;
-                savedConfig.lodEnabled = prop.value;
-                prop.setValue(!!configuration.lodEnabled);
+            const properties = this.getConfigurableProperties(next);
+            for (const key in properties) {
+                if (this.configuration[key] !== undefined) {
+                    next.setup.overrideValue(properties[key], !!this.configuration[key]);
+                }
             }
         }
+    }
+
+    private getConfigurableProperties(document: CVDocument): Partial<Record<keyof CVTaskConfiguration, Property>>
+    {
+        const setup = document.setup;
+        return {
+            gridVisible: setup.grid.ins.visible,
+            annotationsVisible: setup.viewer.ins.annotationsVisible,
+            interfaceVisible: setup.interface.ins.visible,
+            axesVisible: setup.grid.ins.axesEnabled,
+            lodEnabled: setup.derivatives.ins.enabled,
+        };
     }
 }
 

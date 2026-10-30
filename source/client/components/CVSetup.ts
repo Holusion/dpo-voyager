@@ -16,11 +16,12 @@
  */
 
 import Component, { types } from "@ff/graph/Component";
+import Property from "@ff/graph/Property";
 import CTransform from "@ff/scene/components/CTransform";
 
 import { IDocument } from "client/schema/document";
 import { ISetup } from "client/schema/setup";
-import { ELanguageType } from "client/schema/common";
+import { getPersistedProperties, serializeInputs } from "client/utils/persist";
 
 import CVInterface from "./CVInterface";
 import CVViewer from "./CVViewer";
@@ -49,7 +50,12 @@ export default class CVSetup extends Component
 {
     static readonly typeName: string = "CVSetup";
 
-    private _savedSetupData: ISetup = {};
+    // Setup data as loaded, kept so unknown sections survive a save.
+    private _loadedSetupData: ISetup = {};
+    // Values of "capture" properties at the last capture.
+    private _capturedValues = new Map<Property, any>();
+    // Original values of properties temporarily overridden, e.g. by story tasks.
+    private _overriddenValues = new Map<Property, any>();
 
     protected static readonly ins = {
         saveState: types.Event("Setup.SaveState"),
@@ -116,7 +122,9 @@ export default class CVSetup extends Component
 
     dispose()
     {
-        this._savedSetupData = null;
+        this._loadedSetupData = null;
+        this._capturedValues.clear();
+        this._overriddenValues.clear();
 
         const features = CVSetup.featureMap;
         for (const name in features) {
@@ -146,7 +154,7 @@ export default class CVSetup extends Component
         const scene = document.scenes[sceneIndex];
 
         const setupData = document.setups?.[scene.setup] ?? {};
-        this._savedSetupData = JSON.parse(JSON.stringify(setupData));
+        this._loadedSetupData = JSON.parse(JSON.stringify(setupData));
         const features = CVSetup.featureMap;
 
         for (const name in features) {
@@ -160,24 +168,29 @@ export default class CVSetup extends Component
                 this[name].ins.properties.forEach((prop) => prop.changed = !prop.schema.event);
             }
         }
+
+        this.cacheSetupState();
     }
 
     toDocument(document: IDocument, sceneIndex: number, pathMap: Map<Component, string>)
     {
-        const setupData: ISetup = this._savedSetupData;
+        const setupData: ISetup = { ...this._loadedSetupData };
         const features = CVSetup.featureMap;
 
-        for (const name in features) {
-            pathMap.set(this[name], `scenes/${sceneIndex}/setup/${name}`);
-        }
+        // captured values take precedence over overridden ones, which take precedence over live ones
+        const values = new Map([ ...this._overriddenValues, ...this._capturedValues ]);
 
-        // save current tours state (or remove cached if current is empty)
-        const tourData = this["tours"].toData();
-        if (tourData) {
-            setupData["tours"] = tourData;
-        }
-        else if (setupData["tours"]) {
-            delete setupData["tours"];
+        for (const name in features) {
+            const component = this[name];
+            pathMap.set(component, `scenes/${sceneIndex}/setup/${name}`);
+
+            const featureData = component.toData(serializeInputs(component, values));
+            if (featureData) {
+                setupData[name] = featureData;
+            }
+            else {
+                delete setupData[name];
+            }
         }
 
         const snapshotData = this.snapshots.toData(pathMap);
@@ -185,40 +198,60 @@ export default class CVSetup extends Component
             setupData.snapshots = snapshotData;
         }
 
-        if (setupData) {
-            document.setups = document.setups || [];
-            const index = document.setups.length;
-            document.setups.push(setupData);
-            document.scenes[sceneIndex].setup = index;
+        document.setups = document.setups || [];
+        const index = document.setups.length;
+        document.setups.push(setupData);
+        document.scenes[sceneIndex].setup = index;
+    }
+
+    /**
+     * Temporarily sets a property value. The original value is the one that gets
+     * captured and saved, until it is restored with [[restoreValue]].
+     */
+    overrideValue(property: Property, value: any)
+    {
+        if (!this._overriddenValues.has(property)) {
+            this._overriddenValues.set(property, property.cloneValue());
+        }
+        property.setValue(value);
+    }
+
+    restoreValue(property: Property)
+    {
+        if (this._overriddenValues.has(property)) {
+            property.setValue(this._overriddenValues.get(property));
+            this._overriddenValues.delete(property);
         }
     }
 
-    // Caches current setup state for future saving.
+    // Caches the current value of "capture" properties for future saving.
     protected cacheSetupState()
     {
         const features = CVSetup.featureMap;
+        this._capturedValues.clear();
 
         for (const name in features) {
-            const featureData = this[name].toData();
-            if (featureData) {
-                this._savedSetupData[name] = featureData;
-            }
+            getPersistedProperties(this[name], "capture").forEach(property => {
+                const value = this._overriddenValues.has(property) ? this._overriddenValues.get(property) : property.value;
+                this._capturedValues.set(property, Array.isArray(value) ? value.slice() : value);
+            });
         }
-        this.language.ins.primarySceneLanguage.setValue(ELanguageType[this._savedSetupData.language.language]);
+
+        this.language.ins.primarySceneLanguage.setValue(this.language.ins.activeLanguage.value);
     }
 
-    // Restores cached setup state for future saving.
+    // Restores the cached value of "capture" properties.
     protected restoreSetupState()
     {
-        const cachedData = this._savedSetupData;
-        const features = CVSetup.featureMap;
-
-        for (const name in features) {
-            const featureData = cachedData[name];
-            if (featureData && name !== "tours") {
-                this[name].fromData(featureData);
+        this._capturedValues.forEach((value, property) => {
+            value = Array.isArray(value) ? value.slice() : value;
+            if (this._overriddenValues.has(property)) {
+                this._overriddenValues.set(property, value);
             }
-        }
+            else {
+                property.setValue(value);
+            }
+        });
 
         this.slicer.ins.enabled.set();  // slicer needs a push to refresh
         if(this.navigation.ins.autoZoom.value) {

@@ -18,6 +18,7 @@
 import Component, { types } from "@ff/graph/Component";
 
 import { IInterface } from "client/schema/setup";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -29,10 +30,10 @@ export default class CVInterface extends Component
     static readonly typeName: string = "CVInterface";
 
     protected static readonly ins = {
-        visible: types.Boolean("Interface.Visible", true),
-        logo: types.Boolean("Interface.Logo", true),
-        menu: types.Boolean("Interface.Menu", true),
-        tools: types.Boolean("Interface.Tools", true),
+        visible: types.Boolean("Interface.Visible", { preset: true, persist: "always" }),
+        logo: types.Boolean("Interface.Logo", { preset: true, persist: "always" }),
+        menu: types.Boolean("Interface.Menu", { preset: true, persist: "always" }),
+        tools: types.Boolean("Interface.Tools", { preset: true, persist: "always" }),
         visibleElements: types.Number("Interface.VisibleElements", 127)
     };
 
@@ -60,16 +61,9 @@ export default class CVInterface extends Component
         });
     }
 
-    toData(): IInterface
+    toData(values: TPersistedValues = serializeInputs(this)): IInterface
     {
-        const ins = this.ins;
-
-        return {
-            visible: ins.visible.value,
-            logo: ins.logo.value,
-            menu: ins.menu.value,
-            tools: ins.tools.value
-        };
+        return values as IInterface;
     }
 
     isShowing(element: EUIElements) : boolean

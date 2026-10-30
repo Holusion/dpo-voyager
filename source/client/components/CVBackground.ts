@@ -19,6 +19,8 @@ import CBackground, { EBackgroundStyle } from "@ff/scene/components/CBackground"
 import { Node } from "@ff/scene/components/CObject3D";
 
 import { IBackground, TBackgroundStyle } from "client/schema/setup";
+import { Dictionary } from "@ff/core/types";
+import { serializeInputs, TPersistedValues, TPersistMode } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +28,12 @@ import { IBackground, TBackgroundStyle } from "client/schema/setup";
 export default class CVBackground extends CBackground
 {
     static readonly typeName: string = "CVBackground";
+
+    static readonly persist: Dictionary<TPersistMode> = {
+        style: "capture",
+        color0: "capture",
+        color1: "capture",
+    };
 
     get settingProperties() {
         return [
@@ -57,14 +65,8 @@ export default class CVBackground extends CBackground
         });
     }
 
-    toData(): IBackground
+    toData(values: TPersistedValues = serializeInputs(this)): IBackground
     {
-        const ins = this.ins;
-
-        return {
-            style: EBackgroundStyle[ins.style.value] as TBackgroundStyle,
-            color0: ins.color0.cloneValue(),
-            color1: ins.color1.cloneValue(),
-        };
+        return values as IBackground;
     }
 }

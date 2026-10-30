@@ -28,6 +28,8 @@ import { EUnitType } from "client/schema/common";
 
 import CVScene from "./CVScene";
 import CVTape from "./CVTape";
+import { Dictionary } from "@ff/core/types";
+import { serializeInputs, TPersistedValues, TPersistMode } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -42,13 +44,17 @@ export default class CVGrid extends CObject3D
 {
     static readonly typeName: string = "CVGrid";
 
+    static readonly persist: Dictionary<TPersistMode> = {
+        visible: "capture",
+    };
+
     static readonly text: string = "Grid";
     static readonly icon: string = "";
 
     protected tape: CVTape = null;
 
     protected static readonly gridIns = {
-        color: types.ColorRGB("Grid.Color", [ 0.5, 0.7, 0.8 ]),
+        color: types.ColorRGB("Grid.Color", { preset: [ 0.5, 0.7, 0.8 ], persist: "capture" }),
         opacity: types.Percent("Grid.Opacity", 1.0),
         boundingBox: types.Object("Scene.BoundingBox", Box3),
         labelEnabled: types.Boolean("Grid.LabelEnabled", true),
@@ -243,13 +249,8 @@ export default class CVGrid extends CObject3D
         });
     }
 
-    toData(): IGrid
+    toData(values: TPersistedValues = serializeInputs(this)): IGrid
     {
-        const ins = this.ins;
-
-        return {
-            visible: ins.visible.cloneValue(),
-            color: ins.color.cloneValue(),
-        };
+        return values as IGrid;
     }
 }

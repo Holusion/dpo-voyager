@@ -32,6 +32,7 @@ import {getFocusableElements} from "../utils/focusHelpers";
 import CVSetup from "./CVSetup";
 import { CLight } from "./lights/CVLight";
 import CVAssetManager from "./CVAssetManager";
+import { serializeInputs, TPersistedValues } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -66,21 +67,21 @@ export default class CVViewer extends Component
     private _loadedModels = new Set<CVModel2>();
 
     protected static readonly ins = {
-        annotationsVisible: types.Boolean("Annotations.Visible"),
+        annotationsVisible: types.Boolean("Annotations.Visible", { persist: "capture" }),
         annotationExit: types.Event("Annotations.Exit"),
         annotationFocus: types.Boolean("Annotations.Focus", false),
         activeAnnotation: types.String("Annotations.ActiveId"),
-        activeTags: types.Tags("Tags.Active"),
-        sortedTags: types.Tags("Tags.Sorted"),
-        radioTags: types.Boolean("Tags.Radio"),
-        shader: types.Enum("Renderer.Shader", EShaderMode),
+        activeTags: types.Tags("Tags.Active", { persist: "capture" }),
+        sortedTags: types.Tags("Tags.Sorted", { persist: "always" }),
+        radioTags: types.Boolean("Tags.Radio", { persist: "always" }),
+        shader: types.Enum("Renderer.Shader", EShaderMode, { persist: "capture" }),
         variant: types.Option("Renderer.Variant", [], 0),
-        toneMapping: types.Boolean("Renderer.ToneMapping", false),
-        exposure: types.Number("Renderer.Exposure", 1),
-        gamma: types.Number("Renderer.Gamma", 2),
+        toneMapping: types.Boolean("Renderer.ToneMapping", { preset: false, persist: "always" }),
+        exposure: types.Number("Renderer.Exposure", { preset: 1, persist: "always" }),
+        gamma: types.Number("Renderer.Gamma", { preset: 2, persist: "always" }),
         quality: types.Enum("Models.Quality", EDerivativeQuality, EDerivativeQuality.High),
-        isWallMountAR: types.Boolean("AR.IsWallMount", false),
-        arScale: types.Number("AR.Scale", 1.0)
+        isWallMountAR: types.Boolean("AR.IsWallMount", { preset: false, persist: "always" }),
+        arScale: types.Number("AR.Scale", { preset: 1.0, persist: "always" })
     };
 
     protected static readonly outs = {
@@ -303,33 +304,16 @@ export default class CVViewer extends Component
         });
     }
 
-    toData(): IViewer
+    toData(values: TPersistedValues = serializeInputs(this)): IViewer
     {
-        const ins = this.ins;
+        // optional entries are omitted when not set
+        [ "annotationsVisible", "activeTags", "sortedTags", "radioTags" ].forEach(key => {
+            if (!values[key]) {
+                delete values[key];
+            }
+        });
 
-        const data: Partial<IViewer> = {
-            shader: EShaderMode[ins.shader.value] as TShaderMode,
-            exposure: ins.exposure.value,
-            toneMapping: ins.toneMapping.value,
-            gamma: ins.gamma.value,
-            isWallMountAR: ins.isWallMountAR.value,
-            arScale: ins.arScale.value
-        };
-
-        if (ins.annotationsVisible.value) {
-            data.annotationsVisible = true;
-        }
-        if (ins.activeTags.value) {
-            data.activeTags = ins.activeTags.value;
-        }
-        if (ins.sortedTags.value) {
-            data.sortedTags = ins.sortedTags.value;
-        }
-        if (ins.radioTags.value) {
-            data.radioTags = ins.radioTags.value;
-        }
-
-        return data as IViewer;
+        return values as IViewer;
     }
 
     protected refreshTagCloud()

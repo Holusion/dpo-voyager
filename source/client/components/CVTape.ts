@@ -28,6 +28,8 @@ import { EUnitType } from "client/schema/common";
 import unitScaleFactor from "client/utils/unitScaleFactor";
 import Annotation from "../models/Annotation";
 import CVStaticAnnotationView from "./CVStaticAnnotationView";
+import { Dictionary } from "@ff/core/types";
+import { serializeInputs, TPersistedValues, TPersistMode } from "client/utils/persist";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +44,10 @@ export default class CVTape extends CObject3D
 {
     static readonly typeName: string = "CVTape";
 
+    static readonly persist: Dictionary<TPersistMode> = {
+        visible: "capture",
+    };
+
     static readonly text: string = "Tape";
     static readonly icon: string = "";
 
@@ -54,7 +60,7 @@ export default class CVTape extends CObject3D
         globalUnits: types.Enum("Model.GlobalUnits", EUnitType, EUnitType.cm),
         localUnits: types.Enum("Model.LocalUnits", EUnitType, EUnitType.cm),
         enabled: types.Boolean("Tape.Enabled", false),
-        markerStyle: types.Enum("Tape.MarkerStyle", EMarkerStyle, EMarkerStyle.Pin),
+        markerStyle: types.Enum("Tape.MarkerStyle", EMarkerStyle, { preset: EMarkerStyle.Pin, persist: "always" }),
     };
 
     protected static readonly tapeOuts = {
@@ -289,18 +295,10 @@ export default class CVTape extends CObject3D
         }
     }
 
-    toData(): ITape
+    toData(values: TPersistedValues = serializeInputs(this)): ITape
     {
-        const ins = this.ins;
-
-        return {
-            enabled: ins.visible.cloneValue(),
-            markerStyle: EMarkerStyle[ins.markerStyle.value] as TMarkerStyle,
-            /*startPosition: ins.startPosition.cloneValue(),
-            startDirection: ins.startDirection.cloneValue(),
-            endPosition: ins.endPosition.cloneValue(),
-            endDirection: ins.endDirection.cloneValue()*/
-        };
+        const { visible, ...data } = values;
+        return { ...data, enabled: visible } as ITape;   // TODO: should probably be visible instead of enabled
     }
 
     protected onPointerUp(event: IPointerEvent)
