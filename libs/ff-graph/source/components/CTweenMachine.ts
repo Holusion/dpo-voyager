@@ -426,7 +426,8 @@ export default class CTweenMachine extends Component
                 if (target.isArray) {
                     let changed = false;
                     for (let i = 0, n = vA.length; i < n; ++i) {
-                        const v = vA[i] + factor * (vB[i] - vA[i]);
+                        // assign the target exactly at factor 1: vA + (vB - vA) is not always vB in floating point
+                        const v = factor === 1 ? vB[i] : vA[i] + factor * (vB[i] - vA[i]);
                         changed = property.value[i] !== v || changed;
                         property.value[i] = v;
                     }
@@ -434,7 +435,7 @@ export default class CTweenMachine extends Component
                         property.set();
                     }
                 } else {
-                    const v = vA + factor * (vB - vA);
+                    const v = factor === 1 ? vB : vA + factor * (vB - vA);
                     if (v !== property.value) {
                         property.setValue(v);
                     }
