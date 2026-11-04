@@ -199,10 +199,10 @@ export default class CVAnnotationView extends CObject3D
                 return;
             }
 
-            // only activate annotation view if annotations are visible
+            // only activate annotation view if annotations are visible nad not tweening
             const visibleIdx = this.snapshots.getTargetProperties().findIndex(prop => prop.key == "annotationsVisible");
             const annotationsOn = visibleIdx >= 0 ? this.snapshots.getCurrentValues()[visibleIdx] : this.ins.visible.value;
-            if(annotationsOn) {
+            if(annotationsOn && !this.snapshots.outs.tweening.value) {
                 // need to lock truncation checking during a tween
                 if(this._activeView) {
                     this._truncateLock = true;
@@ -652,10 +652,6 @@ export default class CVAnnotationView extends CObject3D
     protected normalizeViewOrbit(viewId: string) {
         const orbitIdx = this.snapshots.getTargetProperties().findIndex(prop => prop.name == "Orbit");
         const viewState = this.snapshots.getState(viewId);
-
-        if(!viewState) {
-
-        }
 
         const currentOrbit = this.snapshots.getCurrentValues()[orbitIdx];
         let angleOffset = 0;

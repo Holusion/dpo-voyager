@@ -52,6 +52,7 @@ export interface IModel
     overlayMap?: number;
     castShadow?: boolean;
     receiveShadow?: boolean;
+    slicerEnabled?: boolean;
     shadowSide?: TSideType;
     translation?: Vector3;
     rotation?: QuaternionTuple;
