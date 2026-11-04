@@ -85,12 +85,6 @@ export default class ShareMenu extends Popup
 
         const emailUrl = `mailto:?subject=${title}&body=${url}`;
 
-        const embedCode = window.top !== window.self ? html`<div class="ff-title" id="embedTitle">${language.getLocalizedString("Embed Link")}</div>
-            <div class="ff-flex-row sv-embed-link">
-                <ff-text-edit readonly aria-labelledby="embedTitle" text=${iFrameEmbedCode}></ff-text-edit>
-                <ff-button icon="copy" title=${language.getLocalizedString("Copy link to Clipboard")} @click=${this.onClickCopy}></ff-button>
-            </div>` : null;
-
         const windowName = language.getLocalizedString("Share Experience");
 
         return html`
@@ -106,7 +100,11 @@ export default class ShareMenu extends Popup
                 <a href=${emailUrl} tabindex="-1" target="_blank"><ff-button class="sv-share-button-email" icon="email" title=${language.getLocalizedString("Email")}></ff-button></a>
                 <a href="${this.url.toString()}?format=zip" download><ff-button class="sv-share-button-download" icon="folder" title=${language.getLocalizedString("Download")}></ff-button></a>
             </div>
-            ${embedCode}
+            <div class="ff-title" id="embedTitle">${language.getLocalizedString("Embed Link")}</div>
+            <div class="ff-flex-row sv-embed-link">
+                <ff-text-edit readonly aria-labelledby="embedTitle" text=${iFrameEmbedCode}></ff-text-edit>
+                <ff-button icon="copy" title=${language.getLocalizedString("Copy link to Clipboard")} @click=${this.onClickCopy}></ff-button>
+            </div>
         </div>
         `;
     }
