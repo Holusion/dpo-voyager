@@ -26,6 +26,7 @@ import CVSnapshots, { EEasingCurve } from "./CVSnapshots";
 import CVAnalytics from "./CVAnalytics";
 import CVLanguageManager from "./CVLanguageManager";
 import CVSetup from "./CVSetup";
+import type { IActiveTourStep } from "./CVViewer";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -59,6 +60,9 @@ export default class CVTours extends Component
     outs = this.addOutputs(CVTours.outs);
 
     private _tours: ITour[] = [];
+
+    /** Step reached but not announced yet with a "tour-step" event, { tour: -1, step: -1 } when leaving tours. */
+    private _pendingArrival: IActiveTourStep = null;
 
     protected get analytics() {
         return this.getMainComponent(CVAnalytics);
@@ -214,6 +218,7 @@ export default class CVTours extends Component
                 // recall pre-tour scene state
                 machine.tweenTo(CVTours.sceneSnapshotId, context.secondsElapsed);
                 machine.deleteState(CVTours.sceneSnapshotId);
+                this._pendingArrival = { tour: -1, step: -1 };
 
                 srElement.textContent = "";
 
@@ -239,6 +244,7 @@ export default class CVTours extends Component
         }
 
         if (stepCount === 0) {
+            this._pendingArrival = null;
             outs.stepIndex.setValue(-1);
             outs.stepTitle.setValue("");
             return true;
@@ -266,6 +272,7 @@ export default class CVTours extends Component
                 outs.tourLead.setValue("");
                 outs.stepIndex.set();
                 nextStepIndex = -1;
+                this._pendingArrival = null;
                 srElement.textContent = "";
             }
         }
@@ -288,10 +295,30 @@ export default class CVTours extends Component
             outs.stepTitle.setValue(this.stepTitle || "Missing content");
             machine.ins.id.setValue(step.id);
             tween ? machine.ins.tween.set() : machine.ins.recall.set();
+            this._pendingArrival = { tour: tourIndex, step: nextStepIndex };
             srElement.textContent = this.stepAltText != "Missing content" ? "Alt text: " + this.stepAltText : "";
         }
 
         return true;
+    }
+
+    /**
+     * Announces a step with a "tour-step" event once the snapshot machine has applied it:
+     * at the end of its transition, or right after an instant recall.
+     */
+    tock(context: IPulseContext)
+    {
+        const arrival = this._pendingArrival;
+        const machine = this.snapshots;
+
+        // the machine handles tween/recall requests in its update, then animates in its tick
+        if (!arrival || machine.changed || machine.outs.tweening.value) {
+            return false;
+        }
+
+        this._pendingArrival = null;
+        this.setup.viewer.dispatch("tour-step", { ...arrival });
+        return false;
     }
 
     fromData(data: ITours)
@@ -390,4 +417,4 @@ export default class CVTours extends Component
             });
         }
     }
-}
+}

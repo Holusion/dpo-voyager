@@ -36,6 +36,16 @@ import CVAssetManager from "./CVAssetManager";
 ////////////////////////////////////////////////////////////////////////////////
 
 /**
+ * Identifies a tour step by index. `{ tour: -1, step: -1 }` stands for "no step":
+ * the view the scene had before tours were enabled.
+ */
+export interface IActiveTourStep
+{
+    tour: number;
+    step: number;
+}
+
+/**
  * The public DOM events the viewer dispatches on its host element, mapped to the type of
  * their `event.detail`. An event whose detail is `void` carries none.
  */
@@ -46,6 +56,7 @@ export interface IViewerEventDetail
     "model-error": string;
     "scene-content-load": void;
     "scene-load": void;
+    "tour-step": IActiveTourStep;
 }
 
 
@@ -153,7 +164,7 @@ export default class CVViewer extends Component
      * Fires events on the host element.
      * Does nothing while the viewer is detached, as nobody could be listening.
      */
-    protected dispatch<K extends keyof IViewerEventDetail>(type: K, ...detail: ViewerEventArgs<K>)
+    dispatch<K extends keyof IViewerEventDetail>(type: K, ...detail: ViewerEventArgs<K>)
     {
         this._rootElement?.dispatchEvent(new CustomEvent(type, { detail: detail[0] }));
     }
