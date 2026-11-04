@@ -707,6 +707,12 @@ Version: ${ENV_VERSION}
         return toursIns;
     }
 
+    // Get the active tour step: { tour, step } or null
+    getActiveTourStep()
+    {
+        return this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.tours.getActiveTourStep();
+    }
+
     // enable/disable camera controls
     enableNavigation(enable: string)
     {

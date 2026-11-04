@@ -147,4 +147,44 @@ describe("CVTours", function() {
             expect(events).to.deep.equal([ { tour: -1, step: -1 } ]);
         });
     });
+
+    describe("getActiveTourStep()", function() {
+        it("is null while tours are disabled", function() {
+            expect(tours.getActiveTourStep()).to.be.null;
+        });
+
+        it("is null on the tour menu", function() {
+            tours.ins.enabled.setValue(true);
+            frames(2);
+            expect(tours.getActiveTourStep()).to.be.null;
+        });
+
+        it("returns the step as soon as it is requested", function() {
+            startTour();
+            frames(1);
+            expect(tours.getActiveTourStep()).to.deep.equal({ tour: 0, step: 0 });
+
+            tours.ins.next.set();
+            frames(1);
+            expect(tours.getActiveTourStep()).to.deep.equal({ tour: 0, step: 1 });
+        });
+
+        it("is null after the last step", function() {
+            startTour();
+            frames(1);
+            tours.ins.stepIndex.setValue(2);
+            frames(1);
+            tours.ins.next.set();
+            frames(1);
+            expect(tours.getActiveTourStep()).to.be.null;
+        });
+
+        it("is null once tours are disabled", function() {
+            startTour();
+            frames(70);
+            tours.ins.enabled.setValue(false);
+            frames(1);
+            expect(tours.getActiveTourStep()).to.be.null;
+        });
+    });
 });

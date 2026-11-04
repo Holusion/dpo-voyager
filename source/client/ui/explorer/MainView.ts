@@ -367,6 +367,13 @@ export default class MainView extends CustomElement
         }
     }
 
+    getActiveTourStep()
+    {
+        if(this.application) {
+            return this.application.getActiveTourStep();
+        }
+    }
+
     setLanguage(languageID: string)
     {
         if(this.application) {

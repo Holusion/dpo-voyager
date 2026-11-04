@@ -92,6 +92,20 @@ export default class CVTours extends Component
         return tour ? tour.steps[this.outs.stepIndex.value] : null;
     }
 
+    /**
+     * The tour step being shown, or null when tours are disabled or no step is shown (eg: on the tour menu).
+     * Changes as soon as a step is requested: the "tour-step" event tells when its state is applied.
+     */
+    getActiveTourStep(): IActiveTourStep | null
+    {
+        const { ins, outs } = this;
+        if (!ins.enabled.value || outs.tourIndex.value < 0 || outs.stepIndex.value < 0) {
+            return null;
+        }
+
+        return { tour: outs.tourIndex.value, step: outs.stepIndex.value };
+    }
+
     get title() {
         const tour = this.activeTour;
         // TODO: Temporary - remove when single string properties are phased out

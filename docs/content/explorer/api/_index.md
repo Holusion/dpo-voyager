@@ -83,6 +83,7 @@ Methods for external control over camera properties and navigation.
 | getAnnotations()				| None				   | Returns an array of [Annotation data objects](https://github.com/Smithsonian/dpo-voyager/blob/d3d63fedeb595ac7b664a2b2e081b691bbdc3084/source/client/schema/model.ts#L63) for the current scene.			|
 | getTags()                     | None                 | Returns the tags displayed in the tag cloud. Tags are separated by a comma (","). |
 | getTours()                    | None                 | Returns a list of [Tours data objects](https://github.com/Smithsonian/dpo-voyager/blob/d3d63fedeb595ac7b664a2b2e081b691bbdc3084/source/client/schema/setup.ts#L175). |
+| getActiveTourStep()           | None                 | Returns the tour step being shown as `{ tour, step }` (indexes), or `null` when tours are disabled or no step is shown (eg: on the tour menu). It changes as soon as a step is requested: listen to the `tour-step` event to know when the step's state is applied. |
 | getActiveLanguage()			| None 			   	   | Returns the active language as valid ISO 639-1  |
 | getLanguages()			    | None 			   	   | Returns all languages available in the scene as valid ISO 639-1    |
 
