@@ -52,7 +52,7 @@ These methods engage Voyager functionality without the native UI.
 | toggleReader()    	 | None    			| On/off toggle for the article reader.  |
 | setReaderEnabled( enabled ) | enabled: boolean | Sets the article reader to the specified state.  |
 | toggleTours()    		 | None    			| On/off toggle for the tour functionality UI.  |
-| setToursEnabled( enabled ) | enabled: boolean | Sets the tour UI to the specified state. Disables reader if enabling. |
+| setToursEnabled( enabled ) | enabled: boolean | Sets the tour UI to the specified state. Disables reader if enabling. Enabling shows the tour menu, unless tours already are enabled: then the current tour step is kept. |
 | toggleTools()    		 | None    			| On/off toggle for the extended tools panel at the bottom of the UI  |
 | setToolsEnabled( visible ) | visible: boolean | Sets the tools panel to the specified state. Disables annotations if enabling.  |
 | toggleMeasurement()	 | None				| On/off toggle for visibility of the object measurement tool.  |

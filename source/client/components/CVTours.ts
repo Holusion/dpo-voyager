@@ -93,6 +93,30 @@ export default class CVTours extends Component
     }
 
     /**
+     * Shows or hides tours, as the setToursEnabled() API does: enabling closes the reader and shows the tour menu.
+     * Does nothing if tours already are in the requested state, so a running tour isn't restarted
+     * and the view to restore when leaving tours isn't overwritten.
+     * @returns true if tours were toggled.
+     */
+    setEnabled(enabled: boolean): boolean
+    {
+        const readerIns = this.setup.reader.ins;
+        if (enabled && readerIns.enabled.value) {
+            readerIns.enabled.setValue(false);
+        }
+
+        if (this.ins.enabled.value === enabled) {
+            return false;
+        }
+
+        this.ins.enabled.setValue(enabled);
+        if (enabled) {
+            this.ins.tourIndex.setValue(-1); // show tour menu
+        }
+        return true;
+    }
+
+    /**
      * The tour step being shown, or null when tours are disabled or no step is shown (eg: on the tour menu).
      * Changes as soon as a step is requested: the "tour-step" event tells when its state is applied.
      */

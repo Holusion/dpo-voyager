@@ -148,6 +148,72 @@ describe("CVTours", function() {
         });
     });
 
+    describe("setEnabled()", function() {
+        it("shows the tour menu and closes the reader", function() {
+            const reader = story.document.setup.reader.ins;
+            reader.enabled.setValue(true);
+
+            expect(tours.setEnabled(true)).to.be.true;
+            frames(1);
+            expect(tours.ins.enabled.value).to.be.true;
+            expect(tours.outs.tourIndex.value).to.equal(-1);
+            expect(reader.enabled.value).to.be.false;
+        });
+
+        it("keeps the current step when tours are already enabled", function() {
+            tours.setEnabled(true);
+            frames(1);
+            tours.ins.tourIndex.setValue(0);
+            frames(70);
+            tours.ins.next.set();
+            frames(70);
+            events.length = 0;
+
+            expect(tours.setEnabled(true)).to.be.false;
+            frames(70);
+            expect(tours.getActiveTourStep()).to.deep.equal({ tour: 0, step: 1 });
+            expect(orbit().value).to.deep.equal([ 3.3, 7.7, 0 ]);
+            expect(events).to.deep.equal([]);
+        });
+
+        it("still restores the view from before the tour after being repeated", function() {
+            tours.setEnabled(true);
+            frames(1);
+            tours.ins.tourIndex.setValue(0);
+            frames(70);
+            tours.setEnabled(true);
+            frames(1);
+
+            tours.setEnabled(false);
+            frames(70);
+            expect(orbit().value).to.deep.equal([ 10, 20, 0 ]);
+        });
+
+        it("closes the reader even when tours are already enabled", function() {
+            tours.setEnabled(true);
+            frames(1);
+            const reader = story.document.setup.reader.ins;
+            reader.enabled.setValue(true);
+
+            tours.setEnabled(true);
+            expect(reader.enabled.value).to.be.false;
+        });
+
+        it("leaves tours only once when disabled twice", function() {
+            tours.setEnabled(true);
+            frames(1);
+            tours.ins.tourIndex.setValue(0);
+            frames(70);
+            events.length = 0;
+
+            expect(tours.setEnabled(false)).to.be.true;
+            frames(70);
+            expect(tours.setEnabled(false)).to.be.false;
+            frames(70);
+            expect(events).to.deep.equal([ { tour: -1, step: -1 } ]);
+        });
+    });
+
     describe("getActiveTourStep()", function() {
         it("is null while tours are disabled", function() {
             expect(tours.getActiveTourStep()).to.be.null;
