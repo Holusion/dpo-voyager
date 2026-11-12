@@ -193,6 +193,20 @@
   width: 120px;
   animation:spin 5s linear infinite;
 }
+// Spinner.template, where its <object> isn't there: turning as eCorpus' loaders do, in the wheel
+.sv-spinner-wheel svg {
+  animation: spin 1.25s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 5s;
+  }
+}
+
+// The page's own loader, where it has one: see Spinner.ts
+.sv-spinner-cube {
+  width: 96px;
+  height: 96px;
+  color: styles.$color-text-light;
+}
 
 
 

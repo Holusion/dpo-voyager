@@ -28,7 +28,7 @@ export default class Spinner extends CustomElement
     @property({ type: String })
     assetPath = "";
 
-    protected static readonly template = html`<div class="sv-spinner-wheel"><svg viewBox="0 0 101.64261 101.4383" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg"><g transform="translate(-67.120928,-102.35083)"><circle style="fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#bfbfbf;stroke-width:3;stroke-miterlimit:4;stroke-dasharray:12, 12;stroke-dashoffset:0;stroke-opacity:1" id="path77" cx="117.94224" cy="152.9675" r="49.321297" /></g></svg></div>`;
+    protected static readonly template = html`<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.2-8.6" fill="none" stroke="#e6b900" stroke-width="2" stroke-linecap="round"/></svg>`;
 
     protected firstConnected()
     {
@@ -38,11 +38,17 @@ export default class Spinner extends CustomElement
 
     protected render()
     {
+        this.style.visibility = this.visible ? "visible" : "hidden";
+
+        // A page that has a loader of its own, as eCorpus has <cube-loader> (drawn and styled by itself), gets it here too
+        if (window.customElements.get("cube-loader")) {
+            return html`<cube-loader class="sv-spinner-cube"></cube-loader>`;
+        }
+
         const spinner = html`<div class="sv-spinner-wheel"><object data="${this.assetPath}images/spinner.svg" type="image/svg+xml" alt="Spinner">
             ${Spinner.template}
         </object></div>`;
 
-        this.style.visibility = this.visible ? "visible" : "hidden";
         return spinner;
     }
 }
