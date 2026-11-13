@@ -1,13 +1,20 @@
 /*
  * CSS Rules overrides over tinymce's default styles
  */
+
+@use "../../fonts";
+
 html {
   display: flex;
   justify-content: center;
 }
 
 body {
-  font-family:"Hind Siliguri",sans-serif;
+  font-family: fonts.$font-body;
+}
+
+h1 {
+  font-family: fonts.$font-heading;
 }
 
 .mce-content-body {

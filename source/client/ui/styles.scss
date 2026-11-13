@@ -17,16 +17,16 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@forward "../../../libs/ff-ui/source/styles/styles";
+@use "fonts";
+@forward "fonts" show $font-heading, $font-body;
+@forward "../../../libs/ff-ui/source/styles/styles" with ($font-ui: fonts.$font-ui !default);
 @use "../../../libs/ff-ui/source/styles/styles";
 @use "../../../libs/ff-three/source/ui/styles" as threeStyle;
 
 ////////////////////////////////////////////////////////////////////////////////
 // TYPOGRAPHY
 
-// now loaded from index page, via fonts.css
-//@import url('https://fonts.googleapis.com/css?family=Amiri:400,700');
-//@import url('https://fonts.googleapis.com/css?family=Hind+Siliguri:400,700');
+// Font families are set in _fonts.scss; their @font-face rules are in assets/fonts/fonts.css.
 
 .sv-article {
   h1 {
@@ -41,14 +41,14 @@
     }
 
     margin: 0.3em 0;
-    font-family: "Amiri", serif;
+    font-family: fonts.$font-heading;
     font-size: 2.3em;
     font-weight: normal;
     color: styles.$color-text-light;
   }
 
   p, h2, h3, h4, h5, h6, ul, ol, li {
-    font-family: "Hind Siliguri", sans-serif;
+    font-family: fonts.$font-body;
     color: styles.$color-text;
   }
 
@@ -90,7 +90,7 @@
   figure {
     display: table;
     margin: 1rem auto;
-    font-family: "Hind Siliguri", sans-serif;
+    font-family: fonts.$font-body;
     font-size: 1.15em;
   }
   
