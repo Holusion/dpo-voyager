@@ -39,7 +39,7 @@ import 'tinymce/plugins/code';
 /* Import content css */
 import contentUiCss from './editor_css/content.ui.min.css?raw';
 import contentCss from './editor_css/content.min.css?raw';
-import contentOverrides from './editor_css/overrides.css?raw';
+import contentOverrides from './editor_css/overrides.scss?raw';
 
 import Notification from "@ff/ui/Notification";
 import MessageBox from "@ff/ui/MessageBox";

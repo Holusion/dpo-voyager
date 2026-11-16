@@ -698,7 +698,7 @@ $pad: $canvas-border-width + $main-menu-button-size + 8px;
   .sv-main-title {
     flex: 1 1 auto;
     margin: $canvas-border-width 8px;
-    font-family: "Hind Siliguri", sans-serif;;
+    font-family: common.$font-body;
     font-weight: normal;
     font-size: 1.412em;
     white-space: pre;
@@ -738,7 +738,7 @@ $pad: $canvas-border-width + $main-menu-button-size + 8px;
   }
 
   .sv-text-icon {
-    font-family: "Hind Siliguri", sans-serif;
+    font-family: common.$font-body;
     font-weight: bold;
     line-height: 25px;
   }

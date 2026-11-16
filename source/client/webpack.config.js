@@ -221,6 +221,7 @@ module.exports = function(env, argv)
                 {
                     // Transpile SCSS to CSS and concatenate
                     test: /\.scss$/,
+                    resourceQuery: { not: [/raw/] },
                     use: [         
                         MiniCssExtractPlugin.loader,
                         "css-loader",
@@ -230,6 +231,12 @@ module.exports = function(env, argv)
                     issuer: {
                         not: [/source\/client\/ui\/explorer/]     // currently only inlining explorer css
                     }
+                },
+                {
+                    // Transpile SCSS imported with ?raw to a CSS string (e.g. the article editor's content style)
+                    test: /\.scss$/,
+                    resourceQuery: /raw/,
+                    use: ["sass-loader"],
                 },
                 {
                     resourceQuery: /raw/,

@@ -905,4 +905,18 @@ $color-component-meta-light: #d9d998;
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// ARTICLE EDITOR (TinyMCE)
 
+// TinyMCE's skin (editor_css/skin.min.css) sets a system font stack on these
+// elements of the editor's toolbar, menus and dialogs. The body prefix outranks
+// its selectors whatever order the two stylesheets are bundled in.
+body {
+  .tox, .tox-tinymce, .tox-tinymce-aux,
+  .tox .tox-button, .tox .tox-button-link, .tox .tox-dialog__title,
+  .tox .tox-listboxfield .tox-listbox--select,
+  .tox .tox-textarea, .tox .tox-textfield, .tox .tox-toolbar-textfield,
+  .tox .tox-selectfield select {
+    font-family: common.$font-ui;
+  }
+}

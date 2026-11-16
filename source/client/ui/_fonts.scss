@@ -1,0 +1,38 @@
+/**
+ * 3D Foundation Project
+ * Copyright 2025 Smithsonian Institution
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+////////////////////////////////////////////////////////////////////////////////
+// FONTS
+//
+// The three font roles used by Voyager. Change a font here; the @font-face
+// rules for the web fonts named here are in assets/fonts/fonts.css, which the
+// host page loads.
+//
+// $font-ui       Interface: menus, panels, popups, annotations, tours, and any
+//                text without a font of its own. Passed on to ff-ui.
+// $font-heading  Article titles, in the reader and in the article editor.
+// $font-body     Article text, the scene title and text icons.
+
+// The @font-face rules in fonts.css hide any installed font of the same name,
+// so the shipped subsets' gaps (Cyrillic, polytonic Greek in body text...) and
+// the moment before a web font loads go to the next family in each list: close
+// relatives where installed, then the system default.
+$font-heading: "Noto Serif", Georgia, serif !default;
+$font-body: "Open Sans", "Noto Sans", "Segoe UI", sans-serif !default;
+// The interface uses the body font, so it looks the same on every platform and
+// annotations, tours and menus match the article text.
+$font-ui: $font-body !default;
