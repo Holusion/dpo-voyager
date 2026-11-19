@@ -24,9 +24,9 @@ import { ITypedEvent } from "@ff/graph/Component";
 import ExplorerApplication from "client/applications/ExplorerApplication";
 import MainView from "client/ui/explorer/MainView";
 import CVDocumentProvider from "./CVDocumentProvider";
-import ImportMenu from "client/ui/story/ImportMenu";
+import ImportMenu, { ImportMenuUpload } from "client/ui/story/ImportMenu";
 import CVModel2, { IModelLoadEvent } from "./CVModel2";
-import { EAssetType, EDerivativeQuality, EDerivativeUsage, EMapType } from "client/schema/model";
+import { EAssetType, EDerivativeQuality, EDerivativeUsage, EMapType, TDerivativeQuality } from "client/schema/model";
 import CSelection from "@ff/graph/components/CSelection";
 import CVMeta from "./CVMeta";
 import Article from "client/models/Article";
@@ -35,6 +35,7 @@ import ImageImportMenu from "client/ui/story/ImageImportMenu";
 import CVAssetReader from "./CVAssetReader";
 import NVNode from "client/nodes/NVNode";
 import CVImagePlane from "./CVImagePlane";
+import { IModelUploader } from "client/io/ModelUploader";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -66,6 +67,26 @@ export default class CVMediaManager extends CAssetManager
     }
     protected get metas() {
         return this.system.getComponents(CVMeta);
+    }
+
+    /** Writes model files as-is to the scene's root */
+    protected readonly defaultModelUploader: IModelUploader = {
+        upload: ({ file, path, signal }) => this.uploadFile(path, file, this.root, { signal }).then(() => ({ uri: path })),
+    };
+
+    /**
+     * Sends dropped model files to the server: the one set as `modelUploader`
+     * on the `<voyager-story>` element if any, the default one otherwise.
+     */
+    get modelUploader(): IModelUploader {
+        const host = document.getElementsByTagName("voyager-story")[0] as HTMLElement & { modelUploader?: IModelUploader };
+        return host?.modelUploader ?? this.defaultModelUploader;
+    }
+
+    /** Whether a dropped file is a model to send through the model uploader */
+    protected isUploadedModel(filenameLower: string): boolean {
+        const extensions = ["glb", ...(this.modelUploader.accept ?? [])];
+        return extensions.some(ext => filenameLower.endsWith("." + ext.toLowerCase().replace(/^\./, "")));
     }
 
     create()
@@ -107,7 +128,7 @@ export default class CVMediaManager extends CAssetManager
         return this.assetManager.getAssetUrl(resolvePathname(uri, this.rootUrl));
     }
 
-    uploadFile(name: string, blob: Blob, folder?: IAssetEntry): Promise<any>
+    uploadFile(name: string, blob: Blob, folder?: IAssetEntry, options: { signal?: AbortSignal } = {}): Promise<any>
     {
         const filename = decodeURI(name);
         const filepath = folder?.info?.path?.length > 1 ? folder.info.path + filename : filename;
@@ -119,8 +140,13 @@ export default class CVMediaManager extends CAssetManager
             return Promise.resolve();
         }
         else {
-            const params: RequestInit = { method: "PUT", credentials: "include", body: new File([blob], filename) };
-            return fetch(url, params).then(() => this.refresh());
+            const params: RequestInit = { method: "PUT", credentials: "include", body: new File([blob], filename), signal: options.signal };
+            return fetch(url, params).then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to upload ${filename}: ${response.status} ${response.statusText}`);
+                }
+                return this.refresh();
+            });
         }
     }
 
@@ -145,7 +171,7 @@ export default class CVMediaManager extends CAssetManager
             const cleanfileName = decodeURI(file.name);
             const filenameLower = cleanfileName.toLowerCase();
             
-            if (filenameLower.match(/\.(gltf|glb|bin|svx.json|html|jpg|jpeg|png|usdz|mp3|vtt|hdr)$/)) {
+            if (filenameLower.match(/\.(gltf|glb|bin|svx.json|html|jpg|jpeg|png|usdz|mp3|vtt|hdr)$/) || this.isUploadedModel(filenameLower)) {
 
                 if(!documentProvided && filenameLower.match(/\.(jpg|jpeg|png|hdr)$/) && !fileArray.some(entry => entry[0].endsWith("gltf"))) {
                     path = CVMediaManager.articleFolder + "/" + cleanfileName;
@@ -166,7 +192,12 @@ export default class CVMediaManager extends CAssetManager
                         );
                     }); 
                 }
-                else if (!documentProvided && filenameLower.match(/\.(gltf|glb)$/)) {
+                else if (!documentProvided && this.isUploadedModel(filenameLower)) {
+                    // Uploaded once a quality is chosen
+                    this.handleModelImport(normalizedPath, file);
+                }
+                else if (!documentProvided && filenameLower.match(/\.gltf$/)) {
+                    // Comes with other files (.bin, textures): they are all uploaded as-is
                     this.uploadFile(normalizedPath, file, this.root).then(() => this.handleModelImport(normalizedPath));
                 }
                 else if (!documentProvided && !fileArray.some(entry => entry[0].endsWith("gltf")) && filenameLower.match(/\.(hdr|jpg|jpeg|png)$/)) {
@@ -182,18 +213,32 @@ export default class CVMediaManager extends CAssetManager
         });
     }
 
-    protected handleModelImport(filepath: string) {
+    /**
+     * Ask for the quality and parent of an imported model, then add it to the scene.
+     * With a `file`, it is sent through the model uploader once they are chosen,
+     * otherwise `filepath` must already have been uploaded.
+     */
+    protected handleModelImport(filepath: string, file?: File) {
         const mainView : MainView = document.getElementsByTagName('voyager-story')[0] as MainView;
         const activeDoc = this.getMainComponent(CVDocumentProvider).activeComponent;
         const filename = filepath.substr(filepath.lastIndexOf("/") + 1);
         const selection = this.getMainComponent(CSelection);
 
-        ImportMenu.show(mainView, activeDoc.setup.language, filename).then(([quality, parentName]) => {
+        const uploader = file ? this.modelUploader : null;
+        const upload: ImportMenuUpload = uploader ? (quality, signal, onProgress) => uploader.upload({
+            file,
+            quality: EDerivativeQuality[quality] as TDerivativeQuality,
+            path: filepath,
+            signal,
+            onProgress,
+        }).then(({ uri }) => this.refresh().then(() => uri)) : undefined;
+
+        ImportMenu.show(mainView, activeDoc.setup.language, filename, upload).then(([quality, parentName, uri = filepath]) => {
             this.assetManager.ins.initialLoad.setValue(true);
             const model = this.getSystemComponents(CVModel2).find(element => element.node.name === parentName);
             if(model === undefined) {
                 // converting path to relative (TODO: check if all browsers will have leading slash here)
-                const newModel = activeDoc.appendModel(filepath, quality);
+                const newModel = activeDoc.appendModel(uri, quality);
                 const name = parentName;
                 newModel.node.name = name;
                 newModel.ins.name.setValue(name);
@@ -203,13 +248,17 @@ export default class CVMediaManager extends CAssetManager
             }
             else {
                 model.derivatives.remove(EDerivativeUsage.Web3D, quality);
-                model.derivatives.createModelAsset(filepath, quality)
+                model.derivatives.createModelAsset(uri, quality)
                 model.ins.quality.setValue(quality);
                 model.outs.updated.set();
                 model.once<IModelLoadEvent>("model-load", () => {selection.selectNode(model.node); 
                     this.assetManager.outs.initialLoad.setValue(false)}, this);
             }
         }).catch(e => {
+            // The menu rejects without an error when closed
+            if (e) console.error("Model import failed:", e);
+            // Nothing was uploaded when the menu is closed before choosing
+            if (file) return;
             const asset = this.getAssetByPath(filepath);
             this.delete(asset);
         });

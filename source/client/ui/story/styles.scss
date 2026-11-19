@@ -759,6 +759,43 @@ $color-component-meta-light: #d9d998;
     color: red;
   }
 
+  // Above the busy overlay: closing the menu cancels the upload
+  .sv-import-title {
+    position: relative;
+    z-index: 2;
+  }
+
+  // Above the menu's sections, some of which are positioned
+  .sv-import-busy {
+    z-index: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(explorer.$menu-color-background-dark, 0.9);
+
+    .sv-spinner {
+      position: absolute;
+    }
+
+    .sv-import-status {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 1em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5em;
+      text-align: center;
+
+      progress {
+        width: 80%;
+      }
+    }
+  }
+
   .sv-notification {
     font-size: 0.85em;
     font-style: italic;

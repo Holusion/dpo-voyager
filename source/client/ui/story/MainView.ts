@@ -44,6 +44,7 @@ import CollectionPanel from "./CollectionPanel";
 
 import "./styles.scss";
 import StatePanel from "./StatePanel";
+import { IModelUploader } from "../../io/ModelUploader";
 
 ////////////////////////////////////////////////////////////////////////////////
 // STORY ICONS
@@ -91,6 +92,14 @@ export default class MainView extends CustomElement
 
     protected application: StoryApplication;
     protected dockView: DockView;
+
+    /**
+     * Sends model files dropped in the editor to the server, see {@link IModelUploader}.
+     * When not set, model files are written as-is to the scene's root.
+     *
+     * Declared only: a value set before the element is upgraded is kept.
+     */
+    declare modelUploader?: IModelUploader;
 
     protected registry: DockContentRegistry;
     protected state: IUIState;
