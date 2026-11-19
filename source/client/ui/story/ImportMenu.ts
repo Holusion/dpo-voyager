@@ -24,6 +24,17 @@ import { EDerivativeQuality, TDerivativeQuality } from "client/schema/model";
 import CVModel2 from "client/components/CVModel2";
 import Notification from "@ff/ui/Notification";
 import CVImagePlane from "client/components/CVImagePlane";
+import { IModelUploadProgress } from "client/io/ModelUploader";
+
+import "../Spinner";
+
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Uploads the file once a quality is chosen, and resolves with the uri of the model to load.
+ * The menu stays open, busy, until it settles. Closing the menu aborts the signal.
+ */
+export type ImportMenuUpload = (quality: EDerivativeQuality, signal: AbortSignal, onProgress: (progress: IModelUploadProgress) => void) => Promise<string>;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -38,23 +49,38 @@ export default class ImportMenu extends Popup
     protected qualitySelection: EDerivativeQuality = null;
     protected parentSelection: {name: string, id: string} = null;
 
-    static show(parent: HTMLElement, language: CVLanguageManager, filename: string): Promise<[EDerivativeQuality, string]>
+    protected upload: ImportMenuUpload = null;
+    protected uploadController: AbortController = null;
+    protected progress: IModelUploadProgress = null;
+    protected uri: string = undefined;
+
+    protected get busy() {
+        return this.uploadController !== null;
+    }
+
+    /**
+     * Resolves with the chosen quality and parent model name.
+     * With an `upload`, the file is uploaded once they are chosen: the uri it resolves with comes third.
+     * Rejects when the menu is closed.
+     */
+    static show(parent: HTMLElement, language: CVLanguageManager, filename: string, upload?: ImportMenuUpload): Promise<[EDerivativeQuality, string, string?]>
     {
-        const menu = new ImportMenu(language, filename);
+        const menu = new ImportMenu(language, filename, upload);
         parent.appendChild(menu);
 
         return new Promise((resolve, reject) => {
-            menu.on("confirm", () => resolve([menu.qualitySelection, menu.parentSelection.name]));
+            menu.on("confirm", () => resolve([menu.qualitySelection, menu.parentSelection.name, menu.uri]));
             menu.on("close", () => reject());
         });
     }
 
-    constructor( language: CVLanguageManager, filename: string )
+    constructor( language: CVLanguageManager, filename: string, upload?: ImportMenuUpload )
     {
         super();
 
         this.language = language;
         this.filename = filename;
+        this.upload = upload ?? null;
         this.modelOptions = this.modelOptions.concat(language.getGraphComponents(CVModel2).filter(model => !model.is(CVImagePlane)).map(model => ({name: model.node.name, id: model.id})));
         this.position = "center";
         this.modal = true;
@@ -65,20 +91,58 @@ export default class ImportMenu extends Popup
 
     close()
     {
+        this.uploadController?.abort();
         this.dispatchEvent(new CustomEvent("close"));
         this.remove();
     }
 
     confirm()
     {
+        if(this.busy) {
+            return;
+        }
         if(this.qualitySelection === null) {
             this.errorString = this.language.getUILocalizedString("Please select derivative quality.");
             this.requestUpdate();
+        }
+        else if(this.upload) {
+            this.startUpload();
         }
         else {
             this.dispatchEvent(new CustomEvent("confirm"));
             this.remove();
         }
+    }
+
+    protected startUpload()
+    {
+        const controller = this.uploadController = new AbortController();
+        this.errorString = "";
+        this.progress = null;
+        this.requestUpdate();
+
+        const onProgress = (progress: IModelUploadProgress) => {
+            if(controller.signal.aborted) return;
+            this.progress = progress;
+            this.requestUpdate();
+        };
+
+        Promise.resolve()
+        .then(() => this.upload(this.qualitySelection, controller.signal, onProgress))
+        .then(uri => {
+            // Closed while uploading: close() already rejected
+            if(controller.signal.aborted) return;
+            this.uri = uri;
+            this.dispatchEvent(new CustomEvent("confirm"));
+            this.remove();
+        }, error => {
+            if(controller.signal.aborted) return;
+            console.error("Model upload failed:", error);
+            this.uploadController = null;
+            this.progress = null;
+            this.errorString = error?.message || this.language.getUILocalizedString("Upload failed");
+            this.requestUpdate();
+        });
     }
 
     protected firstConnected()
@@ -91,6 +155,23 @@ export default class ImportMenu extends Popup
     {
         return html`<div class="sv-entry" @click=${e => this.onClickQuality(e, index)} ?selected=${ quality === this.qualitySelection }>
             ${EDerivativeQuality[quality] as TDerivativeQuality}
+        </div>`;
+    }
+
+    protected renderUploadStatus()
+    {
+        const language = this.language;
+        const { phase = "upload", loaded, total } = this.progress ?? {};
+        const measured = phase === "upload" && typeof loaded === "number" && 0 < total;
+        const status = phase === "process" ? language.getUILocalizedString("Processing...")
+            : language.getUILocalizedString("Uploading...") + (measured ? ` ${Math.floor(100 * loaded / total)}%` : "");
+
+        return html`<div class="sv-import-busy" role="status" aria-live="polite">
+            <sv-spinner visible></sv-spinner>
+            <div class="sv-import-status">
+                <div>${status}</div>
+                ${measured ? html`<progress max=${total} .value=${loaded}></progress>` : null}
+            </div>
         </div>`;
     }
 
@@ -108,7 +189,8 @@ export default class ImportMenu extends Popup
         return html`
         <div>
             <div class="ff-flex-column ff-fullsize">
-                <div class="ff-flex-row">
+                ${this.busy ? this.renderUploadStatus() : null}
+                <div class="ff-flex-row sv-import-title">
                     <div class="ff-flex-spacer ff-title">${language.getUILocalizedString("File:")} <i>${this.filename}</i></div>
                     <ff-button icon="close" transparent class="ff-close-button" title=${language.getUILocalizedString("Close")} @click=${this.close}></ff-button>
                 </div>
@@ -132,11 +214,11 @@ export default class ImportMenu extends Popup
                     <div class="ff-flex-row">
                         <label class="ff-label ff-off">${language.getUILocalizedString("Add New Model")}:</label>
                         <div class="ff-flex-spacer"></div>
-                        <input id="modelName" tabindex="0" class="ff-property-field ff-input" @change=${this.onNameChange} value=${"Model"+this.modelOptions.length.toString()} touch-action="none" style="touch-action: none;" title="Parent.Name [string]"><div class="ff-fullsize ff-off ff-content"></div></input>
+                        <input id="modelName" tabindex="0" ?disabled=${this.busy} class="ff-property-field ff-input" @change=${this.onNameChange} value=${"Model"+this.modelOptions.length.toString()} touch-action="none" style="touch-action: none;" title="Parent.Name [string]"><div class="ff-fullsize ff-off ff-content"></div></input>
                     </div>
                 </div>
                 <div class="ff-flex-row sv-centered">
-                    <ff-button icon="upload" class="ff-button ff-control" text=${language.getUILocalizedString("Import Model")} title=${language.getUILocalizedString("Import Model")} @click=${this.confirm}></ff-button>
+                    <ff-button icon="upload" class="ff-button ff-control" text=${language.getUILocalizedString("Import Model")} title=${language.getUILocalizedString("Import Model")} ?disabled=${this.busy} @click=${this.confirm}></ff-button>
                 </div>
                 <div class="ff-flex-row sv-centered sv-import-error-msg">
                     <div>${this.errorString}</div>
@@ -149,6 +231,7 @@ export default class ImportMenu extends Popup
     protected onClickQuality(e: MouseEvent, index: number)
     {
         e.stopPropagation();
+        if(this.busy) return;
 
         this.qualitySelection = EDerivativeQuality[EDerivativeQuality[index]];
         this.requestUpdate();
@@ -157,6 +240,7 @@ export default class ImportMenu extends Popup
     protected onClickParent(e: MouseEvent, index: number)
     {
         e.stopPropagation();
+        if(this.busy) return;
 
         this.parentSelection = this.modelOptions[index] || {name: (this.querySelector("#modelName") as HTMLInputElement).value, id: "-1"};
         this.requestUpdate();
