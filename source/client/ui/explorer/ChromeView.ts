@@ -35,7 +35,6 @@ import DocumentView, { customElement, html } from "./DocumentView";
 import { showLanguageMenu } from "./LanguageMenu";
 import { EUIElements } from "client/components/CVInterface";
 import CVAssetReader from "client/components/CVAssetReader";
-import { showSplashScreen } from "./SplashScreen";
 import type SceneView from "../SceneView";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -136,8 +135,10 @@ export default class ChromeView extends DocumentView
         const introText = this.activeDocument.outs.intro.value;
         if(introText) { // TODO: Stop intro pop-up from spawning when setting property in Story
             if(this.needsSplash && introText.length > 0 && this.activeDocument.ins.showIntro.value) {
-                showSplashScreen(this, this.activeDocument.setup.language, introText).then(() => {
-                    (this.getRootNode() as ShadowRoot).getElementById("sv-scene").focus();
+                this.showHelp().then(target => {
+                    if (!target) {
+                        (this.getRootNode() as ShadowRoot).getElementById("sv-scene").focus();
+                    }
                 });
             }
             this.needsSplash = false;
@@ -185,7 +186,7 @@ export default class ChromeView extends DocumentView
                     ${captionsVisible ? html`<ff-button icon="caption" id="main-caption" title=${languageManager.getLocalizedString("Captions")} ?selected=${captionsEnabled} @click=${this.updateCaptions} class="sv-text-icon"></ff-button>` : ""}
                     ${languagesVisible ? html`<ff-button id="language" style=${setup.language.codeString().length > 2 ? "font-size:0.9em"
                          : ""} text=${setup.language.codeString()} title=${languageManager.getLocalizedString("Set Language")} @click=${this.openLanguageMenu} class="sv-text-icon"></ff-button>` : null}
-                    ${helpVisible ? html`<ff-button icon="help" id="main-help" title=${languageManager.getLocalizedString("Help")} ?selected=${false} @click=${this.openHelp} class="sv-text-icon"></ff-button>` : ""}
+                    ${helpVisible ? html`<ff-button icon="intro" id="main-help" title=${languageManager.getLocalizedString("Introduction")} ?selected=${false} @click=${this.openHelp} class="sv-text-icon"></ff-button>` : ""}
                 </div>
             </div>`;
     }
@@ -231,7 +232,7 @@ export default class ChromeView extends DocumentView
         });
     }
 
-    /** Shows the help over the blurred scene and title. */
+    /** Shows the help over the blurred scene and title: the help shows the title. */
     protected showHelp() {
         const document = this.activeDocument;
         const sceneView = (this.getRootNode() as ParentNode).querySelector(".sv-scene-view") as SceneView;

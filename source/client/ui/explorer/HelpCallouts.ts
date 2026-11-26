@@ -95,6 +95,11 @@ export default class HelpCallouts extends CustomElement
     @property({ type: Number })
     minFreeWidth = 320;
 
+    /** If set when connected, focuses the first enabled callout once laid out. */
+    @property({ type: Boolean })
+    focusFirst = false;
+
+    protected focusPending = false;
     // where the extents are set: the parent is gone once disconnected
     protected extentsElement: HTMLElement = null;
 
@@ -125,6 +130,7 @@ export default class HelpCallouts extends CustomElement
         window.addEventListener("resize", this.scheduleLayout);
         this.observeRoot();
         this.scheduleLayout();
+        this.focusPending = this.focusFirst;
     }
 
     protected disconnected()
@@ -206,6 +212,11 @@ export default class HelpCallouts extends CustomElement
     protected updated(changedProperties)
     {
         super.updated(changedProperties);
+
+        if (this.focusPending && this.layouts.length > 0) {
+            this.focusPending = false;
+            Array.from(this.querySelectorAll<HTMLButtonElement>(".sv-help-callout-ring")).find(ring => !ring.disabled)?.focus();
+        }
 
         // measures the callouts, once rendered
         const box = this.getBoundingClientRect();

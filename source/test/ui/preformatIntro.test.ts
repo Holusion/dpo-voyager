@@ -1,6 +1,6 @@
 import { expect } from "chai";
 
-import { preformatIntro } from "client/ui/explorer/SplashScreen";
+import { preformatIntro } from "client/ui/explorer/HelpMain";
 
 describe("preformatIntro", function() {
 
