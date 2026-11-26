@@ -103,6 +103,32 @@ describe("Modal", function() {
         expect(content.inert).to.equal(false);
     });
 
+    it("closes at once, though browsers fire the dialog's close event later", async function() {
+        const { modal } = await open(chrome);
+
+        // happy-dom fires it at once: defers it, like browsers do
+        const dialog = modal.querySelector("dialog");
+        let deferred = false;
+        dialog.addEventListener("close", event => {
+            if (!deferred) {
+                deferred = true;
+                event.stopImmediatePropagation();
+                setTimeout(() => dialog.dispatchEvent(new Event("close")), 0);
+            }
+        }, { capture: true });
+
+        let closeEvents = 0;
+        modal.addEventListener("close", () => closeEvents++);
+        modal.close();
+
+        expect(content.inert, "interface usable at once").to.equal(false);
+        expect(modal.isConnected, "removed at once").to.equal(false);
+        expect(closeEvents).to.equal(1);
+
+        await nextFrame();
+        expect(closeEvents, "once only").to.equal(1);
+    });
+
     it("opens in a Voyager element without shadow root, like mini", async function() {
         const mini = element(page, "voyager-mini");
         const miniContent = element(mini);

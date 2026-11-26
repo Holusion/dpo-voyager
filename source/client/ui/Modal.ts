@@ -119,12 +119,11 @@ export default class Modal extends CustomElement
         this._value = value;
 
         if (this.dialog && this.dialog.open) {
-            // triggers onDialogClose
             this.dialog.close();
         }
-        else {
-            this.onDialogClose();
-        }
+        // at once: browsers fire the dialog's "close" event in a later task, until which
+        // the rest of the interface would stay inert (onDialogClose then does nothing)
+        this.onDialogClose();
     }
 
     /**
