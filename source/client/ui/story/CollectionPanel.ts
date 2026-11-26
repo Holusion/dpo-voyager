@@ -45,8 +45,7 @@ export default class CollectionPanel extends DocumentView
         if(meta) {
             meta.collection.ids.forEach(id => {
                 if(!["title","titles","intros"].includes(id)) {
-                    customMetas.push(html`<br><div class="sv-label">${id}</div>
-                    <ff-line-edit name=${id} text=${meta.collection.get(id)} @change=${this.onTextEdit}></ff-line-edit>`);
+                    customMetas.push(this.renderCustomMeta(id, meta.collection.get(id)));
                 }
             })
         }
@@ -67,6 +66,33 @@ export default class CollectionPanel extends DocumentView
             <ff-line-edit name="copyright" text=${this.activeDocument.ins.copyright.value} @change=${this.onTextEdit}></ff-line-edit>
             ${customMetas}
         </div>`;
+    }
+
+    /**
+     * A field for a custom meta, keeping its value's type: an on/off switch for a boolean,
+     * else (string, or anything else) a text field.
+     */
+    protected renderCustomMeta(id: string, value: any)
+    {
+        if (typeof value === "boolean") {
+            // laid out like a boolean property view (PropertyBoolean)
+            return html`<br><div class="sv-property-view"><div class="sv-property sv-property-boolean">
+                <label class="ff-label ff-off">${id}</label>
+                <div><ff-button role="switch" name=${id} aria-label=${id} aria-checked=${String(value)}
+                    text=${value ? "On" : "Off"} ?selected=${value} @click=${() => this.onToggleMeta(id)}></ff-button></div>
+            </div></div>`;
+        }
+        return html`<br><div class="sv-label">${id}</div>
+            <ff-line-edit name=${id} text=${value ?? ""} @change=${this.onTextEdit}></ff-line-edit>`;
+    }
+
+    protected onToggleMeta(id: string)
+    {
+        const collection = this.activeDocument?.meta?.collection;
+        if (collection) {
+            collection.insert(!collection.get(id), id);
+            this.requestUpdate();
+        }
     }
 
     protected onTextEdit(event: ILineEditChangeEvent)
@@ -100,8 +126,12 @@ export default class CollectionPanel extends DocumentView
             
             }
             else {
-                // assign value from custom field
-                this.activeDocument.meta.collection.insert(text,target.name);
+                // assign value from custom field, unless unchanged: the field commits its
+                // text when it loses focus, which would turn a number or null into a string
+                const collection = this.activeDocument.meta.collection;
+                if (text !== String(collection.get(target.name) ?? "")) {
+                    collection.insert(text, target.name);
+                }
             }
         }
     }
