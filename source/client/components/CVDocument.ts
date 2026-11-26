@@ -66,6 +66,8 @@ export default class CVDocument extends CRenderGraph
         download: types.Event("Document.Download"),
         title: types.String("Document.Title"),
         intro: types.String("Document.Intro", ""),
+        /** Whether the introduction is shown at load. Saved in the meta collection when false. */
+        showIntro: types.Boolean("Document.ShowIntro", true),
         copyright: types.String("Document.Copyright", ""),
     };
 
@@ -159,6 +161,16 @@ export default class CVDocument extends CRenderGraph
             if(ins.title.value) {
                 this.titles[ELanguageType[language.outs.activeLanguage.value]] = ins.title.value;     
                 this.updateMeta();
+            }
+        }
+
+        if (ins.showIntro.changed && this.meta) {
+            // true is the default: only false is saved
+            if (ins.showIntro.value) {
+                this.meta.collection.remove("showIntro");
+            }
+            else {
+                this.meta.collection.insert(false, "showIntro");
             }
         }
 
@@ -322,6 +334,9 @@ export default class CVDocument extends CRenderGraph
                     this.titles[ELanguageType[language.outs.activeLanguage.value]] = meta.collection.get("title") || "";
                     meta.collection.dictionary["titles"] = this.titles;
                 }
+
+                // before the introduction, which is shown at load depending on it
+                this.ins.showIntro.setValue(meta.collection.get("showIntro") !== false);
 
                 const title = this.titles[ELanguageType[language.outs.activeLanguage.value]];
                 propTitle.setValue(title);

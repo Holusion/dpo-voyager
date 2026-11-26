@@ -58,7 +58,7 @@ export default class CollectionPanel extends DocumentView
         let customMetas = [];
         if(meta) {
             meta.collection.ids.forEach(id => {
-                if(!["title","titles","intros"].includes(id)) {
+                if(!["title","titles","intros","showIntro"].includes(id)) {
                     customMetas.push(this.renderCustomMeta(id, meta.collection.get(id)));
                 }
             })
@@ -75,6 +75,7 @@ export default class CollectionPanel extends DocumentView
                 <ff-line-edit name="title" text=${this.activeDocument.ins.title.value || "Missing Title"} @change=${this.onTextEdit}></ff-line-edit>
                 <div class="sv-label">Intro</div>
                 <ff-text-edit name="intro" class="sv-intro-edit" text=${this.activeDocument.ins.intro.value} rows=5 @change=${this.onTextEdit}></ff-text-edit>
+                <sv-property-view .property=${this.activeDocument.ins.showIntro} label="Show intro on load"></sv-property-view>
             </div>
             <div class="sv-label">Copyright</div>
             <ff-line-edit name="copyright" text=${this.activeDocument.ins.copyright.value} @change=${this.onTextEdit}></ff-line-edit>
