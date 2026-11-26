@@ -24,6 +24,20 @@ import { ILineEditChangeEvent } from "client/../../libs/ff-ui/source/LineEdit";
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * Keeps the HTML of the scene's introduction that is safe to show: an annotation's lead's
+ * (see AnnotationsTaskView), with paragraphs, line breaks and headings.
+ */
+export function sanitizeIntro(text: string)
+{
+    return sanitizeHtml(text, {
+        allowedTags: [ 'p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'b', 'i', 'em', 'strong', 'a', 'sup', 'sub' ],
+        allowedAttributes: {
+            'a': [ 'href', 'target' ]
+        }
+    });
+}
+
 @customElement("sv-collection-panel")
 export default class CollectionPanel extends DocumentView
 {
@@ -60,7 +74,7 @@ export default class CollectionPanel extends DocumentView
                 <div class="sv-label">Title</div>
                 <ff-line-edit name="title" text=${this.activeDocument.ins.title.value || "Missing Title"} @change=${this.onTextEdit}></ff-line-edit>
                 <div class="sv-label">Intro</div>
-                <ff-text-edit name="intro" text=${this.activeDocument.ins.intro.value} @change=${this.onTextEdit}></ff-text-edit>
+                <ff-text-edit name="intro" class="sv-intro-edit" text=${this.activeDocument.ins.intro.value} rows=5 @change=${this.onTextEdit}></ff-text-edit>
             </div>
             <div class="sv-label">Copyright</div>
             <ff-line-edit name="copyright" text=${this.activeDocument.ins.copyright.value} @change=${this.onTextEdit}></ff-line-edit>
@@ -111,11 +125,7 @@ export default class CollectionPanel extends DocumentView
                 ));
             }
             else if (target.name === "intro") {
-                activeDoc.ins.intro.setValue(sanitizeHtml(text,
-                    {
-                        allowedTags: [ 'i','b','p' ]
-                    }    
-                ));
+                activeDoc.ins.intro.setValue(sanitizeIntro(text));
             }
             else if (target.name === "copyright") {
                 activeDoc.ins.copyright.setValue(sanitizeHtml(text,

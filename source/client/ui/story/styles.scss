@@ -458,6 +458,10 @@ $color-component-meta-light: #d9d998;
   .sv-indent {
     margin: 2px 2px 2px 15px;
   }
+
+  .sv-intro-edit textarea {
+    resize: vertical;
+  }
 }
 
 .sv-tour-feature-menu {

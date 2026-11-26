@@ -1609,10 +1609,28 @@ $tour-entry-indent: 12px;
   max-width: 85%;
 }
 
+// PRE-FORMATTED TEXT: introduction and leads, whose line breaks are kept
+
+.sv-preformatted {
+  white-space: pre-line;
+}
+
 .sv-splash {
   background-color: $menu-color-background;
   max-width: #{"min(80%, 800px)"};
   min-width: 50%;
+
+  // headings are allowed in the introduction (see CollectionPanel.sanitizeIntro)
+  .sv-splash-intro {
+    h1, h2, h3, h4, h5, h6 {
+      margin: 0.8em 0 0.4em;
+      line-height: 1.2;
+    }
+    h1 { font-size: 1.4em; }
+    h2 { font-size: 1.25em; }
+    h3 { font-size: 1.1em; }
+    h4, h5, h6 { font-size: 1em; }
+  }
 
   & > :focus-visible {
     outline: none;

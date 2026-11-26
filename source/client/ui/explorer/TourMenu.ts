@@ -58,7 +58,7 @@ export default class TourMenu extends CustomElement
                 <h1>${unsafeHTML( Object.keys(tour.titles).length > 0 ? tour.titles[ELanguageType[this.activeLanguage]] || "Missing content" : tour.title )}</h1>
                 <ff-icon class="ff-off" name="triangle-right">
             </div>
-            <p>${unsafeHTML( (Object.keys(tour.leads).length > 0 && (Object.values(tour.leads).find((lead)=> lead)))? (tour.leads[ELanguageType[this.activeLanguage]] || "Missing content"): tour.lead )}</p>
+            <p class="sv-preformatted">${unsafeHTML( (Object.keys(tour.leads).length > 0 && (Object.values(tour.leads).find((lead)=> lead)))? (tour.leads[ELanguageType[this.activeLanguage]] || "Missing content"): tour.lead )}</p>
         </div>`;
     }
 

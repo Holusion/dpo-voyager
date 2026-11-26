@@ -24,6 +24,18 @@ import { openModal } from "../Modal";
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * The introduction is shown pre-formatted, but may have paragraphs and headings
+ * (see CollectionPanel.sanitizeIntro), which break lines already: drops a line break
+ * typed next to them or after a <br>, else they'd add an empty line.
+ */
+export function preformatIntro(intro: string)
+{
+    return intro
+        .replace(/(<\/(?:p|h[1-6])>|<br\s*\/?>)[ \t]*\r?\n/gi, "$1")
+        .replace(/\r?\n[ \t]*(?=<(?:p|h[1-6])[\s>])/gi, "");
+}
+
 /** Shows the scene's introduction, `content` being an HTML string. */
 export function showSplashScreen(parent: HTMLElement, language: CVLanguageManager, content: string): Promise<void>
 {
@@ -35,7 +47,7 @@ export function showSplashScreen(parent: HTMLElement, language: CVLanguageManage
                 <div class="ff-flex-spacer ff-title"><b>${windowName}</b></div>
                 <ff-button icon="close" transparent class="ff-close-button" title=${language.getLocalizedString("Close")} @click=${() => close()}></ff-button>
             </div>
-            <div>${unsafeHTML(content)}</div>
+            <div class="sv-splash-intro sv-preformatted">${unsafeHTML(preformatIntro(content))}</div>
         </div>`,
         { label: windowName, panelClass: "sv-splash" });
 }

@@ -51,7 +51,7 @@ export default class ReaderView extends DocumentView
                 <h1>${unsafeHTML(article.title)}</h1>
                 <ff-icon class="ff-off" name="triangle-right">
             </div>
-            <p>${article.lead}</p>
+            <p class="sv-preformatted">${article.lead}</p>
         </div>`;
     }
 
