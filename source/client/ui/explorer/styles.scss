@@ -250,7 +250,8 @@ $pad: $canvas-border-width + $main-menu-button-size + 8px;
   @include common.fullsize;
   overflow: hidden;
 
-  &.sv-blur {
+  // sv-help-blur: while the help is open (see ChromeView.showHelp)
+  &.sv-blur, &.sv-help-blur {
     filter: brightness(60%) blur(5px);
     transition: filter 0.5s;
   }
@@ -684,6 +685,12 @@ $pad: $canvas-border-width + $main-menu-button-size + 8px;
     white-space: pre;
     color: common.$color-text-light;
     @include common.noselect;
+    transition: filter 0.5s;
+
+    // behind the help's backdrop, like the scene (see ChromeView.showHelp)
+    &.sv-help-blur {
+      filter: brightness(60%) blur(5px);
+    }
 
     span {
       color: transparent;
@@ -1086,62 +1093,205 @@ $tour-entry-indent: 12px;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// HELP SCREEN
+// HELP SCREEN (see HelpMain.ts)
+
+// The scene is blurred while the help is open (.sv-help-blur). The chrome stays sharp,
+// for the callouts on its buttons, so the dialog doesn't darken it.
+:host > .sv-modal:has(.sv-help-overlay) > dialog {
+  background-color: transparent;
+}
+
+// The panel covers the dialog without catching clicks, so that clicks outside the
+// window still dismiss it. It holds the callouts and the window.
+.sv-modal-panel.sv-help-overlay {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+  max-height: none;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: none;
+  box-shadow: none;
+  pointer-events: none;
+
+  // keeps the window beside or below the menu's callouts (see HelpCallouts.ts)
+  padding-left: calc(16px + var(--sv-help-callouts-left, 0px));
+  padding-top: calc(16px + var(--sv-help-callouts-top, 0px));
+  padding-bottom: calc(16px + var(--sv-help-callouts-bottom, 0px));
+}
+
+.sv-help-callouts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sv-help-callout {
+  position: absolute;
+
+  // a button standing for the target, over it (see HelpCallouts.ts)
+  .sv-help-callout-ring {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+    outline: none;
+    transition: background-color common.$tx-short;
+
+    &:disabled {
+      border-color: common.$color-text-disabled;
+      cursor: default;
+    }
+  }
+
+  .sv-help-callout-bubble {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 230px;
+    padding: 4px 8px;
+    font-size: 0.85em;
+    line-height: 1.25;
+    background: common.$color-background;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
+    border-radius: 3px;
+    // text only, but catches clicks so that clicking it doesn't dismiss the help
+    pointer-events: auto;
+
+    // arrow towards the target
+    &::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      margin-top: -6px;
+      border: 6px solid transparent;
+    }
+  }
+
+  &.sv-help-callout-right .sv-help-callout-bubble {
+    left: calc(100% + 12px);
+
+    &::before {
+      right: 100%;
+      border-right-color: common.$color-background;
+    }
+  }
+
+  // focused like the menu buttons (see circle-btn)
+  .sv-help-callout-ring:focus-visible {
+    box-shadow: 0 0 3pt 2pt color.adjust(common.$color-primary, $lightness: 50%);
+  }
+
+  .sv-help-callout-ring:enabled:hover, .sv-help-callout-ring:focus-visible {
+    
+    background-color: #ffffff19;
+  }
+
+  &:has(.sv-help-callout-ring:disabled) .sv-help-callout-bubble {
+    color: common.$color-text-disabled;
+  }
+
+  &.sv-help-callout-left .sv-help-callout-bubble {
+    right: calc(100% + 12px);
+
+    &::before {
+      left: 100%;
+      border-left-color: common.$color-background;
+    }
+  }
+
+  // above the target, aligned with its edge towards the middle, the arrow on its center
+  &.sv-help-callout-top .sv-help-callout-bubble {
+    top: auto;
+    bottom: calc(100% + 12px);
+    left: 0;
+    transform: none;
+
+    &::before {
+      top: 100%;
+      margin-top: 0;
+      left: calc(var(--sv-help-target-width) / 2 - 6px);
+      border-top-color: common.$color-background;
+    }
+  }
+
+  &.sv-help-callout-top.sv-help-callout-end .sv-help-callout-bubble {
+    left: auto;
+    right: 0;
+
+    &::before {
+      left: auto;
+      right: calc(var(--sv-help-target-width) / 2 - 6px);
+    }
+  }
+}
 
 .sv-main-help {
-  width: 90%;
-  height: 90%;
+  position: relative;
+  z-index: 1; // over the callouts when space is short
+  box-sizing: border-box;
+  width: 600px;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: common.$color-background;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  outline: none;
 
-  .sv-help-section {
-    display: flex;
-    text-align: center;
-    width: 33%;
-    min-width: 180px;
-    max-height: 90%;
-    flex-direction: column;
-    justify-content: center;
-    margin-top: 20px;
-    margin-bottom: 20px;
-  }
-
-  .sv-help-short {
-    min-width: 100px;
-  }
-
-  .sv-help-row {
+  // the navigation controls, side by side
+  .sv-help-nav {
+    flex: 1 1 auto;
+    overflow-y: auto;
     display: flex;
     flex-wrap: wrap;
-    height: 90%;
-    justify-content: center;
-    overflow: auto;
-  }
+    gap: 4px 16px;
+    padding: 4px 8px 8px;
 
-  .sv-help-text {
-    padding: 5px 5px 0px 5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+    section {
+      flex: 1 1 160px;
+    }
 
-  .sv-help-region {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
+    h3 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 8px 0 4px;
+      font-size: 1em;
 
-  .ff-icon {
-    height: 2rem;
-  }
+      .ff-icon {
+        height: 1.4em;
+      }
+    }
 
-  .sv-commands {
-    flex: 0 0 auto;
-    display: flex;
-    flex-wrap: wrap;
-    padding: 2px;
-  
-    .ff-button {
-      width: 50%;
-      min-width: 100px;
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 0;
+      font-size: 0.9em;
+
+      .ff-icon {
+        flex: 0 0 1.4em;
+        height: 1.4em;
+      }
     }
   }
 }

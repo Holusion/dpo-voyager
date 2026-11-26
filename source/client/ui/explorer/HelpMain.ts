@@ -18,13 +18,13 @@
 import { html } from "@ff/ui/CustomElement";
 
 import "@ff/ui/Button";
-import CVLanguageManager from "client/components/CVLanguageManager";
+import CVDocument from "client/components/CVDocument";
 import { ENavigationType } from "client/schema/setup";
 import { openModal } from "../Modal";
+import { IHelpCallout, IHelpCalloutSelectEvent } from "./HelpCallouts";
+import "./HelpCallouts";
 
 ////////////////////////////////////////////////////////////////////////////////
-
-enum EHelpSection { Nav, Menu }
 
 const leftClick = html`<svg class="ff-icon" viewBox="150 150 900 900" xmlns="http://www.w3.org/2000/svg"><path d="m600 930.62c-121.73 0-220.41-98.684-220.41-220.41v-220.42c0-121.73 98.684-220.42 220.41-220.42 121.73 0 220.42 98.684 220.42 220.42v220.42c0 121.73-98.684 220.41-220.42 220.41zm-188.93-346.37h377.86v125.95c0 104.34-84.594 188.93-188.93 188.93s-188.93-84.59-188.93-188.93zm159.28-85.285c4.2188 2.8008 8.9414 4.7539 13.902 5.7617v48.035h-106.02zm-17.586-62.66v29.863c0 2.125 0.17188 4.2383 0.50391 6.3008l-137.46 80.293h-4.7383v-33.691zm62.977-71.668v-63.133c96.969 7.9961 173.18 89.234 173.18 188.28v62.977h-173.18v-48.035c7.5078-1.5273 14.469-5.2266 19.965-10.723 7.3828-7.3828 11.523-17.395 11.523-27.836v-62.977c0-10.438-4.1406-20.449-11.523-27.832-5.4961-5.4961-12.457-9.1953-19.965-10.723zm-31.488-19.664v19.664c-7.5117 1.5273-14.469 5.2266-19.965 10.723-6.5625 6.5625-10.562 15.207-11.367 24.387l-141.71 82.766c0.51953-13.695 2.4883-27.031 5.7773-39.832zm31.488 121.2v-62.977c0-2.0938-0.83594-4.0898-2.3008-5.5703-1.4766-1.4648-3.4766-2.3008-5.5703-2.3008h-15.746c-2.0938 0-4.0938 0.83594-5.5742 2.3008-1.4609 1.4805-2.2969 3.4766-2.2969 5.5703v62.977c0 2.0938 0.83594 4.0938 2.2969 5.5742 1.4805 1.4648 3.4805 2.3008 5.5742 2.3008h15.746c2.0938 0 4.0938-0.83594 5.5703-2.3008 1.4648-1.4805 2.3008-3.4805 2.3008-5.5742zm-31.488-157.66-147.54 86.184c30.262-51.859 84.516-87.992 147.54-93.188z" fill-rule="evenodd"/></svg>`;
 const rightClick = html`<svg class="ff-icon" viewBox="150 150 900 900" xmlns="http://www.w3.org/2000/svg"><path d="m600 930.62c121.73 0 220.42-98.684 220.42-220.41v-220.42c0-121.73-98.684-220.42-220.42-220.42-121.73 0-220.41 98.684-220.41 220.42v220.42c0 121.73 98.684 220.41 220.41 220.41zm188.93-346.37h-377.86v125.95c0 104.34 84.59 188.93 188.93 188.93s188.93-84.59 188.93-188.93zm-159.28-85.285c-4.2188 2.8008-8.9414 4.7539-13.902 5.7617v48.035h106.02zm17.586-62.66v29.863c0 2.125-0.17188 4.2383-0.50391 6.3008l137.46 80.293h4.7383v-33.691zm-62.977-71.668v-63.133c-96.969 7.9961-173.18 89.234-173.18 188.28v62.977h173.18v-48.035c-7.5117-1.5273-14.469-5.2266-19.965-10.723-7.3828-7.3828-11.523-17.395-11.523-27.836v-62.977c0-10.438 4.1406-20.449 11.523-27.832 5.4961-5.4961 12.453-9.1953 19.965-10.723zm31.488-19.664v19.664c7.5078 1.5273 14.469 5.2266 19.965 10.723 6.5625 6.5625 10.562 15.207 11.367 24.387l141.71 82.766c-0.51953-13.695-2.4883-27.031-5.7773-39.832zm-31.488 121.2v-62.977c0-2.0938 0.83594-4.0898 2.2969-5.5703 1.4805-1.4648 3.4805-2.3008 5.5742-2.3008h15.746c2.0938 0 4.0938 0.83594 5.5703 2.3008 1.4648 1.4805 2.3008 3.4766 2.3008 5.5703v62.977c0 2.0938-0.83594 4.0938-2.3008 5.5742-1.4766 1.4648-3.4766 2.3008-5.5703 2.3008h-15.746c-2.0938 0-4.0938-0.83594-5.5742-2.3008-1.4609-1.4805-2.2969-3.4805-2.2969-5.5742zm31.488-157.66 147.54 86.184c-30.258-51.859-84.512-87.992-147.54-93.188z" fill-rule="evenodd"/></svg>`;
@@ -54,117 +54,98 @@ const arrowKeysLR = html`<svg class="ff-icon" viewBox="350 350 950 800" xmlns="h
         <path d="m1116 895.32v-238.92c0-22.559-18.359-40.922-40.922-40.922l-238.92 0.003907c-22.559 0-40.922 18.359-40.922 40.922v238.92c0 22.559 18.359 40.922 40.922 40.922h238.92c22.68-0.007813 40.918-18.367 40.918-40.926zm-148.44-85.559v-24.961h-86.039c-4.9219 0-9-4.0781-9-9s4.0781-9 9-9h86.039v-24.84c0-4.9219 5.2812-7.9219 9.4805-5.5195l58.68 33.84c4.1992 2.3984 4.1992 8.5195 0 11.039l-58.68 33.84c-4.1992 2.5195-9.4805-0.60156-9.4805-5.3984z"/>
         <g transform="translate(350 0)"><path d="m84 656.4v238.92c0 22.559 18.359 40.922 40.922 40.922h238.92c22.559 0 40.922-18.359 40.922-40.922l-0.003906-238.92c0-22.559-18.359-40.922-40.922-40.922l-238.92 0.003907c-22.684 0-40.922 18.359-40.922 40.918zm148.44 85.562v24.84h86.039c4.9219 0 9 4.0781 9 9s-4.0781 9-9 9h-86.039v24.84c0 4.9219-5.2812 7.9219-9.4805 5.5195l-58.68-33.84c-4.1992-2.3984-4.1992-8.5195 0-11.039l58.68-33.84c4.1992-2.4023 9.4805 0.59766 9.4805 5.5195z"/></g></g></svg>`;
 
-/** Shows the introduction to Voyager: navigation controls and menu icons. */
-export function showHelp(parent: HTMLElement, language: CVLanguageManager, navMode: ENavigationType): Promise<void>
-{
-    const windowName = language.getLocalizedString("Introduction to Voyager");
-    let section = EHelpSection.Nav;
-    let srTrigger = "";
-    let srTimer = 0;
+/** Callouts on the main menu's and bottom bar's buttons. */
+const menuCallouts: IHelpCallout[] = [
+    { selector: "#ar-btn", text: "Launch an augmented reality experience" },
+    { selector: "#audio-btn", text: "Hear an audio narration of the scene" },
+    { selector: "#tour-btn", text: "Take a curated guided tour of the scene" },
+    { selector: "#reader-btn", text: "Read articles about the scene content" },
+    { selector: "#anno-btn", text: "Show annotations highlighting key points" },
+    { selector: "#share-btn", text: "Share the experience with a friend" },
+    { selector: "#fullscreen-btn", text: "View the experience in fullscreen mode" },
+    { selector: "#tools-btn", text: "Open the advanced tool menu" },
+    // bottom bar, side by side: one bubble beside, the other above, so that none covers the other
+    { selector: "#main-reset", text: "Reset the scene to its initial view", side: "left" },
+    { selector: "#language", text: "Choose the language of the experience", side: "top" },
+    // the help button, closing the help: no bubble, the language's is above
+    { selector: "#main-help", text: "" },
+];
 
-    return openModal(parent, ({ close, update }) => {
-        if (!srTimer) {
-            // trigger screen reader on first pass
-            srTimer = window.setTimeout(() => { srTrigger = "section end"; update(); }, 100);
+/**
+ * Shows the help over the blurred scene: callouts on the main menu's and bottom bar's
+ * buttons, and a window with the navigation controls. Follows the language while open.
+ * `parent` is the chrome view, where the buttons are looked up.
+ * The callouts stand for their buttons: clicking one closes the help, then focuses and
+ * clicks the button, from the callout's click handler, so that the button's action still
+ * counts as user-initiated (required for fullscreen and AR). The help button's closes it.
+ * @returns the button clicked through a callout, if any, once closed.
+ */
+export function showHelp(parent: HTMLElement, document: CVDocument): Promise<HTMLElement | undefined>
+{
+    const language = document.setup.language;
+    const followed = [ language.outs.activeLanguage ];
+    let onChange: () => void;
+
+    const closed = openModal<HTMLElement>(parent, ({ close, update }) => {
+        if (!onChange) {
+            onChange = update;
+            followed.forEach(property => property.on("value", onChange));
         }
 
-        const showSection = (idx: EHelpSection) => {
-            section = idx;
-            update();
+        const t = (text: string) => language.getLocalizedString(text);
+        const isOrbit = document.setup.navigation.ins.mode.value === ENavigationType.Orbit;
+        const callouts = menuCallouts.map(callout => ({ ...callout, text: callout.text && t(callout.text) }));
+
+        const onSelect = (event: IHelpCalloutSelectEvent) => {
+            const target = event.detail.target;
+            if (target.id === "main-help") {
+                close();
+                return;
+            }
+            // closing at once makes the menu usable again
+            close(target);
+            target.focus();
+            target.click();
         };
 
-        const isOrbit = navMode === ENavigationType.Orbit;
+        const gesture = (icon, text: string) => html`<li>${icon}<span>${t(text)}</span></li>`;
 
-        const arVisible = parent.querySelector("#ar-btn") ? true : false;
-        const audioVisible = parent.querySelector("#audio-btn") ? true : false;
-        const toursVisible = parent.querySelector("#tour-btn") ? true : false;
-        const readerVisible = parent.querySelector("#reader-btn") ? true : false;
-        const annosVisible = parent.querySelector("#anno-btn") ? true : false;
-        const fsVisible = parent.querySelector("#fullscreen-btn") ? true : false;
-        const toolsVisible = parent.querySelector("#tools-btn") ? true : false;
-
-        const fpTileOption = html`<div class="sv-help-text">Ctrl + ${arrowKeysUD}Arrow keys</div>`;
-
-        const navContent = html`<div class="sv-help-row" aria-live="polite" aria-atomic="true">
-                                    <div class="sv-help-section">
-                                        <ff-icon class="ff-off" name="rotate"></ff-icon>
-                                        <div class="sv-help-text"><b>${isOrbit ? 'Orbit' : 'Look Around'}</b></div>
-                                        <div class="sv-help-text">${leftClick}Left-click and drag</div>
-                                        <div class="sr-only"> Or.</div>
-                                        <div class="sv-help-text">${oneFinger}One-finger drag</div>
-                                        <div class="sr-only"> Or.</div>
-                                        <div class="sv-help-text">${isOrbit ? arrowKeys : arrowKeysLR}Arrow keys</div>
-                                        ${!isOrbit ? fpTileOption : null}
-                                    </div>
-                                    <div class="sv-help-section">
-                                        <ff-icon class="ff-off" name="move"></ff-icon>
-                                        <div class="sv-help-text"><b>Pan</b></div>
-                                        <div class="sv-help-text">${rightClick}Right-click and drag</div>
-                                        <div class="sr-only"> Or.</div>
-                                        <div class="sv-help-text">${twoFinger}Two-finger drag</div>
-                                        <div class="sr-only"> Or.</div>
-                                        <div class="sv-help-text">Shift + ${arrowKeys}Arrow keys</div>
-                                    </div>
-                                    <div class="sv-help-section">
-                                        <ff-icon class="ff-off" name="zoom"></ff-icon>
-                                        <div class="sv-help-text"><b>${isOrbit ? 'Zoom' : 'Forward/Backward'}</b></div>
-                                        <div class="sv-help-text">${mouseWheel}Mouse wheel</div>
-                                        <div class="sr-only"> Or.</div>
-                                        <div class="sv-help-text">${pinch}Two-finger pinch</div>
-                                        <div class="sr-only"> Or.</div>
-                                        <div class="sv-help-text">${isOrbit ? 'Ctrl + ' : ''}${isOrbit ? arrowKeys : arrowKeysUD}Arrow keys</div>
-                                    </div>
-                                    <div id="sr-trigger" class="sr-only">${srTrigger}</div>
-                                </div>`;
-
-        const menuContent = html`<div class="sv-help-text">The tools below can be accessed by clicking the corresponding icons on the menu bar to the left of the screen.</div>
-                                <div class="sv-help-row">
-                                    ${arVisible ? html`<div class="sv-help-section sv-help-short">
-                                        <ff-icon title="AR." class="ff-off" name="ar"></ff-icon>
-                                        <div class="sv-help-text">Launch an augmented<br>reality experience.</div>
-                                    </div>`:""}
-                                    ${audioVisible ? html`<div class="sv-help-section sv-help-short">
-                                        <ff-icon title="Play Narration." class="ff-off" name="audio"></ff-icon>
-                                        <div class="sv-help-text">Hear an audio<br>narration of the scene.</div>
-                                    </div>`:""}
-                                    ${toursVisible ? html`<div class="sv-help-section sv-help-short">
-                                        <ff-icon title="Tours." class="ff-off" name="globe"></ff-icon>
-                                        <div class="sv-help-text">Take a curated guided<br>tour of the scene.</div>
-                                    </div>`:""}                       
-                                    ${readerVisible ? html`<div class="sv-help-section sv-help-short">
-                                        <ff-icon title="Articles." class="ff-off" name="article"></ff-icon>
-                                        <div class="sv-help-text">Read articles about<br>the scene content.</div>
-                                    </div>`:""}
-                                    ${annosVisible ? html`<div class="sv-help-section sv-help-short">
-                                        <ff-icon title="Annotations." class="ff-off" name="comment"></ff-icon>
-                                        <div class="sv-help-text">Show annotations<br>highlighting key points.</div>
-                                    </div>`:""}
-                                    <div class="sv-help-section sv-help-short">
-                                        <ff-icon title="Share." class="ff-off" name="share"></ff-icon>
-                                        <div class="sv-help-text">Share the experience<br>with a friend!</div>
-                                    </div>
-                                    ${fsVisible ? html`<div class="sv-help-section sv-help-short">
-                                        <ff-icon title="Fullscreen." class="ff-off" name="expand"></ff-icon>
-                                        <div class="sv-help-text">View the experience<br>in fullscreen mode.</div>
-                                    </div>`:""}
-                                    ${toolsVisible ? html`<div class="sv-help-section sv-help-short">
-                                        <ff-icon title="Advanced Tools." class="ff-off" name="tools"></ff-icon>
-                                        <div class="sv-help-text">Open the advanced<br>tool menu.</div>
-                                    </div>`:""}
-                                </div>`;
-
-        return html`
-        <div class="sv-help-region" aria-live="polite">
-            <div class="ff-flex-row">
-                <div class="ff-flex-spacer ff-title"><b>${windowName}</b></div>
-                <ff-button icon="close" transparent class="ff-close-button" title=${language.getLocalizedString("Close")} @click=${() => close()}></ff-button>
+        return html`<div class="sv-main-help" tabindex="-1" autofocus>
+                <div class="ff-flex-row">
+                    <div class="ff-flex-spacer ff-title" role="heading"><b>${t("Navigation")}</b></div>
+                    <ff-button icon="close" transparent class="ff-close-button" title=${t("Close")} @click=${() => close()}></ff-button>
+                </div>
+                <div class="sv-help-nav">
+                    <section>
+                        <h3><ff-icon name="rotate"></ff-icon>${t(isOrbit ? "Orbit" : "Look Around")}</h3>
+                        <ul>
+                            ${gesture(leftClick, "Left-click and drag")}
+                            ${gesture(oneFinger, "One-finger drag")}
+                            ${gesture(isOrbit ? arrowKeys : arrowKeysLR, "Arrow keys")}
+                            ${!isOrbit ? gesture(arrowKeysUD, "Ctrl + Arrow keys") : null}
+                        </ul>
+                    </section>
+                    <section>
+                        <h3><ff-icon name="move"></ff-icon>${t("Pan")}</h3>
+                        <ul>
+                            ${gesture(rightClick, "Right-click and drag")}
+                            ${gesture(twoFinger, "Two-finger drag")}
+                            ${gesture(arrowKeys, "Shift + Arrow keys")}
+                        </ul>
+                    </section>
+                    <section>
+                        <h3><ff-icon name="zoom"></ff-icon>${t(isOrbit ? "Zoom" : "Forward/Backward")}</h3>
+                        <ul>
+                            ${gesture(mouseWheel, "Mouse wheel")}
+                            ${gesture(pinch, "Two-finger pinch")}
+                            ${gesture(isOrbit ? arrowKeys : arrowKeysUD, isOrbit ? "Ctrl + Arrow keys" : "Arrow keys")}
+                        </ul>
+                    </section>
+                </div>
             </div>
-            <div class="sv-commands">
-                <ff-button text="Navigation" index=${EHelpSection.Nav} selectedIndex=${section} @click=${() => showSection(EHelpSection.Nav)} autofocus></ff-button>
-                <ff-button text="Menu Icons" index=${EHelpSection.Menu} selectedIndex=${section} @click=${() => showSection(EHelpSection.Menu)}></ff-button>
-            </div>
-            ${section === EHelpSection.Nav ? navContent : menuContent}
-        </div>
-        `;
-    }, { label: windowName, panelClass: "sv-main-help" });
+            <sv-help-callouts .root=${parent} .callouts=${callouts} label=${t("Main toolbar")}
+                @select=${onSelect}></sv-help-callouts>`;
+    }, { label: language.getLocalizedString("Help"), panelClass: "sv-help-overlay" });
+
+    return closed.finally(() => followed.forEach(property => property.off("value", onChange)));
 }

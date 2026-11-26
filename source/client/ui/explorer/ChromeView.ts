@@ -36,6 +36,7 @@ import { showLanguageMenu } from "./LanguageMenu";
 import { EUIElements } from "client/components/CVInterface";
 import CVAssetReader from "client/components/CVAssetReader";
 import { showSplashScreen } from "./SplashScreen";
+import type SceneView from "../SceneView";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -44,6 +45,7 @@ export default class ChromeView extends DocumentView
 {
     protected documentProps = new Subscriber("value", this.onUpdate, this);
     protected titleElement: HTMLDivElement;
+    protected helpOpen = false;
     protected assetPath: string = "";
     protected needsSplash: boolean = true;
 
@@ -168,7 +170,7 @@ export default class ChromeView extends DocumentView
                     ${menuVisible ? html`<sv-main-menu role="region" aria-label="Main toolbar" .system=${this.system}></sv-main-menu>` : null}
                 </div>
                 <div class="sv-top-bar">
-                    ${titleVisible ? html`<div role="heading" class="ff-ellipsis sv-main-title">${titleElement}<span class="ff-ellipsis"> </span></div>` : null}
+                    ${titleVisible ? html`<div role="heading" class="ff-ellipsis sv-main-title ${this.helpOpen ? "sv-help-blur" : ""}">${titleElement}<span class="ff-ellipsis"> </span></div>` : null}
                     ${logoVisible ? html`<sv-logo .assetPath=${this.assetPath}></sv-logo>` : null}
                 </div>
             </div>
@@ -221,12 +223,39 @@ export default class ChromeView extends DocumentView
     }
 
     protected openHelp() {
-        const language = this.activeDocument.setup.language;
-        const navMode = this.activeDocument.setup.navigation.ins.mode.value;
-
-        showHelp(this, language, navMode).then(() => {
-            (this.querySelector("#main-help") as HTMLElement).focus();
+        this.showHelp().then(target => {
+            // else focus is on the menu button the help was left through
+            if (!target) {
+                (this.querySelector("#main-help") as HTMLElement)?.focus();
+            }
         });
+    }
+
+    /** Shows the help over the blurred scene and title. */
+    protected showHelp() {
+        const document = this.activeDocument;
+        const sceneView = (this.getRootNode() as ParentNode).querySelector(".sv-scene-view") as SceneView;
+        this.setHelpBlur(sceneView, true);
+        this.helpOpen = true;
+        this.requestUpdate();
+
+        return showHelp(this, document)
+            .finally(() => {
+                this.setHelpBlur(sceneView, false);
+                this.helpOpen = false;
+                this.requestUpdate();
+            });
+    }
+
+    protected setHelpBlur(sceneView: SceneView, blur: boolean) {
+        if (!sceneView) {
+            return;
+        }
+        // like ContentView's blur: delayed, and the scene rendered again, for Android Firefox
+        setTimeout(() => {
+            sceneView.classList.toggle("sv-help-blur", blur);
+            sceneView.getView()?.render();
+        }, 1);
     }
 
     protected resetViewer() {
