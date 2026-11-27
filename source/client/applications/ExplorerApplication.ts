@@ -568,15 +568,15 @@ Version: ${ENV_VERSION}
     // Returns camera offset vector (x,y,z)
     getCameraOffset( type?: string )
     {
-        const orbitNavIns = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.navigation.ins;
-        let returnValue = orbitNavIns.offset.value;
+        const navigation = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.navigation;
+        let returnValue = navigation.ins.offset.value;
         if(type) {
             const type_lower = type.toLowerCase();
             if(type_lower === "max") {
-                returnValue = orbitNavIns.maxOffset.value;
+                returnValue = navigation.effectiveOffsetLimits.max;
             }
             else if(type_lower === "min") {
-                returnValue = orbitNavIns.minOffset.value;
+                returnValue = navigation.effectiveOffsetLimits.min;
             }
             else if(type_lower !== "active") {
                 console.error("Error: getCameraOffset invalid type param.");
@@ -589,21 +589,20 @@ Version: ${ENV_VERSION}
     // Sets camera offset vector (x,y,z)
     setCameraOffset( x: string, y: string, z: string)
     {
-        const orbitNavIns = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.navigation.ins;
+        const navigation = this.system.getMainComponent(CVDocumentProvider).activeComponent.setup.navigation;
         let xNum = parseFloat(x);
         let yNum = parseFloat(y);
         let zNum = parseFloat(z);
   
         if (!isNaN(xNum) && !isNaN(yNum) && !isNaN(zNum)) {
-            const minOffset = orbitNavIns.minOffset.value;
-            const maxOffset = orbitNavIns.maxOffset.value;
+            const { min: minOffset, max: maxOffset } = navigation.effectiveOffsetLimits;
 
             // check limits
             xNum = clamp(xNum, minOffset[0], maxOffset[0]);
             yNum = clamp(yNum, minOffset[1], maxOffset[1]);
             zNum = clamp(zNum, minOffset[2], maxOffset[2]);
 
-            orbitNavIns.offset.setValue([xNum, yNum, zNum]);
+            navigation.ins.offset.setValue([xNum, yNum, zNum]);
         }
         else {
             console.error("Error: setCameraOffset param is not a number.");

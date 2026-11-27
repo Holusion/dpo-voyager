@@ -55,6 +55,12 @@ const _replaceNull = function(vector: number[], replacement: number)
     return vector;
 };
 
+// Limits left unset in a document (null, i.e. non-finite) are derived from the scene's size.
+/** Derived minimum zoom distance, as a factor of the scene's bounding radius. */
+const MIN_OFFSET_RADIUS_FACTOR = 0.1;
+/** Fallback zoom distance until the scene's size is known. */
+const MIN_OFFSET_FALLBACK = 0.1;
+
 /**
  * Voyager explorer orbit navigation.
  * Controls manipulation and parameters of the camera.
@@ -82,7 +88,7 @@ export default class CVOrbitNavigation extends CObject3D
         orbit: types.Vector3("Current.Orbit", [ -25, -25, 0 ]),
         offset: types.Vector3("Current.Offset", [ 0, 0, 100 ]),
         minOrbit: types.Vector3("Limits.Min.Orbit", [ -90, -Infinity, -Infinity ]),
-        minOffset: types.Vector3("Limits.Min.Offset", [ -Infinity, -Infinity, 0.1 ]),
+        minOffset: types.Vector3("Limits.Min.Offset", [ -Infinity, -Infinity, -Infinity ]),
         maxOrbit: types.Vector3("Limits.Max.Orbit", [ 90, Infinity, Infinity ]),
         maxOffset: types.Vector3("Limits.Max.Offset", [ Infinity, Infinity, Infinity ]),
         keyNavActive: types.Enum("Navigation.KeyNavActive", EKeyNavMode),
@@ -99,6 +105,8 @@ export default class CVOrbitNavigation extends CObject3D
     private _isAutoZooming = false;
     private _autoRotationStartTime = null;
     private _initYOrbit = null;
+    /** Set when the scene bounds changed, derived limits are updated in the next update(). */
+    private _boundsChanged = false;
 
     constructor(node: Node, id: string)
     {
@@ -154,7 +162,7 @@ export default class CVOrbitNavigation extends CObject3D
 
     dispose()
     {
-        this.sceneNode.outs.boundingRadius.on("value", this.onBoundsChange, this);
+        this.sceneNode.outs.boundingRadius.off("value", this.onBoundsChange, this);
         this.assetManager.outs.completed.off("value", this.onLoadingCompleted, this);
 
         this.system.off<IPointerEvent>(["pointer-down", "pointer-up", "pointer-move"], this.onPointer, this);
@@ -240,6 +248,11 @@ export default class CVOrbitNavigation extends CObject3D
             controller.maxOffset.fromArray(maxOffset.value);
         }
 
+        if (limitsChanged || this._boundsChanged) {
+            this._boundsChanged = false;
+            this.updateDerivedLimits();
+        }
+
         // Limits apply to every camera pose, not only to user interaction: documents,
         // tours, snapshots and the API may set values outside of them.
         // The clamped pose is written back to ins.orbit/ins.offset on the next tick.
@@ -264,7 +277,9 @@ export default class CVOrbitNavigation extends CObject3D
                 }
 
                 controller.camera = cameraComponent.camera;
-            
+
+                // scene bounds may just have been updated above
+                this.updateDerivedLimits();
                 controller.zoomExtents(this._modelBoundingBox);
                 //cameraComponent.ins.zoom.set();
                 this._hasZoomed = true;
@@ -406,6 +421,8 @@ export default class CVOrbitNavigation extends CObject3D
             maxOffset: orbit.maxOffset ? _replaceNull(orbit.maxOffset, Infinity) : ins.maxOffset.schema.preset,
         });
 
+        this.updateDerivedLimits();
+
         if (this.ins.autoZoom.value) {
             this.ins.zoomExtents.set();
             this._isAutoZooming = true;
@@ -524,5 +541,36 @@ export default class CVOrbitNavigation extends CObject3D
     protected onBoundsChange()
     {
         this._controller.boundsRadius = this.sceneNode.outs.boundingRadius.value;
+        // apply derived limits (and clamp the pose to them) in the next update
+        this._boundsChanged = true;
+        this.changed = true;
+    }
+
+    /**
+     * Zoom distance limits left unset (non-finite) in the document get a value derived from the scene's size.
+     * Derived values are only applied to the controller: the inputs keep the authored values,
+     * so "unset" is what gets saved with the document.
+     */
+    protected updateDerivedLimits()
+    {
+        const controller = this._controller;
+        const radius = controller.boundsRadius;
+
+        const minOffsetZ = this.ins.minOffset.value[2];
+        if (!Number.isFinite(minOffsetZ)) {
+            controller.minOffset.z = radius > 0 ? radius * MIN_OFFSET_RADIUS_FACTOR : MIN_OFFSET_FALLBACK;
+        }
+        else {
+            controller.minOffset.z = minOffsetZ;
+        }
+    }
+
+    /** Offset limits currently in effect, including derived values. */
+    get effectiveOffsetLimits(): { min: number[], max: number[] }
+    {
+        return {
+            min: this._controller.minOffset.toArray(),
+            max: this._controller.maxOffset.toArray(),
+        };
     }
 }
