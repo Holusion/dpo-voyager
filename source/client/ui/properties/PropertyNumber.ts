@@ -127,6 +127,15 @@ export default class PropertyNumber extends PropertyBase
         }
     }
 
+    /** Resets the property, or its element for a vector, to its preset. */
+    protected resetValue(){
+        if(typeof this.index === "number" && 0 <= this.index){
+            this.setValue(this.property.schema.preset[this.index]);
+        }else{
+            this.property.reset();
+        }
+    }
+
     protected setPrecision(value: number) : string {
         const schema = this.property.schema;
         let text :string;
@@ -150,6 +159,13 @@ export default class PropertyNumber extends PropertyBase
     protected onChange = (event: Event) => {
         let text = (event.target as HTMLInputElement).value;
 
+        // an emptied field gets its default value back
+        if (text.trim() === "") {
+            this.resetValue();
+            // if the value was already the default, lit sees no change and leaves the field empty
+            (event.target as HTMLInputElement).value = this.setPrecision(this.value);
+            return;
+        }
         if (text.toLowerCase().indexOf("inf") >= 0) {
             this.setValue(text[0] === "-" ? -Infinity : Infinity);
             return;
