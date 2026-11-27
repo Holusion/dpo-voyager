@@ -369,6 +369,9 @@ export default class CVOrbitNavigation extends CObject3D
             controller.offset.toArray(ins.offset.value);
             ins.offset.set(true);
 
+            // clipping planes follow the camera distance
+            this.sceneNode.updateCameraClipping(true);
+
             // if camera has moved, set preset to "None"
             if (ins.preset.value !== EViewPreset.None && !ins.preset.changed) {
                 ins.preset.setValue(EViewPreset.None, true);
@@ -577,18 +580,19 @@ export default class CVOrbitNavigation extends CObject3D
             controller.minOffset.z = minOffsetZ;
         }
 
+        // without a document offset or a framing yet (e.g. no navigation section), the current pose
+        const reference = this._referenceDistance || _vec3.fromArray(this.ins.offset.value).length();
+        // an authored minimum is part of the scene's scale, the fallback minimum is not
+        const authoredMin = Number.isFinite(minOffsetZ) ? minOffsetZ : 0;
+        const size = Math.max(radius, reference, authoredMin);
+        const autoMaxOffsetZ = size > 0 ? size * MAX_OFFSET_FACTOR : MAX_OFFSET_FALLBACK;
+
+        // an orthographic camera stays at the automatic max distance, even with an authored max
+        // (possibly unlimited): it only needs to be outside of the scene
+        controller.orthographicDistance = autoMaxOffsetZ;
+
         const maxOffsetZ = this.ins.maxOffset.value[2];
-        if (!Number.isFinite(maxOffsetZ)) {
-            // without a document offset or a framing yet (e.g. no navigation section), the current pose
-            const reference = this._referenceDistance || _vec3.fromArray(this.ins.offset.value).length();
-            // an authored minimum is part of the scene's scale, the fallback minimum is not
-            const authoredMin = Number.isFinite(minOffsetZ) ? minOffsetZ : 0;
-            const size = Math.max(radius, reference, authoredMin);
-            controller.maxOffset.z = size > 0 ? size * MAX_OFFSET_FACTOR : MAX_OFFSET_FALLBACK;
-        }
-        else {
-            controller.maxOffset.z = maxOffsetZ;
-        }
+        controller.maxOffset.z = Number.isFinite(maxOffsetZ) ? maxOffsetZ : autoMaxOffsetZ;
 
         // inconsistent authored limits: the minimum wins
         controller.maxOffset.z = Math.max(controller.maxOffset.z, controller.minOffset.z);

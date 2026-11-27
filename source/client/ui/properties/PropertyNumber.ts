@@ -23,6 +23,13 @@ import PropertyBase from "./PropertyBase";
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * Value entered as "inf" or "-inf": large enough to mean "no limit", but finite,
+ * so it is saved as a number. Non-finite values are saved as null, which stands for
+ * "unset" (e.g. a navigation limit derived from the scene) and is shown as "auto".
+ */
+export const UNLIMITED = Number.MAX_SAFE_INTEGER;
+
 @customElement("sv-property-number")
 export default class PropertyNumber extends PropertyBase
 {
@@ -109,6 +116,7 @@ export default class PropertyNumber extends PropertyBase
                     min=${min ?? ""}
                     max=${max ?? ""}
                     .value=${text}
+                    placeholder=${isFinite(value) ? "" : "auto"}
                     @change=${this.onChange}
                     @focus=${(e)=>{ e.target.select();}}}
                     @keypress=${(e)=>{if(e.key === "Enter"){e.target.blur();}}}
@@ -141,6 +149,9 @@ export default class PropertyNumber extends PropertyBase
         let text :string;
 
         if(!isFinite(value)){
+            text = ""; // shown as the "auto" placeholder
+        }
+        else if(Math.abs(value) >= UNLIMITED){
             text = value > 0 ? "inf" : "-inf";
         }
         else{
@@ -167,7 +178,7 @@ export default class PropertyNumber extends PropertyBase
             return;
         }
         if (text.toLowerCase().indexOf("inf") >= 0) {
-            this.setValue(text[0] === "-" ? -Infinity : Infinity);
+            this.setValue(text.trim()[0] === "-" ? -UNLIMITED : UNLIMITED);
             return;
         }
         let value :number;
@@ -200,8 +211,8 @@ export default class PropertyNumber extends PropertyBase
         if (!event.isPrimary || event.button !== 0) {
             return;
         }
-        if(!isFinite(this.value)){
-            return; //No point in incrementing +/-infinity.
+        if(!isFinite(this.value) || Math.abs(this.value) >= UNLIMITED){
+            return; //No point in incrementing "auto" or +/-infinity.
         }
         const target = event.target as HTMLInputElement;
         if((target.tagName !== "INPUT" && !target.classList.contains("sv-property-field")) || target == document.activeElement) return;

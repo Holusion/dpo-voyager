@@ -42,6 +42,13 @@ import CSunLight from "@ff/scene/components/CSunLight";
 const _vec3 = new Vector3();
 const _vec3b = new Vector3();
 
+/**
+ * Cameras with automatic clipping see the scene from up to this many times the current camera distance
+ * (or the maximum zoom distance if closer). The planes follow the camera instead of covering the maximum zoom
+ * distance: an unlimited or very large maximum would spread the depth buffer's precision over a useless range.
+ */
+const CLIPPING_DISTANCE_FACTOR = 4;
+
 function light_has_shadowSize(l : CLight): l is (CLight & {ins: {shadowSize: Property<number>}}) {
     return "shadowSize" in l.ins;
 }
@@ -327,11 +334,15 @@ export default class CVScene extends CVNode
         this.updateCameraClipping();
     }
 
+    /** Camera distance the clipping planes were last computed for. */
+    private _clippingDistance = 0;
+
     /**
-     * Updates near and far planes of cameras with automatic clipping,
-     * so the scene stays visible up to the navigation's maximum zoom distance.
+     * Updates near and far planes of cameras with automatic clipping, so the scene stays visible
+     * from the current camera distance and a few times beyond it, up to the navigation's maximum zoom distance.
+     * @param onlyIfMoved Skip the update while the camera distance stays within a factor of 2 of the last update's.
      */
-    updateCameraClipping()
+    updateCameraClipping(onlyIfMoved = false)
     {
         if(this.renderer.views[0] && this.renderer.views[0].renderer.xr.isPresenting) {
             return;
@@ -341,10 +352,19 @@ export default class CVScene extends CVNode
         if (!(radius > 0)) {
             return; // scene size not known yet
         }
-        const maxDistance = this.setup.navigation.effectiveOffsetLimits.max[2];
+        const navigation = this.setup.navigation;
+        const distance = _vec3.fromArray(navigation.ins.offset.value).length();
 
-        // camera can be up to maxDistance from the scene center, the scene extends radius beyond it
-        const far = Math.max(4 * radius, maxDistance + 2 * radius);
+        if (onlyIfMoved && distance <= 2 * this._clippingDistance && 2 * distance >= this._clippingDistance) {
+            return;
+        }
+        this._clippingDistance = distance;
+
+        // the camera can get CLIPPING_DISTANCE_FACTOR times farther before the next update,
+        // but not beyond the maximum zoom distance; the scene extends radius beyond its center
+        const maxDistance = navigation.effectiveOffsetLimits.max[2];
+        const reach = Math.min(maxDistance, CLIPPING_DISTANCE_FACTOR * Math.max(distance, radius));
+        const far = Math.max(4 * radius, reach + 2 * radius);
         const near = Math.min(far / 1000.0, radius / 100.0);
 
         this.cameras.forEach(camera => {

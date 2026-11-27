@@ -54,6 +54,12 @@ export default class CameraController implements IManip
 
     boundsRadius = 0;
 
+    /**
+     * Distance of an orthographic camera from the orbit center. It doesn't change the view,
+     * the camera only needs to be outside of the scene. Defaults to maxOffset.z when not set.
+     */
+    orthographicDistance: number = undefined;
+
     orientationEnabled = true;
     offsetEnabled = true;
 
@@ -278,9 +284,10 @@ export default class CameraController implements IManip
         _vec3b.copy(this.offset);
 
         if (camera.isOrthographicCamera) {
-            _vec3b.z = this.maxOffset.z; // fixed distance = maxOffset.z
+            const distance = this.orthographicDistance ?? this.maxOffset.z;
+            _vec3b.z = distance; // fixed distance
             camera.size = this.offset.z; // use size to visualize distance
-            camera.far = 2 * this.maxOffset.z; // adjust far clipping
+            camera.far = 2 * distance; // adjust far clipping
             camera.updateProjectionMatrix();
         }
 

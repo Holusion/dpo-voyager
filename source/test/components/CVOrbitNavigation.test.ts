@@ -1,9 +1,13 @@
 import { expect } from "chai";
+import { Vector3 } from "three";
 
 import CVOrbitNavigation from "client/components/CVOrbitNavigation";
 import CVScene from "client/components/CVScene";
 import CVCamera from "client/components/CVCamera";
 import { IDocument } from "client/schema/document";
+
+import { UNLIMITED } from "client/ui/properties/PropertyNumber";
+import { EProjection } from "@ff/three/UniversalCamera";
 
 import { createDocumentData, createStory, IStory } from "../helpers/story";
 
@@ -37,6 +41,7 @@ describe("CVOrbitNavigation", function(){
   }
 
   const offsetZ = () => navigation.ins.offset.value[2];
+  const far = () => story.document.getInnerComponent(CVCamera).ins.far.value;
   const radius = () => story.document.getInnerComponent(CVScene).outs.boundingRadius.value;
 
   describe("with unset limits", function(){
@@ -64,10 +69,13 @@ describe("CVOrbitNavigation", function(){
       expect(orbit.maxOffset).to.deep.equal([ null, null, null ]);
     });
 
-    it("sets the far plane beyond the maximum zoom distance", function(){
-      const camera = story.document.getInnerComponent(CVCamera);
+    it("keeps the scene within the far plane when zooming out to the maximum", function(){
       const { max } = navigation.effectiveOffsetLimits;
-      expect(camera.ins.far.value).to.be.at.least(max[2] + radius());
+      navigation.ins.offset.setValue([ 0, 0, max[2] ]);
+      story.update();
+      story.update();
+      expect(offsetZ()).to.equal(max[2]);
+      expect(far()).to.be.at.least(offsetZ() + radius());
     });
   });
 
@@ -104,6 +112,65 @@ describe("CVOrbitNavigation", function(){
       story.update();
       expect(offsetZ()).to.equal(1);
     });
+  });
+
+  describe("with an unlimited maxOffset", function(){
+    beforeEach(function(){
+      load(createSmallObjectDocument({ maxOffset: [ null, null, UNLIMITED ] }));
+    });
+
+    it("is saved and reloaded as an authored limit", function(){
+      expect(navigation.effectiveOffsetLimits.max[2]).to.equal(UNLIMITED);
+      const data = story.document.deflateDocument();
+      expect(data.setups[0].navigation.orbit.maxOffset).to.deep.equal([ null, null, UNLIMITED ]);
+      data.models.forEach(model => delete model.boundingBox);
+      load(data);
+      expect(navigation.effectiveOffsetLimits.max[2]).to.equal(UNLIMITED);
+    });
+
+    it("lets the far plane follow the camera instead of the maximum", function(){
+      const farAt = (distance: number) => {
+        navigation.ins.offset.setValue([ 0, 0, distance ]);
+        story.update();
+        story.update();
+        expect(offsetZ()).to.equal(distance);
+        expect(far()).to.be.at.least(distance + radius());
+        return far();
+      };
+      const r = radius();
+      // far from the object, the far plane stays within a few times the camera distance
+      expect(farAt(1e6 * r)).to.be.below(1e7 * r);
+      // and comes back when zooming in again
+      expect(farAt(r)).to.be.below(10 * r);
+    });
+  });
+
+  describe("with an orthographic camera", function(){
+    function cameraDistance()
+    {
+      const camera = story.document.getInnerComponent(CVCamera);
+      return new Vector3().setFromMatrixPosition(camera.transform.object3D.matrix).length();
+    }
+
+    for (const [ name, maxOffset ] of [
+      [ "unset", [ null, null, null ] ],
+      [ "unlimited", [ null, null, UNLIMITED ] ],
+    ] as [ string, number[] ][]) {
+      it(`places the camera at the automatic max distance with an ${name} maxOffset`, function(){
+        load(createSmallObjectDocument({ maxOffset }));
+        // as the projection toggle does
+        navigation.ins.projection.setValue(EProjection.Orthographic);
+        for (let i = 0; i < 3; ++i) {
+          story.update();
+        }
+        const camera = story.document.getInnerComponent(CVCamera).camera;
+        expect(camera.isOrthographicCamera).to.be.true;
+
+        // outside of the scene, but in the scene's order of magnitude
+        expect(cameraDistance()).to.be.above(2 * radius()).and.below(1);
+        expect(camera.far).to.be.at.least(cameraDistance() + radius()).and.below(2);
+      });
+    }
   });
 
   describe("without a navigation section", function(){

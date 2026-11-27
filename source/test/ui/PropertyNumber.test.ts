@@ -1,6 +1,6 @@
 import { expect } from "chai";
 
-import PropertyNumber from "client/ui/properties/PropertyNumber";
+import PropertyNumber, { UNLIMITED } from "client/ui/properties/PropertyNumber";
 import CVOrbitNavigation from "client/components/CVOrbitNavigation";
 
 import { createDocumentData, createStory } from "../helpers/story";
@@ -63,5 +63,30 @@ describe("PropertyNumber", function(){
 
     await enter(input, "");
     expect(input.value).to.equal(text);
+  });
+
+  it("enters inf and -inf as large finite values, and shows them as inf", async function(){
+    const maxOffset = navigation.ins.maxOffset;
+    const x = await field(maxOffset, 0);
+    await enter(x, "inf");
+    element.remove();
+    const y = await field(maxOffset, 1);
+    await enter(y, "-INF");
+
+    expect(maxOffset.value[0]).to.equal(UNLIMITED);
+    expect(maxOffset.value[1]).to.equal(-UNLIMITED);
+    expect(y.value).to.equal("-inf");
+  });
+
+  it("shows an unset (non-finite) value as auto, and resets to it when emptied", async function(){
+    const maxOffset = navigation.ins.maxOffset;
+    maxOffset.setValue([ Infinity, Infinity, 50 ]);
+    const z = await field(maxOffset, 2);
+    expect(parseFloat(z.value)).to.equal(50);
+
+    await enter(z, "");
+    expect(maxOffset.value[2]).to.equal(Infinity);
+    expect(z.value).to.equal("");
+    expect(z.placeholder).to.equal("auto");
   });
 });
