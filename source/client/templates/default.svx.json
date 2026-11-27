@@ -61,7 +61,7 @@
                 "minOrbit": [-90, null, null],
                 "maxOrbit": [90, null, null],
                 "minOffset": [null, null, null],
-                "maxOffset": [null, null, 10000]
+                "maxOffset": [null, null, null]
             }
         },
         "background": {

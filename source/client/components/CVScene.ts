@@ -324,34 +324,34 @@ export default class CVScene extends CVNode
 
     protected updateCameras()
     {
+        this.updateCameraClipping();
+    }
+
+    /**
+     * Updates near and far planes of cameras with automatic clipping,
+     * so the scene stays visible up to the navigation's maximum zoom distance.
+     */
+    updateCameraClipping()
+    {
         if(this.renderer.views[0] && this.renderer.views[0].renderer.xr.isPresenting) {
             return;
         }
 
-        this.updateCameraHelper();
-    }
-
-    protected updateCameraHelper = () =>
-    {
-        const navOffset = this.setup.navigation.ins.offset.value;
-        const orbitRadius =  _vec3.set(navOffset[0], navOffset[1], navOffset[2]).length();
-
-        if(!this.system.getComponent("CVStoryApplication", true)) {
-            const maxOffset = 2.5 * Math.max(orbitRadius, this.outs.boundingRadius.value);
-            const currOffset = this.setup.navigation.ins.maxOffset.value;
-            //const zOffset = navOffset[2] < currOffset[2] ? Math.min(currOffset[2], maxOffset) : maxOffset;
-            this.setup.navigation.ins.maxOffset.setValue([currOffset[0], currOffset[1], maxOffset]);
+        const radius = this.outs.boundingRadius.value;
+        if (!(radius > 0)) {
+            return; // scene size not known yet
         }
+        const maxDistance = this.setup.navigation.effectiveOffsetLimits.max[2];
+
+        // camera can be up to maxDistance from the scene center, the scene extends radius beyond it
+        const far = Math.max(4 * radius, maxDistance + 2 * radius);
+        const near = Math.min(far / 1000.0, radius / 100.0);
 
         this.cameras.forEach(camera => {
-            if(camera.addIns.autoNearFar.value) {
-                const far = 4 * Math.max(orbitRadius, this.outs.boundingRadius.value);
-                const near = Math.min(far / 1000.0, this.outs.boundingRadius.value / 100.0);
-                if(far < camera.ins.far.value || camera.ins.far.value < 2*this.setup.navigation.ins.maxOffset.value[2]) {
-                    camera.ins.far.setValue(far);
-                    camera.ins.near.setValue(near);
-                    this.setup.navigation.ins.projection.set(); // trigger projection update
-                }
+            if(camera.addIns.autoNearFar.value && (camera.ins.far.value !== far || camera.ins.near.value !== near)) {
+                camera.ins.far.setValue(far);
+                camera.ins.near.setValue(near);
+                this.setup.navigation.ins.projection.set(); // trigger projection update
             }
         });
     }

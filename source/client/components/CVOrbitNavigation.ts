@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Box3 } from "three";
+import { Box3, Vector3 } from "three";
 
 import CObject3D, { Node, types } from "@ff/scene/components/CObject3D";
 
@@ -58,8 +58,13 @@ const _replaceNull = function(vector: number[], replacement: number)
 // Limits left unset in a document (null, i.e. non-finite) are derived from the scene's size.
 /** Derived minimum zoom distance, as a factor of the scene's bounding radius. */
 const MIN_OFFSET_RADIUS_FACTOR = 0.1;
-/** Fallback zoom distance until the scene's size is known. */
+/** Derived maximum zoom distance, as a factor of the larger of the bounding radius and the reference camera distance. */
+const MAX_OFFSET_FACTOR = 2.5;
+/** Fallback zoom distances until the scene's size is known. */
 const MIN_OFFSET_FALLBACK = 0.1;
+const MAX_OFFSET_FALLBACK = 1000;
+
+const _vec3 = new Vector3();
 
 /**
  * Voyager explorer orbit navigation.
@@ -105,6 +110,8 @@ export default class CVOrbitNavigation extends CObject3D
     private _isAutoZooming = false;
     private _autoRotationStartTime = null;
     private _initYOrbit = null;
+    /** Camera distance the derived max offset accounts for: the document's offset, then the last zoom extents framing. */
+    private _referenceDistance = 0;
     /** Set when the scene bounds changed, derived limits are updated in the next update(). */
     private _boundsChanged = false;
 
@@ -278,8 +285,11 @@ export default class CVOrbitNavigation extends CObject3D
 
                 controller.camera = cameraComponent.camera;
 
-                // scene bounds may just have been updated above
-                this.updateDerivedLimits();
+                // derived limits must contain the new framing, authored limits take precedence over it
+                if (controller.computeExtentsOffset(this._modelBoundingBox, _vec3)) {
+                    this._referenceDistance = _vec3.length();
+                    this.updateDerivedLimits();
+                }
                 controller.zoomExtents(this._modelBoundingBox);
                 //cameraComponent.ins.zoom.set();
                 this._hasZoomed = true;
@@ -421,6 +431,7 @@ export default class CVOrbitNavigation extends CObject3D
             maxOffset: orbit.maxOffset ? _replaceNull(orbit.maxOffset, Infinity) : ins.maxOffset.schema.preset,
         });
 
+        this._referenceDistance = _vec3.fromArray(ins.offset.value).length();
         this.updateDerivedLimits();
 
         if (this.ins.autoZoom.value) {
@@ -550,11 +561,13 @@ export default class CVOrbitNavigation extends CObject3D
      * Zoom distance limits left unset (non-finite) in the document get a value derived from the scene's size.
      * Derived values are only applied to the controller: the inputs keep the authored values,
      * so "unset" is what gets saved with the document.
+     * Updates the cameras' near/far planes if the effective max distance changed.
      */
     protected updateDerivedLimits()
     {
         const controller = this._controller;
         const radius = controller.boundsRadius;
+        const prevMaxZ = controller.maxOffset.z;
 
         const minOffsetZ = this.ins.minOffset.value[2];
         if (!Number.isFinite(minOffsetZ)) {
@@ -562,6 +575,26 @@ export default class CVOrbitNavigation extends CObject3D
         }
         else {
             controller.minOffset.z = minOffsetZ;
+        }
+
+        const maxOffsetZ = this.ins.maxOffset.value[2];
+        if (!Number.isFinite(maxOffsetZ)) {
+            // without a document offset or a framing yet (e.g. no navigation section), the current pose
+            const reference = this._referenceDistance || _vec3.fromArray(this.ins.offset.value).length();
+            // an authored minimum is part of the scene's scale, the fallback minimum is not
+            const authoredMin = Number.isFinite(minOffsetZ) ? minOffsetZ : 0;
+            const size = Math.max(radius, reference, authoredMin);
+            controller.maxOffset.z = size > 0 ? size * MAX_OFFSET_FACTOR : MAX_OFFSET_FALLBACK;
+        }
+        else {
+            controller.maxOffset.z = maxOffsetZ;
+        }
+
+        // inconsistent authored limits: the minimum wins
+        controller.maxOffset.z = Math.max(controller.maxOffset.z, controller.minOffset.z);
+
+        if (controller.maxOffset.z !== prevMaxZ) {
+            this.getSystemComponent(CVScene, true)?.updateCameraClipping();
         }
     }
 

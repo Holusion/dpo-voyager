@@ -200,22 +200,24 @@ export default class CameraController implements IManip
     }
 
     /**
-     * Adjusts the camera such that the given bounding box is entirely visible.
+     * Computes the offset at which the given bounding box is entirely visible
+     * from the current orbit, without applying limits.
      * This method can only be called if an internal camera has been assigned.
      * @param box Bounding box
+     * @param target Receives the offset
+     * @returns false if no framing can be computed (not in orbit mode, or no camera)
      */
-    zoomExtents(box: Box3)
+    computeExtentsOffset(box: Box3, target: Vector3): boolean
     {
         if(this.controllerMode != EControllerMode.Orbit) {
-            return;
+            return false;
         }
 
         const camera = this.camera;
-        const offset = this.offset;
 
         if (!camera) {
             console.warn("CameraController.zoomExtents - camera not set");
-            return;
+            return false;
         }
 
         // rotate box to camera space
@@ -227,26 +229,34 @@ export default class CameraController implements IManip
         _box3.getSize(_vec3a);
         _box3.getCenter(_vec3b);
 
-        // keep the framing within the offset limits, otherwise the camera
-        // would jump back inside them on the first user interaction
-        offset.x = math.limit(_vec3b.x, this.minOffset.x, this.maxOffset.x);
-        offset.y = math.limit(_vec3b.y, this.minOffset.y, this.maxOffset.y);
+        target.x = _vec3b.x;
+        target.y = _vec3b.y;
 
         const size = Math.max(_vec3a.x / camera.aspect, _vec3a.y);
 
         if (camera.isOrthographicCamera) {
-            offset.z = size * 1.1; // add some padding
+            target.z = size * 1.1; // add some padding
         }
         else {
             const fovFactor = 1 / (2 * Math.tan(camera.fov * math.DEG2RAD * 0.5));
-            offset.z = (_vec3b.z + size * fovFactor + _vec3a.z * 0.25 /* was 0.5 */);
+            target.z = (_vec3b.z + size * fovFactor + _vec3a.z * 0.25 /* was 0.5 */);
         }
 
-        if(offset.z > this.maxOffset.z) {
-            this.maxOffset.z = 2 * offset.length();
+        return true;
+    }
+
+    /**
+     * Adjusts the camera such that the given bounding box is entirely visible,
+     * as far as the offset limits allow: limits are never changed, and always win over the framing,
+     * otherwise the camera would jump back inside them on the first user interaction.
+     * This method can only be called if an internal camera has been assigned.
+     * @param box Bounding box
+     */
+    zoomExtents(box: Box3)
+    {
+        if (this.computeExtentsOffset(box, this.offset)) {
+            this.applyLimits();
         }
-        offset.z = Math.max(offset.z, this.minOffset.z);
-        //this.maxOffset.z = Math.max(this.maxOffset.z, offset.z + _vec3a.z * 4);
     }
 
     /**
