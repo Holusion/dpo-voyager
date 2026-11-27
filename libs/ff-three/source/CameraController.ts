@@ -203,8 +203,10 @@ export default class CameraController implements IManip
         _box3.getSize(_vec3a);
         _box3.getCenter(_vec3b);
 
-        offset.x = _vec3b.x;
-        offset.y = _vec3b.y;
+        // keep the framing within the offset limits, otherwise the camera
+        // would jump back inside them on the first user interaction
+        offset.x = math.limit(_vec3b.x, this.minOffset.x, this.maxOffset.x);
+        offset.y = math.limit(_vec3b.y, this.minOffset.y, this.maxOffset.y);
 
         const size = Math.max(_vec3a.x / camera.aspect, _vec3a.y);
 
@@ -219,6 +221,7 @@ export default class CameraController implements IManip
         if(offset.z > this.maxOffset.z) {
             this.maxOffset.z = 2 * offset.length();
         }
+        offset.z = Math.max(offset.z, this.minOffset.z);
         //this.maxOffset.z = Math.max(this.maxOffset.z, offset.z + _vec3a.z * 4);
     }
 
