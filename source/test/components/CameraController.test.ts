@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { Box3, Vector3 } from "three";
 
-import CameraController from "@ff/three/CameraController";
+import CameraController, { EControllerMode } from "@ff/three/CameraController";
 import UniversalCamera from "@ff/three/UniversalCamera";
 
 
@@ -12,6 +12,25 @@ describe("CameraController", function(){
     controller = new CameraController();
     controller.camera = new UniversalCamera();
     controller.orbit.set(0, 0, 0);
+  });
+
+  describe("applyLimits()", function(){
+    it("clamps orbit and offset", function(){
+      controller.minOffset.set(-1, -1, 0.5);
+      controller.maxOffset.set(1, 1, 10);
+      controller.offset.set(5, -5, 0.1);
+      controller.orbit.set(-120, 0, 0);
+      controller.applyLimits();
+      expect(controller.offset.toArray()).to.deep.equal([1, -1, 0.5]);
+      expect(controller.orbit.x).to.equal(-90);
+    });
+
+    it("does not clamp the offset outside of orbit mode", function(){
+      controller.controllerMode = EControllerMode.Fly;
+      controller.offset.set(0, 0, 10000);
+      controller.applyLimits();
+      expect(controller.offset.z).to.equal(10000);
+    });
   });
 
   describe("zoomExtents()", function(){

@@ -225,16 +225,26 @@ export default class CVOrbitNavigation extends CObject3D
         const { minOrbit, minOffset, maxOrbit, maxOffset} = ins;
 
         // orbit, offset and limits
-        if (orbit.changed || offset.changed) {
+        const poseChanged = orbit.changed || offset.changed;
+        const limitsChanged = minOrbit.changed || minOffset.changed || maxOrbit.changed || maxOffset.changed;
+
+        if (poseChanged) {
             controller.orbit.fromArray(orbit.value);
             controller.offset.fromArray(offset.value);
         }
 
-        if (minOrbit.changed || minOffset.changed || maxOrbit.changed || maxOffset.changed) {
+        if (limitsChanged) {
             controller.minOrbit.fromArray(minOrbit.value);
             controller.minOffset.fromArray(minOffset.value);
             controller.maxOrbit.fromArray(maxOrbit.value);
             controller.maxOffset.fromArray(maxOffset.value);
+        }
+
+        // Limits apply to every camera pose, not only to user interaction: documents,
+        // tours, snapshots and the API may set values outside of them.
+        // The clamped pose is written back to ins.orbit/ins.offset on the next tick.
+        if (poseChanged || limitsChanged || ins.mode.changed) {
+            controller.applyLimits();
         }
 
         // zoom extents

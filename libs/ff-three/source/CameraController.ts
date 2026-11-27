@@ -176,6 +176,30 @@ export default class CameraController implements IManip
     }
 
     /**
+     * Clamps orbit and offset to the configured limits.
+     * Call after orbit, offset or limits have been set from outside the controller,
+     * user interaction applies the same limits in updatePose().
+     */
+    applyLimits()
+    {
+        const {
+            orbit, minOrbit, maxOrbit,
+            offset, minOffset, maxOffset
+        } = this;
+
+        orbit.x = math.limit(orbit.x, minOrbit.x, maxOrbit.x);
+        orbit.y = math.limit(orbit.y, minOrbit.y, maxOrbit.y);
+        orbit.z = math.limit(orbit.z, minOrbit.z, maxOrbit.z);
+
+        // offset limits only have a meaning in orbit mode
+        if (this.controllerMode == EControllerMode.Orbit) {
+            offset.x = math.limit(offset.x, minOffset.x, maxOffset.x);
+            offset.y = math.limit(offset.y, minOffset.y, maxOffset.y);
+            offset.z = math.limit(offset.z, minOffset.z, maxOffset.z);
+        }
+    }
+
+    /**
      * Adjusts the camera such that the given bounding box is entirely visible.
      * This method can only be called if an internal camera has been assigned.
      * @param box Bounding box
